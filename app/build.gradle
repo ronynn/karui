@@ -4,7 +4,7 @@ android {
     compileSdkVersion 31
 
     defaultConfig {
-        applicationId "com.example.app"
+        applicationId "io.ronynn.github.karui"
         minSdkVersion 21
         targetSdkVersion 31
         versionCode 1

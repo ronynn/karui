@@ -1,4 +1,4 @@
-package com.example.app;
+package io.github.ronynn.karui;
 
 import android.content.Intent;
 import android.net.Uri;

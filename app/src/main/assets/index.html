@@ -1,11 +1,604 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-</head>
-<body style="font-family: monospace">
-    REPLACE THIS FILE WITH YOUR OWN INDEX.HTML
-</body>
+<!doctype html>
+<html lang="en" x-data="app()" x-init="init()" x-cloak>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Cozy Minimal To-Do</title>
+        <link rel="stylesheet" href="normalize.css" />
+        <link rel="stylesheet" href="milligram.css" />
+        <script src="alpine.cdn.min.js" defer></script>
+        <style>
+            /* Hide elements until Alpine is ready */
+            [x-cloak] {
+                display: none !important;
+            }
+            /* Slide animation classes */
+            .slide-left {
+                animation: slideLeft 0.1s forwards;
+            }
+            .slide-right {
+                animation: slideRight 0.2s forwards;
+            }
+            @keyframes slideLeft {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideRight {
+                from {
+                    transform: translateX(-100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            /* Top bar (Windows Mobile pivot style) */
+            .top-bar {
+                display: flex;
+                overflow-x: auto;
+                white-space: nowrap;
+                border-bottom: 2px solid var(--border);
+                padding: 0.5rem 1rem;
+                margin-bottom: 1rem;
+            }
+            .top-bar span {
+                display: inline-block;
+                padding: 0.5rem 1rem;
+                cursor: pointer;
+                margin-right: 0.5rem;
+            }
+            .active-tab {
+                color: var(--button);
+                font-weight: bold;
+                border-bottom: 2px solid var(--button);
+            }
+            .inactive-tab {
+                color: gray;
+            }
+            /* Horizontal scrollable tab bar for note categories in Box 2 */
+            .category-tabs {
+                overflow-x: auto;
+                white-space: nowrap;
+                margin-bottom: 1rem;
+            }
+            .category-tabs span {
+                display: inline-block;
+                padding: 0.5rem 1rem;
+                cursor: pointer;
+                border: 1px solid var(--border);
+                margin-right: 0.5rem;
+            }
+            /* Import modal */
+            .modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            /* Draggable note list items */
+            li.dragging {
+                opacity: 0.5;
+            }
+            li {
+                position: relative;
+                padding-right: 2rem;
+                cursor: grab;
+            }
+            li.completed {
+                text-decoration: line-through;
+                color: gray;
+                opacity: 0.7;
+            }
+            /* Floating delete text */
+            .delete-text {
+                position: absolute;
+                right: 0;
+                top: 0;
+                padding: 0.5rem;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body :data-theme="currentTheme" x-cloak>
+        <!-- Top Bar -->
+        <div class="top-bar" x-cloak>
+            <template x-for="tab in tabs" :key="tab">
+                <span
+                    x-text="tab"
+                    :class="activeTab === tab ? 'active-tab' : 'inactive-tab'"
+                    @click="activateTab(tab)"
+                ></span>
+            </template>
+        </div>
+
+        <!-- View Wrapper with Slide Transition -->
+        <div x-ref="viewWrapper" :class="slideClass" x-cloak>
+            <template x-if="activeTab==='Main'">
+                <div>
+                    <!-- Box 1: Input and Stats -->
+                    <div class="box" x-cloak>
+                        <label>Box 1</label>
+                        <input
+                            type="text"
+                            placeholder="Type note or command"
+                            x-model="inputText"
+                            @keydown.enter="handleInput"
+                        />
+                        <div style="margin-top: 1rem">
+                            <span
+                                >Remaining: <span x-text="remainingCount"></span
+                            ></span>
+                            <span style="margin-left: 1rem"
+                                >Completed: <span x-text="completedCount"></span
+                            ></span>
+                        </div>
+                    </div>
+
+                    <!-- Box 2: Draggable Notes & Category Tabs -->
+                    <div class="box" x-cloak>
+                        <label>Box 2</label>
+                        <!-- Category tabs -->
+                        <div class="category-tabs">
+                            <template
+                                x-for="category in noteCategories"
+                                :key="category"
+                            >
+                                <span
+                                    x-text="category"
+                                    :class="activeCategory === category ? 'active-tab' : 'inactive-tab'"
+                                    @click="activeCategory = category"
+                                ></span>
+                            </template>
+                        </div>
+                        <!-- Draggable note list -->
+                        <ul
+                            style="min-height: 200px"
+                            x-ref="notesList"
+                            @dragover.prevent
+                            @drop="dropNote($event)"
+                        >
+                            <template
+                                x-for="(note, index) in filteredNotes"
+                                :key="note.id"
+                            >
+                                <li
+                                    draggable="true"
+                                    @dragstart="dragStart(note, $event)"
+                                    @dragend="dragEnd($event)"
+                                    :class="note.completed ? 'completed' : ''"
+                                >
+                                    <span
+                                        x-text="note.text"
+                                        @click="toggleComplete(note)"
+                                    ></span>
+                                    <span
+                                        class="delete-text"
+                                        @click="deleteNote(note)"
+                                        >√d</span
+                                    >
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="activeTab==='Settings'">
+                <div>
+                    <!-- Box 3: Theme & Font Selector -->
+                    <div class="box" x-cloak>
+                        <label>Box 3: Theme & Font</label>
+                        <div style="overflow-x: auto; white-space: nowrap">
+                            <template x-for="theme in themes" :key="theme">
+                                <button
+                                    @click="setTheme(theme)"
+                                    style="margin-right: 0.5rem"
+                                    x-text="theme"
+                                ></button>
+                            </template>
+                        </div>
+                        <div
+                            style="
+                                overflow-x: auto;
+                                white-space: nowrap;
+                                margin-top: 1rem;
+                            "
+                        >
+                            <template x-for="font in fonts" :key="font">
+                                <button
+                                    @click="setFont(font)"
+                                    style="margin-right: 0.5rem"
+                                    x-text="font"
+                                ></button>
+                            </template>
+                        </div>
+                    </div>
+                    <!-- Box 4: About -->
+                    <div class="box" x-cloak>
+                        <label>Box 4: About</label>
+                        <p>
+                            Cozy Minimal To-Do is a lightweight, bloat‑free open
+                            source app. More customizations will be added. Use
+                            <code>///</code> to add a new tab,
+                            <code>\\\</code> to remove a tab, slide theme
+                            buttons and check all the themes. Check our
+                            <a
+                                href="https://github.com/yourrepo"
+                                target="_blank"
+                                >GitHub Repo</a
+                            >. Report issues at our issue tracker. See the
+                            <a href="license.txt" target="_blank"
+                                >license.txt</a
+                            >
+                            for details.
+                        </p>
+                    </div>
+                    <!-- Box 5: Deleted Items -->
+                    <!-- Box 5: Deleted Items -->
+                    <div class="box" x-cloak>
+                        <label>Box 5: Deleted Items</label>
+                        <div>
+                            <span
+                                style="float: right; cursor: pointer"
+                                @click="recycleBin = []; localStorage.setItem('recycleBin', JSON.stringify([]))"
+                                >√e</span
+                            >
+                            <h2>Recycle Bin</h2>
+                        </div>
+                        <ul>
+                            <template
+                                x-for="(note, index) in recycleBin"
+                                :key="note.id"
+                            >
+                                <li>
+                                    <span x-text="note.text"></span>
+                                    <span
+                                        style="
+                                            float: right;
+                                            cursor: pointer;
+                                            margin-left: 1rem;
+                                        "
+                                        @click="restoreNote(index)"
+                                        >√r</span
+                                    >
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                    <!-- Box 6: Import/Export -->
+                    <div class="box" x-cloak>
+                        <label>Box 6: Import/Export</label>
+                        <div style="margin-bottom: 1rem">
+                            <button @click="exportNotes('json')">
+                                Save as JSON
+                            </button>
+                            <button @click="exportNotes('txt')">
+                                Save as TXT
+                            </button>
+                        </div>
+                        <div style="margin-bottom: 1rem">
+                            <button @click="importJsonFile">Import JSON</button>
+                            <button @click="openImportModal">Paste JSON</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Import Modal -->
+        <div x-show="showImportModal" class="modal" x-cloak>
+            <div class="box" style="max-width: 300px">
+                <label>Paste JSON</label>
+                <textarea
+                    x-model="importText"
+                    rows="5"
+                    style="width: 100%"
+                ></textarea>
+                <div style="margin-top: 1rem">
+                    <button @click="pasteImport">Import</button>
+                    <button @click="closeImportModal">Cancel</button>
+                </div>
+                <template x-if="importError">
+                    <p style="color: red" x-text="importError"></p>
+                </template>
+            </div>
+        </div>
+
+        <script>
+            function app() {
+                return {
+                    // Screen management
+                    activeTab: "Main",
+                    tabs: ["Main", "Settings"],
+                    slideDirection: "left",
+                    slideClass: "",
+                    // Note category management (persisted in local storage)
+                    noteCategories: JSON.parse(
+                        localStorage.getItem("noteCategories")
+                    ) || ["Main"],
+                    activeCategory: "Main",
+                    // Input & data
+                    inputText: "",
+                    notes: JSON.parse(localStorage.getItem("notes")) || [],
+                    recycleBin:
+                        JSON.parse(localStorage.getItem("recycleBin")) || [],
+                    // Theme and Font
+                    themes: [
+                        "default",
+                        "gruvbox",
+                        "monokai",
+                        "dracula",
+                        "nord",
+                        "solarized",
+                        "catppuccin",
+                        "tokyo-night",
+                        "everforest"
+                    ],
+                    fonts: ["default", "monospace"],
+                    currentTheme: localStorage.getItem("theme") || "default",
+                    currentFont: localStorage.getItem("font") || "default",
+                    // Drag and drop
+                    draggingNoteId: null,
+                    // Import modal
+                    showImportModal: false,
+                    importText: "",
+                    importError: "",
+
+                    init() {
+                        this.applyTheme();
+                        this.applyFont();
+                    },
+                    applyTheme() {
+                        document.documentElement.setAttribute(
+                            "data-theme",
+                            this.currentTheme
+                        );
+                        localStorage.setItem("theme", this.currentTheme);
+                    },
+                    setTheme(theme) {
+                        this.currentTheme = theme;
+                        this.applyTheme();
+                    },
+                    applyFont() {
+                        document.body.style.fontFamily =
+                            this.currentFont === "monospace" ? "monospace" : "";
+                        localStorage.setItem("font", this.currentFont);
+                    },
+                    setFont(font) {
+                        this.currentFont = font;
+                        this.applyFont();
+                    },
+                    activateTab(tab) {
+                        let currentIndex = this.tabs.indexOf(this.activeTab);
+                        let newIndex = this.tabs.indexOf(tab);
+                        this.slideDirection =
+                            newIndex > currentIndex ? "left" : "right";
+                        this.slideClass =
+                            this.slideDirection === "left"
+                                ? "slide-left"
+                                : "slide-right";
+                        this.activeTab = tab;
+                        setTimeout(() => {
+                            this.slideClass = "";
+                        }, 500);
+                    },
+                    // Filter notes by active category
+                    get filteredNotes() {
+                        return this.notes.filter(
+                            note => note.category === this.activeCategory
+                        );
+                    },
+                    get remainingCount() {
+                        return this.filteredNotes.filter(
+                            note => !note.completed
+                        ).length;
+                    },
+                    get completedCount() {
+                        return this.filteredNotes.filter(note => note.completed)
+                            .length;
+                    },
+                    // Handle input commands and adding notes
+                    handleInput() {
+                        const text = this.inputText.trim();
+                        if (!text) return;
+                        if (text.startsWith("///")) {
+                            const newTab = text.slice(3).trim();
+                            if (
+                                newTab &&
+                                !this.noteCategories.includes(newTab)
+                            ) {
+                                this.noteCategories.push(newTab);
+                                this.saveData();
+                            }
+                        } else if (text.startsWith("\\\\\\")) {
+                            const tabName = text.slice(3).trim();
+                            const idx = this.noteCategories.indexOf(tabName);
+                            if (idx > -1 && tabName !== "Main") {
+                                this.noteCategories.splice(idx, 1);
+                                // Move notes in that category to recycle bin
+                                this.notes = this.notes.filter(note => {
+                                    if (note.category === tabName) {
+                                        this.recycleBin.push(note);
+                                        return false;
+                                    }
+                                    return true;
+                                });
+                                this.saveData();
+                                if (this.activeCategory === tabName) {
+                                    this.activeCategory = "Main";
+                                }
+                            } else {
+                                this.addNote(text);
+                            }
+                        } else {
+                            this.addNote(text);
+                        }
+                        this.inputText = "";
+                    },
+                    addNote(text) {
+                        const newNote = {
+                            id: Date.now(),
+                            text: text,
+                            completed: false,
+                            category: this.activeCategory
+                        };
+                        this.notes.unshift(newNote);
+                        this.saveData();
+                    },
+                    toggleComplete(note) {
+                        note.completed = !note.completed;
+                        this.saveData();
+                    },
+                    deleteNote(note) {
+                        this.notes = this.notes.filter(n => n.id !== note.id);
+                        this.recycleBin.push(note);
+                        this.saveData();
+                    },
+                    // Drag and drop functions:
+                    dragStart(note, event) {
+                        this.draggingNoteId = note.id;
+                        event.target.classList.add("dragging");
+                    },
+                    dragEnd(event) {
+                        event.target.classList.remove("dragging");
+                        this.draggingNoteId = null;
+                    },
+                    dropNote(event) {
+                        const targetEl = event.target.closest("li");
+                        if (!targetEl) return;
+                        let children = Array.from(
+                            this.$refs.notesList.children
+                        );
+                        let targetIndex = children.indexOf(targetEl);
+                        if (this.draggingNoteId === null || targetIndex === -1)
+                            return;
+                        let filtered = this.filteredNotes;
+                        let draggedIndex = filtered.findIndex(
+                            n => n.id === this.draggingNoteId
+                        );
+                        if (draggedIndex === -1) return;
+                        let draggedNote = filtered.splice(draggedIndex, 1)[0];
+                        filtered.splice(targetIndex, 0, draggedNote);
+                        let otherNotes = this.notes.filter(
+                            n => n.category !== this.activeCategory
+                        );
+                        this.notes = filtered.concat(otherNotes);
+                        this.saveData();
+                    },
+                    saveData() {
+                        localStorage.setItem(
+                            "notes",
+                            JSON.stringify(this.notes)
+                        );
+                        localStorage.setItem(
+                            "recycleBin",
+                            JSON.stringify(this.recycleBin)
+                        );
+                        localStorage.setItem(
+                            "noteCategories",
+                            JSON.stringify(this.noteCategories)
+                        );
+                    },
+
+                    restoreNote(index) {
+                        const note = this.recycleBin.splice(index, 1)[0];
+                        this.notes.push(note);
+                        this.saveData();
+                    },
+                    exportNotes(format) {
+                        let fileName =
+                            format === "json" ? "notes.json" : "notes.txt";
+                        let fileType =
+                            format === "json"
+                                ? "application/json"
+                                : "text/plain";
+                        let fileData =
+                            format === "json"
+                                ? JSON.stringify(this.notes)
+                                : this.notes.map(note => note.text).join("\n");
+
+                        if (window.Android) {
+                            Android.saveFile(fileName, fileData, fileType);
+                        } else {
+                            const blob = new Blob([fileData], {
+                                type: fileType
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = fileName;
+                            a.click();
+                        }
+                    },
+
+                    setAndroidColors(color1, color2, color3) {
+                        document.documentElement.style.setProperty(
+                            "--dynamic-primary",
+                            color1
+                        );
+                        document.documentElement.style.setProperty(
+                            "--dynamic-secondary",
+                            color2
+                        );
+                        document.documentElement.style.setProperty(
+                            "--dynamic-tertiary",
+                            color3
+                        );
+                    },
+                    importJsonFile() {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "application/json";
+                        input.onchange = e => {
+                            const file = e.target.files[0];
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                try {
+                                    const importedNotes = JSON.parse(
+                                        reader.result
+                                    );
+                                    this.notes = importedNotes;
+                                    this.saveData();
+                                } catch (err) {
+                                    alert("Import failed.");
+                                }
+                            };
+                            reader.readAsText(file);
+                        };
+                        input.click();
+                    },
+                    openImportModal() {
+                        this.showImportModal = true;
+                    },
+                    closeImportModal() {
+                        this.showImportModal = false;
+                        this.importText = "";
+                        this.importError = "";
+                    },
+                    pasteImport() {
+                        try {
+                            const importedNotes = JSON.parse(this.importText);
+                            this.notes = importedNotes;
+                            this.saveData();
+                            this.closeImportModal();
+                        } catch (err) {
+                            this.importError = "Invalid JSON format.";
+                        }
+                    }
+                };
+            }
+        </script>
+    </body>
 </html>
