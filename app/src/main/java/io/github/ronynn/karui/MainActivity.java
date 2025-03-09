@@ -15,12 +15,20 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
 
     private static final int CREATE_FILE_REQUEST_CODE = 1;
+    private static final int IMPORT_FILE_REQUEST_CODE = 2;
+
     private WebView mWebView;
     private View splashScreen;
 
@@ -50,23 +58,23 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(mWebView, true);
 
-        // Add our JavaScript interface to handle file saving and dynamic color requests
+        // Add the JavaScript interface to handle file saving, importing, and dynamic colors.
         mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
         mWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Fade out the splash screen when WebView is ready
+                // Fade out the splash screen when WebView is ready.
                 ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
                 fadeOut.setInterpolator(new DecelerateInterpolator());
                 fadeOut.setDuration(500);
                 fadeOut.start();
 
-                // Hide splash screen and show WebView
+                // Hide the splash screen and show the WebView.
                 splashScreen.setVisibility(View.GONE);
                 mWebView.setVisibility(View.VISIBLE);
 
-                // If running on Android 12+ (API 31), get dynamic Material You colors and pass them to the HTML
+                // If on Android 12+ (API 31), fetch dynamic Material You colors and pass them to the HTML.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     int color1 = getColor(android.R.color.system_accent1_100);
                     int color2 = getColor(android.R.color.system_accent2_100);
@@ -84,7 +92,7 @@ public class MainActivity extends Activity {
         mWebView.loadUrl("file:///android_asset/index.html");
     }
 
-    // Handle file picker result for saving JSON or TXT
+    // Handle results from file picker intents (both saving and importing).
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -103,10 +111,31 @@ public class MainActivity extends Activity {
                     }
                 }
             }
+        } else if (requestCode == IMPORT_FILE_REQUEST_CODE && resultCode == RESULT_OK) {
+            if (data != null) {
+                Uri uri = data.getData();
+                if (uri != null) {
+                    try {
+                        InputStream inputStream = getContentResolver().openInputStream(uri);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                        StringBuilder sb = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            sb.append(line);
+                        }
+                        reader.close();
+                        String jsonContent = sb.toString();
+                        // Call the global JavaScript function "handleImportedJson" with the JSON string.
+                        String jsCode = "handleImportedJson(" + JSONObject.quote(jsonContent) + ")";
+                        mWebView.evaluateJavascript(jsCode, null);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
         }
     }
 
-    // Allow back navigation in WebView
     @Override
     public void onBackPressed() {
         if (mWebView.canGoBack()) {
@@ -116,18 +145,15 @@ public class MainActivity extends Activity {
         }
     }
 
-    // JavaScript interface for file saving and dynamic colors
+    // JavaScript interface for file operations and dynamic colors.
     public class WebAppInterface {
-        // Called from JavaScript when user clicks "Save as JSON" or "Save as TXT"
+        // Called from JavaScript to save a file (JSON or TXT).
         @JavascriptInterface
         public void saveFile(String fileName, String fileData, String fileType) {
-            // Store file details for later use in onActivityResult
             pendingFileName = fileName;
             pendingFileData = fileData;
             pendingFileType = fileType;
 
-            // Launch Android's file picker (Storage Access Framework)
-            // This does NOT require READ/WRITE storage permissions.
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType(fileType);
@@ -135,7 +161,16 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
         }
 
-        // Called from JavaScript to request dynamic colors manually
+        // Called from JavaScript to import a JSON file via the Android file picker.
+        @JavascriptInterface
+        public void importJsonFile() {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+        }
+
+        // Called from JavaScript to request dynamic colors manually.
         @JavascriptInterface
         public void getDynamicColors() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

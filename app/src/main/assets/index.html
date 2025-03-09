@@ -537,68 +537,79 @@
                         this.notes.push(note);
                         this.saveData();
                     },
-                    exportNotes(format) {
-                        let fileName =
-                            format === "json" ? "notes.json" : "notes.txt";
-                        let fileType =
-                            format === "json"
-                                ? "application/json"
-                                : "text/plain";
-                        let fileData =
-                            format === "json"
-                                ? JSON.stringify(this.notes)
-                                : this.notes.map(note => note.text).join("\n");
+               // Export notes: save as JSON or TXT
+exportNotes(format) {
+  let fileName = format === "json" ? "notes.json" : "notes.txt";
+  let fileType = format === "json" ? "application/json" : "text/plain";
+  let fileData = format === "json" 
+    ? JSON.stringify(this.notes) 
+    : this.notes.map(note => note.text).join("\n");
+    
+  if (window.Android && window.Android.saveFile) {
+    Android.saveFile(fileName, fileData, fileType);
+  } else {
+    const blob = new Blob([fileData], { type: fileType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.click();
+  }
+},
 
-                        if (window.Android) {
-                            Android.saveFile(fileName, fileData, fileType);
-                        } else {
-                            const blob = new Blob([fileData], {
-                                type: fileType
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = fileName;
-                            a.click();
-                        }
-                    },
+// Import notes: open Android file picker if available, otherwise use file input.
+importJsonFile() {
+  if (window.Android && window.Android.importJsonFile) {
+    Android.importJsonFile();
+  } else {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = e => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const importedNotes = JSON.parse(reader.result);
+          this.notes = importedNotes;
+          this.saveData();
+        } catch (err) {
+          alert("Import failed.");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+},
 
-                    setAndroidColors(color1, color2, color3) {
-                        document.documentElement.style.setProperty(
-                            "--dynamic-primary",
-                            color1
-                        );
-                        document.documentElement.style.setProperty(
-                            "--dynamic-secondary",
-                            color2
-                        );
-                        document.documentElement.style.setProperty(
-                            "--dynamic-tertiary",
-                            color3
-                        );
-                    },
-                    importJsonFile() {
-                        const input = document.createElement("input");
-                        input.type = "file";
-                        input.accept = "application/json";
-                        input.onchange = e => {
-                            const file = e.target.files[0];
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                                try {
-                                    const importedNotes = JSON.parse(
-                                        reader.result
-                                    );
-                                    this.notes = importedNotes;
-                                    this.saveData();
-                                } catch (err) {
-                                    alert("Import failed.");
-                                }
-                            };
-                            reader.readAsText(file);
-                        };
-                        input.click();
-                    },
+// Set dynamic colors from Android by mapping them to your preset theme variables.
+setAndroidColors(color1, color2, color3) {
+  // For example, mapping Android dynamic colors to your theme variables.
+  document.documentElement.style.setProperty("--bg", color1);
+  document.documentElement.style.setProperty("--text", color2);
+  document.documentElement.style.setProperty("--border", color3);
+  document.documentElement.style.setProperty("--button", color2);
+  document.documentElement.style.setProperty("--button-hover", color3);
+  document.documentElement.style.setProperty("--input-bg", color1);
+  document.documentElement.style.setProperty("--input-border", color3);
+  document.documentElement.style.setProperty("--input-text", color2);
+  // Mark this theme as dynamic
+  document.documentElement.setAttribute("data-theme", "dynamic");
+},
+
+// Global function called from Android when a JSON file is imported via the native file picker.
+function handleImportedJson(jsonContent) {
+  try {
+    const importedNotes = JSON.parse(jsonContent);
+    // Assuming your Alpine.js data is attached to the <html> element:
+    const appData = document.querySelector('html').__x.$data;
+    appData.notes = importedNotes;
+    appData.saveData();
+  } catch (error) {
+    alert("Import failed.");
+  }
+},
                     openImportModal() {
                         this.showImportModal = true;
                     },
