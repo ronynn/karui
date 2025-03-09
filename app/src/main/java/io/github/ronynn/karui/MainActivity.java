@@ -1,25 +1,18 @@
 package io.github.ronynn.karui;
 
+
+import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.graphics.Color;
 import android.os.Bundle;
-import android.view.Window;
-import android.view.WindowManager;
-import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-
-
+import android.view.View;
+import android.view.animation.DecelerateInterpolator;
+import android.webkit.*;
 
 public class MainActivity extends Activity {
 
     private WebView mWebView;
-
-
+    private View splashScreen;
 
     @Override
     @SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
@@ -27,12 +20,10 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
-
         mWebView = findViewById(R.id.activity_main_webview);
-        WebSettings webSettings = mWebView.getSettings();
+        splashScreen = findViewById(R.id.splash_screen);
 
-        // Enable JavaScript, DOM Storage and full file/content URI access
+        WebSettings webSettings = mWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setAllowFileAccess(true);
@@ -40,63 +31,28 @@ public class MainActivity extends Activity {
         webSettings.setAllowFileAccessFromFileURLs(true);
         webSettings.setAllowUniversalAccessFromFileURLs(true);
 
-
-
-        // Enable cookies
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(mWebView, true);
 
+        mWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                // Fade out the splash screen when WebView is ready
+                ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
+                fadeOut.setInterpolator(new DecelerateInterpolator());
+                fadeOut.setDuration(500);
+                fadeOut.start();
 
+                // Hide splash screen and show WebView
+                splashScreen.setVisibility(View.GONE);
+                mWebView.setVisibility(View.VISIBLE);
+            }
+        });
 
-        // Add the JavaScript interface for dynamic color updating
-        mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
-
-
-
-        mWebView.setWebViewClient(new WebViewClient());
         mWebView.setWebChromeClient(new WebChromeClient());
-
-
-
         mWebView.loadUrl("file:///android_asset/index.html");
     }
-
-
-
-    public class WebAppInterface {
-
-        @JavascriptInterface
-        public void setStatusBarColor(String color) {
-            runOnUiThread(() -> {
-                try {
-                    Window window = getWindow();
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-                    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-                    window.setStatusBarColor(Color.parseColor(color));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-
-
-
-        @JavascriptInterface
-        public void setNavigationBarColor(String color) {
-            runOnUiThread(() -> {
-                try {
-                    Window window = getWindow();
-                    // Requires API 21+
-                    window.setNavigationBarColor(Color.parseColor(color));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-    }
-
-
 
     @Override
     public void onBackPressed() {

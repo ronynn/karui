@@ -1,16 +1,11 @@
 <resources>
 
-
-
     <style name="AppTheme" parent="android:Theme.DeviceDefault">
-        <!-- Set initial values to transparent so the HTML color can be applied dynamically -->
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:statusBarColor">#32302f</item>
+        <item name="android:navigationBarColor">#32302f</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
-
-
 
 </resources>
