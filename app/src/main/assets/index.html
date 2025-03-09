@@ -109,6 +109,13 @@
                 padding: 0.5rem;
                 cursor: pointer;
             }
+            html {
+                user-select: none;
+            }
+            input,
+            textarea {
+                user-select: text;
+            }
         </style>
     </head>
     <body :data-theme="currentTheme" x-cloak>
@@ -201,7 +208,10 @@
                     <div class="box" x-cloak>
                         <label>Box 3: Theme & Font</label>
                         <div style="overflow-x: auto; white-space: nowrap">
-                            <template x-for="theme in themes" :key="theme">
+                            <template
+                                x-for="theme in themes.concat(['dynamic'])"
+                                :key="theme"
+                            >
                                 <button
                                     @click="setTheme(theme)"
                                     style="margin-right: 0.5rem"
@@ -316,7 +326,6 @@
             </div>
         </div>
 
-        
         <script>
             function app() {
                 return {
@@ -369,8 +378,18 @@
                         localStorage.setItem("theme", this.currentTheme);
                     },
                     setTheme(theme) {
-                        this.currentTheme = theme;
-                        this.applyTheme();
+                        if (theme === "dynamic") {
+                            if (window.Android) {
+                                Android.getDynamicColors();
+                            }
+                        } else {
+                            this.currentTheme = theme;
+                            document.documentElement.setAttribute(
+                                "data-theme",
+                                this.currentTheme
+                            );
+                            localStorage.setItem("theme", this.currentTheme);
+                        }
                     },
                     applyFont() {
                         document.body.style.fontFamily =
