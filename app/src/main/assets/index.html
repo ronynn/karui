@@ -207,6 +207,7 @@
                     <!-- Box 3: Theme & Font Selector -->
                     <div class="box" x-cloak>
                         <label>Box 3: Theme & Font</label>
+<h2>Themes</h2>
                         <div style="overflow-x: auto; white-space: nowrap">
                             <template
                                 x-for="theme in themes.concat(['dynamic'])"
@@ -219,6 +220,7 @@
                                 ></button>
                             </template>
                         </div>
+<h2>Fonts</h2>
                         <div
                             style="
                                 overflow-x: auto;
@@ -238,21 +240,18 @@
                     <!-- Box 4: About -->
                     <div class="box" x-cloak>
                         <label>Box 4: About</label>
+                        <h2>About</h2>
                         <p>
-                            Cozy Minimal To-Do is a lightweight, bloat‑free open
-                            source app. More customizations will be added. Use
+                            Karui is a privacy friendly, lightweight, bloat‑free open
+                            source todo list/ note-taking app. More customizations will be added. <br/> Use
                             <code>///</code> to add a new tab,
                             <code>\\\</code> to remove a tab, slide theme
-                            buttons and check all the themes. Check our
+                            buttons and check all the themes. √d is to delete a note, √r is to restore a note, √e is to clear the recycle bin. <br/> Check our
                             <a
-                                href="https://github.com/yourrepo"
-                                target="_blank"
+                                href="https://github.com/ronynn/karui"
+                                
                                 >GitHub Repo</a
-                            >. Report issues at our issue tracker. See the
-                            <a href="license.txt" target="_blank"
-                                >license.txt</a
-                            >
-                            for details.
+                            > for more info, updates, licenses. Report issues at the issue tracker.
                         </p>
                     </div>
                     <!-- Box 5: Deleted Items -->
@@ -537,79 +536,100 @@
                         this.notes.push(note);
                         this.saveData();
                     },
-               // Export notes: save as JSON or TXT
-exportNotes(format) {
-  let fileName = format === "json" ? "notes.json" : "notes.txt";
-  let fileType = format === "json" ? "application/json" : "text/plain";
-  let fileData = format === "json" 
-    ? JSON.stringify(this.notes) 
-    : this.notes.map(note => note.text).join("\n");
-    
-  if (window.Android && window.Android.saveFile) {
-    Android.saveFile(fileName, fileData, fileType);
-  } else {
-    const blob = new Blob([fileData], { type: fileType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
-  }
-},
+                    // Export notes: save as JSON or TXT
+                    exportNotes(format) {
+                        let fileName =
+                            format === "json" ? "notes.json" : "notes.txt";
+                        let fileType =
+                            format === "json"
+                                ? "application/json"
+                                : "text/plain";
+                        let fileData =
+                            format === "json"
+                                ? JSON.stringify(this.notes)
+                                : this.notes.map(note => note.text).join("\n");
 
-// Import notes: open Android file picker if available, otherwise use file input.
-importJsonFile() {
-  if (window.Android && window.Android.importJsonFile) {
-    Android.importJsonFile();
-  } else {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/json";
-    input.onchange = e => {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const importedNotes = JSON.parse(reader.result);
-          this.notes = importedNotes;
-          this.saveData();
-        } catch (err) {
-          alert("Import failed.");
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }
-},
+                        if (window.Android && window.Android.saveFile) {
+                            Android.saveFile(fileName, fileData, fileType);
+                        } else {
+                            const blob = new Blob([fileData], {
+                                type: fileType
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = fileName;
+                            a.click();
+                        }
+                    },
 
-// Set dynamic colors from Android by mapping them to your preset theme variables.
-setAndroidColors(color1, color2, color3) {
-  // For example, mapping Android dynamic colors to your theme variables.
-  document.documentElement.style.setProperty("--bg", color1);
-  document.documentElement.style.setProperty("--text", color2);
-  document.documentElement.style.setProperty("--border", color3);
-  document.documentElement.style.setProperty("--button", color2);
-  document.documentElement.style.setProperty("--button-hover", color3);
-  document.documentElement.style.setProperty("--input-bg", color1);
-  document.documentElement.style.setProperty("--input-border", color3);
-  document.documentElement.style.setProperty("--input-text", color2);
-  // Mark this theme as dynamic
-  document.documentElement.setAttribute("data-theme", "dynamic");
-},
+                    importJsonFile() {
+                        if (window.Android && window.Android.importJsonFile) {
+                            Android.importJsonFile();
+                        } else {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = "application/json";
+                            input.onchange = e => {
+                                const file = e.target.files[0];
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    try {
+                                        const importedNotes = JSON.parse(
+                                            reader.result
+                                        );
+                                        this.notes = importedNotes;
+                                        this.saveData();
+                                    } catch (err) {
+                                        alert("Import failed.");
+                                    }
+                                };
+                                reader.readAsText(file);
+                            };
+                            input.click();
+                        }
+                    },
 
-// Global function called from Android when a JSON file is imported via the native file picker.
-function handleImportedJson(jsonContent) {
-  try {
-    const importedNotes = JSON.parse(jsonContent);
-    // Assuming your Alpine.js data is attached to the <html> element:
-    const appData = document.querySelector('html').__x.$data;
-    appData.notes = importedNotes;
-    appData.saveData();
-  } catch (error) {
-    alert("Import failed.");
-  }
-},
+                    setAndroidColors(color1, color2, color3) {
+                        // Map the Android dynamic colors into your theme's CSS custom properties
+                        document.documentElement.style.setProperty(
+                            "--bg",
+                            color1
+                        );
+                        document.documentElement.style.setProperty(
+                            "--text",
+                            color2
+                        );
+                        document.documentElement.style.setProperty(
+                            "--border",
+                            color3
+                        );
+                        document.documentElement.style.setProperty(
+                            "--button",
+                            color2
+                        );
+                        document.documentElement.style.setProperty(
+                            "--button-hover",
+                            color3
+                        );
+                        document.documentElement.style.setProperty(
+                            "--input-bg",
+                            color1
+                        );
+                        document.documentElement.style.setProperty(
+                            "--input-border",
+                            color3
+                        );
+                        document.documentElement.style.setProperty(
+                            "--input-text",
+                            color2
+                        );
+                        // Mark this theme as dynamic so your theme picker reflects it
+                        document.documentElement.setAttribute(
+                            "data-theme",
+                            "dynamic"
+                        );
+                        },
                     openImportModal() {
                         this.showImportModal = true;
                     },

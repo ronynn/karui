@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
     private WebView mWebView;
     private View splashScreen;
 
-    // Pending file save data
+    // Pending file data for export
     private String pendingFileName;
     private String pendingFileData;
     private String pendingFileType;
@@ -58,23 +58,22 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(mWebView, true);
 
-        // Add the JavaScript interface to handle file saving, importing, and dynamic colors.
+        // Add the JavaScript interface for file operations and dynamic colors.
         mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
         mWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Fade out the splash screen when WebView is ready.
+                // Fade out the splash screen.
                 ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
                 fadeOut.setInterpolator(new DecelerateInterpolator());
                 fadeOut.setDuration(500);
                 fadeOut.start();
 
-                // Hide the splash screen and show the WebView.
                 splashScreen.setVisibility(View.GONE);
                 mWebView.setVisibility(View.VISIBLE);
 
-                // If on Android 12+ (API 31), fetch dynamic Material You colors and pass them to the HTML.
+                // If running on Android 12+ (API 31), retrieve dynamic colors and pass them to JavaScript.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     int color1 = getColor(android.R.color.system_accent1_100);
                     int color2 = getColor(android.R.color.system_accent2_100);
@@ -92,7 +91,6 @@ public class MainActivity extends Activity {
         mWebView.loadUrl("file:///android_asset/index.html");
     }
 
-    // Handle results from file picker intents (both saving and importing).
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -125,8 +123,11 @@ public class MainActivity extends Activity {
                         }
                         reader.close();
                         String jsonContent = sb.toString();
-                        // Call the global JavaScript function "handleImportedJson" with the JSON string.
-                        String jsCode = "handleImportedJson(" + JSONObject.quote(jsonContent) + ")";
+                        // Inject JavaScript to update the Alpine.js app:
+                        // It sets the notes array and calls saveData().
+                        String jsCode = "var imp = JSON.parse(" + JSONObject.quote(jsonContent) + ");" +
+                                "document.querySelector('[x-data]').__x.$data.notes = imp;" +
+                                "document.querySelector('[x-data]').__x.$data.saveData();";
                         mWebView.evaluateJavascript(jsCode, null);
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -145,9 +146,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    // JavaScript interface for file operations and dynamic colors.
+    // JavaScript interface exposing file operations and dynamic color retrieval.
     public class WebAppInterface {
-        // Called from JavaScript to save a file (JSON or TXT).
         @JavascriptInterface
         public void saveFile(String fileName, String fileData, String fileType) {
             pendingFileName = fileName;
@@ -161,7 +161,6 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
         }
 
-        // Called from JavaScript to import a JSON file via the Android file picker.
         @JavascriptInterface
         public void importJsonFile() {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -170,7 +169,6 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
         }
 
-        // Called from JavaScript to request dynamic colors manually.
         @JavascriptInterface
         public void getDynamicColors() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
