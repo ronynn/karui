@@ -317,6 +317,21 @@
         </div>
 
         <script>
+            function sendBackgroundColorToAndroid() {
+                let bgColor = window.getComputedStyle(
+                    document.body
+                ).backgroundColor;
+                Android.setStatusBarColor(bgColor);
+                Android.setNavigationBarColor(bgColor);
+            }
+
+            document.addEventListener(
+                "DOMContentLoaded",
+                sendBackgroundColorToAndroid
+            );
+        </script>
+
+        <script>
             function app() {
                 return {
                     // Screen management
