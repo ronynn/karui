@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             android:layout_below="@id/progress_bar"
             android:layout_centerHorizontal="true"
-            android:text="Initialising OS..."
+            android:text="_initialising _ronynn OS..."
             android:textColor="#ebdbb2"
             android:paddingTop="16dp"/>
     </RelativeLayout>
