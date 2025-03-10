@@ -1,4 +1,4 @@
-# TodoList App
+# Karui ToDo
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/icon.png" alt="App Icon" />
