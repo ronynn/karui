@@ -18,11 +18,11 @@ jobs:
         uses: actions/checkout@v4
 
       # Set up JDK
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
-          java-version: 21
+          java-version: 17
 
       # Cache Gradle dependencies
       - name: Cache Gradle dependencies
@@ -44,6 +44,9 @@ jobs:
         if: contains(github.event.head_commit.message, 'release')
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > keystore.jks
+          
+      - name: Debug Keystore File
+        run: ls -lh keystore.jks && keytool -list -v -keystore keystore.jks -storepass $ANDROID_KEYSTORE_PASSWORD
 
       # Build APK: if commit message contains "release", build the release APK; otherwise, build the debug APK.
       - name: Build APK
