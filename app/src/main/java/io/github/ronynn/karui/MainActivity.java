@@ -37,60 +37,66 @@ public class MainActivity extends Activity {
     private String pendingFileData;
     private String pendingFileType;
 
-    @Override
-    @SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+ @Override
+@SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
 
-        mWebView = findViewById(R.id.activity_main_webview);
-        splashScreen = findViewById(R.id.splash_screen);
+    mWebView = findViewById(R.id.activity_main_webview);
+    splashScreen = findViewById(R.id.splash_screen);
 
-        WebSettings webSettings = mWebView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
-        webSettings.setAllowFileAccess(true);
-        webSettings.setAllowContentAccess(true);
-        webSettings.setAllowFileAccessFromFileURLs(true);
-        webSettings.setAllowUniversalAccessFromFileURLs(true);
+    WebSettings webSettings = mWebView.getSettings();
+    webSettings.setJavaScriptEnabled(true);
+    webSettings.setDomStorageEnabled(true);
+    webSettings.setAllowFileAccess(true);
+    webSettings.setAllowContentAccess(true);
+    webSettings.setAllowFileAccessFromFileURLs(true);
+    webSettings.setAllowUniversalAccessFromFileURLs(true);
 
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(mWebView, true);
+    CookieManager cookieManager = CookieManager.getInstance();
+    cookieManager.setAcceptCookie(true);
+    cookieManager.setAcceptThirdPartyCookies(mWebView, true);
 
-        // Add the JavaScript interface for file operations and dynamic colors.
-        mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
+    // Add the JavaScript interface for file operations and dynamic colors.
+    mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
-        mWebView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                // Fade out the splash screen.
-                ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
-                fadeOut.setInterpolator(new DecelerateInterpolator());
-                fadeOut.setDuration(500);
-                fadeOut.start();
+    mWebView.setWebViewClient(new WebViewClient() {
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            view.getContext().startActivity(intent);
+            return true;
+        }
 
-                splashScreen.setVisibility(View.GONE);
-                mWebView.setVisibility(View.VISIBLE);
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            // Fade out the splash screen.
+            ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
+            fadeOut.setInterpolator(new DecelerateInterpolator());
+            fadeOut.setDuration(500);
+            fadeOut.start();
 
-                // If running on Android 12+ (API 31), retrieve dynamic colors and pass them to JavaScript.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    int color1 = getColor(android.R.color.system_accent1_100);
-                    int color2 = getColor(android.R.color.system_accent2_100);
-                    int color3 = getColor(android.R.color.system_accent3_100);
-                    String hex1 = String.format("#%06X", (0xFFFFFF & color1));
-                    String hex2 = String.format("#%06X", (0xFFFFFF & color2));
-                    String hex3 = String.format("#%06X", (0xFFFFFF & color3));
-                    String jsCode = "setAndroidColors('" + hex1 + "', '" + hex2 + "', '" + hex3 + "')";
-                    mWebView.evaluateJavascript(jsCode, null);
-                }
+            splashScreen.setVisibility(View.GONE);
+            mWebView.setVisibility(View.VISIBLE);
+
+            // If running on Android 12+ (API 31), retrieve dynamic colors and pass them to JavaScript.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                int color1 = getColor(android.R.color.system_accent1_100);
+                int color2 = getColor(android.R.color.system_accent2_100);
+                int color3 = getColor(android.R.color.system_accent3_100);
+                String hex1 = String.format("#%06X", (0xFFFFFF & color1));
+                String hex2 = String.format("#%06X", (0xFFFFFF & color2));
+                String hex3 = String.format("#%06X", (0xFFFFFF & color3));
+                String jsCode = "setAndroidColors('" + hex1 + "', '" + hex2 + "', '" + hex3 + "')";
+                mWebView.evaluateJavascript(jsCode, null);
             }
-        });
+        }
+    });
 
-        mWebView.setWebChromeClient(new WebChromeClient());
-        mWebView.loadUrl("file:///android_asset/index.html");
-    }
-
+    mWebView.setWebChromeClient(new WebChromeClient());
+    mWebView.loadUrl("file:///android_asset/index.html");
+}
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);

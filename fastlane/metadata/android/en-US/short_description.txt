@@ -1,0 +1,2 @@
+An open source, privacy focussed, todo list app to quickly jot down things to do.  
+Inspired by the system-24 theme and the Windows Mobile design system.

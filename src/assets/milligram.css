@@ -11,11 +11,11 @@
 }
 
 html {
-    user-select: none;
+  user-select: none;
 }
 input,
 textarea {
-    user-select: text;
+  user-select: text;
 }
 
 input {
@@ -784,5 +784,3 @@ img {
 .float-right {
     float: right;
 }
-
-/*# sourceMappingURL=milligram.css.map */
