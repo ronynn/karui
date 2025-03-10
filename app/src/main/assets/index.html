@@ -132,11 +132,11 @@
 
         <!-- View Wrapper with Slide Transition -->
         <div x-ref="viewWrapper" :class="slideClass" x-cloak>
-            <template x-if="activeTab==='Main'">
+            <template x-if="activeTab==='Home'">
                 <div>
                     <!-- Box 1: Input and Stats -->
                     <div class="box" x-cloak>
-                        <label>Box 1</label>
+                        <label>Notes Input</label>
                         <input
                             type="text"
                             placeholder="Type note or command"
@@ -155,7 +155,7 @@
 
                     <!-- Box 2: Draggable Notes & Category Tabs -->
                     <div class="box" x-cloak>
-                        <label>Box 2</label>
+                        <label>Notes List</label>
                         <!-- Category tabs -->
                         <div class="category-tabs">
                             <template
@@ -329,8 +329,8 @@
             function app() {
                 return {
                     // Screen management
-                    activeTab: "Main",
-                    tabs: ["Main", "Settings"],
+                    activeTab: "Home",
+                    tabs: ["Home", "Settings"],
                     slideDirection: "left",
                     slideClass: "",
                     // Note category management (persisted in local storage)

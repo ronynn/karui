@@ -3,13 +3,17 @@
     package="io.github.ronynn.karui"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.INTERNET" />
+    
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/AppTheme"
         tools:ignore="GoogleAppIndexingWarning">
+    	
+    	<meta-data 
+    android:name="android.theme_customization.adaptive_icon_background" 
+    android:resource="@color/dynamic_icon_bg"/>
         <activity
             android:configChanges="orientation|screenSize"
             android:name="io.github.ronynn.karui.MainActivity"
