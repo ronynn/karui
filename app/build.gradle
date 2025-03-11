@@ -2,6 +2,8 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 34
+    
+    namespace "io.github.ronynn.karui"
 
     defaultConfig {
         applicationId "io.github.ronynn.karui"
