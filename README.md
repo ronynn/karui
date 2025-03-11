@@ -12,8 +12,8 @@ Inspired by the system-24 theme and the Windows Mobile design system, this app's
 ## Screenshots
 
 <div align="center">
-  <img src="fastlane/metadata/android/en-US/images/1.jpg" alt="Screenshot 1" width="45%" style="margin-right: 10px;">
-  <img src="fastlane/metadata/android/en-US/images/2.jpg" alt="Screenshot 2" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Screenshot 1" width="45%" style="margin-right: 10px;">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Screenshot 2" width="45%">
 </div>
 
 ## Features
@@ -40,6 +40,9 @@ This app is designed to operate entirely locally, with no cloud storage involved
 ## Releases
 
 Stay updated via our [RSS feed for GitHub releases](https://github.com/ronynn/karui/releases.atom) which includes detailed release notes.
+
+## Contact
+[Dev.to Profile](https://dev.to/ronynn)
 
 ## Roadmap
 
