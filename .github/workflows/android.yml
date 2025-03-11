@@ -34,6 +34,12 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             gradle-${{ runner.os }}-
+
+      # Clear previous build outputs
+      - name: Clean Build Directory
+        run: |
+          rm -rf app/build
+
       # Grant execute permission to Gradle wrapper
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x ./gradlew
@@ -43,14 +49,33 @@ jobs:
         if: contains(github.event.head_commit.message, 'release')
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > keystore.jks
+
+      # Debug step to verify if the keystore file exists
+      - name: Verify Keystore File
+        if: contains(github.event.head_commit.message, 'release')
+        run: |
+          if [ -f "keystore.jks" ]; then
+            echo "Keystore file exists."
+          else
+            echo "Keystore file is missing!" && exit 1
+          fi
+
       # Build APK: if commit message contains "release", build the release APK; otherwise, build the debug APK.
       - name: Build APK
         run: |
+          ./gradlew clean
           if [[ "${{ github.event.head_commit.message }}" == *release* ]]; then
             ./gradlew assembleRelease
           else
             ./gradlew assembleDebug
           fi
+
+      # Ensure old artifacts are removed before uploading new ones
+      - name: Remove Old Artifacts
+        run: |
+          rm -rf app/build/outputs/apk/release/*.apk
+          rm -rf app/build/outputs/apk/debug/*.apk
+
       # Upload the built APK as an artifact.
       - name: Upload APK Artifact (Release)
         if: contains(github.event.head_commit.message, 'release')
