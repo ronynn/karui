@@ -44,7 +44,7 @@ Stay updated via our [RSS feed for GitHub releases](https://github.com/ronynn/ka
 ## Roadmap
 
 - [ ] Get user feedback and suggestions to improve and expand the project scope.
-- [ ] Fix import `.json` bugs.
+- [x] Fix import `.json` bugs.
 - [ ] Enhance accessibility with larger touch areas.
 - [ ] Resolve dynamic color issues (😔 still figuring this one out—maybe a short break is needed).
 - [ ] Add translations.
