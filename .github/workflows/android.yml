@@ -1,5 +1,6 @@
 name: Android APK Build
 
+
 on:
   push:
     branches:
@@ -7,10 +8,12 @@ on:
       - master
   pull_request:
 
+
 jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+
 
     steps:
       # Checkout the repository
@@ -57,18 +60,19 @@ jobs:
       - name: Setup Keystore
         if: contains(github.event.head_commit.message, 'release')
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > keystore.jks
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
 
 
 
-      # Debug step to verify if the keystore file exists
+      # Debug step to verify if the keystore file exists and is non-empty
       - name: Verify Keystore File
         if: contains(github.event.head_commit.message, 'release')
         run: |
-          if [ -f "keystore.jks" ]; then
-            echo "Keystore file exists."
+          if [ -s "keystore.jks" ]; then
+            echo "Keystore file exists and is non-empty."
+            ls -lh keystore.jks
           else
-            echo "Keystore file is missing!" && exit 1
+            echo "Keystore file is missing or empty!" && exit 1
           fi
 
 
