@@ -44,9 +44,10 @@ jobs:
 
 
 
-      # Clear previous build outputs
+      # Clean previous build outputs (and APK outputs)
       - name: Clean Build Directory
-        run: rm -rf app/build
+        run: |
+          rm -rf app/build
 
 
 
@@ -100,6 +101,14 @@ jobs:
 
 
 
+      # Debug: List APK outputs
+      - name: List APK Outputs
+        run: |
+          echo "APK files in app/build/outputs/apk:"
+          find app/build/outputs/apk -type f -name "*.apk"
+          
+
+
       # If the build failed, rerun with detailed logging to help diagnose the issue.
       - name: Debug Build Failure (Stacktrace, Info, Scan)
         if: failure()
@@ -114,21 +123,13 @@ jobs:
 
 
 
-      # Ensure old artifacts are removed before uploading new ones
-      - name: Remove Old Artifacts
-        run: |
-          rm -rf app/build/outputs/apk/release/*.apk
-          rm -rf app/build/outputs/apk/debug/*.apk
-
-
-
       # Upload the built APK as an artifact (Release)
       - name: Upload APK Artifact (Release)
         if: contains(github.event.head_commit.message, 'release')
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/*.apk
 
 
 
@@ -138,4 +139,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
