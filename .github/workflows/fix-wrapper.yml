@@ -16,18 +16,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download Gradle Distribution
+      - name: Download Gradle Distribution & Checksum
         run: |
           GRADLE_VERSION="8.4"
           JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
           CHECKSUM_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip.sha256"
 
-          # Download Gradle distribution & checksum
+          # Download files
           wget -q "$JAR_URL" -O gradle.zip
           wget -q "$CHECKSUM_URL" -O gradle.zip.sha256
 
-      - name: Verify ZIP Checksum (Before Extraction)
-        run: sha256sum -c gradle.zip.sha256 || (echo "ZIP Checksum mismatch!" && exit 1)
+      - name: Verify ZIP Checksum (Manual Comparison)
+        run: |
+          # Read the checksum from file (removing any extra spaces/newlines)
+          EXPECTED_CHECKSUM=$(cat gradle.zip.sha256 | tr -d ' \n')
+          
+          # Compute the actual checksum
+          ACTUAL_CHECKSUM=$(sha256sum gradle.zip | awk '{ print $1 }')
+
+          echo "Expected: $EXPECTED_CHECKSUM"
+          echo "Actual:   $ACTUAL_CHECKSUM"
+
+          # Compare and fail if they don’t match
+          if [[ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]; then
+            echo "ZIP Checksum mismatch!"
+            exit 1
+          else
+            echo "ZIP Checksum verified!"
+          fi
 
       - name: List ZIP Contents (Debugging)
         run: unzip -l gradle.zip
