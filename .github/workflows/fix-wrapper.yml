@@ -3,8 +3,8 @@ name: Fix Gradle Wrapper
 on:
   push:
     branches:
-      - main  # Change if using another branch
-  workflow_dispatch:  # Allows manual triggering
+      - main  
+  workflow_dispatch:  
 
 jobs:
   fix-wrapper:
@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download & Extract Gradle Wrapper JAR
+      - name: Download Gradle Distribution
         run: |
           GRADLE_VERSION="8.4"
           JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
@@ -24,8 +24,13 @@ jobs:
           # Download Gradle distribution
           wget -q "$JAR_URL" -O gradle.zip
 
-          # Extract only the gradle-wrapper.jar
-          unzip -j gradle.zip "**/gradle-wrapper.jar" -d gradle/wrapper/
+      - name: List ZIP Contents (Debugging)
+        run: unzip -l gradle.zip
+
+      - name: Extract Gradle Wrapper JAR
+        run: |
+          # Find the correct path and extract the file
+          unzip -j gradle.zip "**/gradle-wrapper.jar" -d gradle/wrapper/ || (echo "Extraction failed! Check ZIP contents above." && exit 1)
 
           # Cleanup
           rm gradle.zip
@@ -44,7 +49,7 @@ jobs:
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true  # Avoids failure if no changes
+        continue-on-error: true  
 
       - name: Trigger Build Workflow
         run: gh workflow run build.yml
