@@ -79,6 +79,6 @@ jobs:
         continue-on-error: true  
 
       - name: Trigger Build Workflow
-        run: gh workflow run build.yml
+        run: gh workflow run android.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
