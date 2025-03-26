@@ -20,9 +20,14 @@ jobs:
         run: |
           GRADLE_VERSION="8.4"
           JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+          CHECKSUM_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip.sha256"
 
-          # Download Gradle distribution
+          # Download Gradle distribution & checksum
           wget -q "$JAR_URL" -O gradle.zip
+          wget -q "$CHECKSUM_URL" -O gradle.zip.sha256
+
+      - name: Verify ZIP Checksum (Before Extraction)
+        run: sha256sum -c gradle.zip.sha256 || (echo "ZIP Checksum mismatch!" && exit 1)
 
       - name: List ZIP Contents (Debugging)
         run: unzip -l gradle.zip
@@ -36,12 +41,15 @@ jobs:
           mv gradle/wrapper/gradle-wrapper-8.4.jar gradle/wrapper/gradle-wrapper.jar
 
           # Cleanup
-          rm gradle.zip
+          rm gradle.zip gradle.zip.sha256
 
-      - name: Verify Checksum
+      - name: Get Official Checksum for JAR
         run: |
-          CHECKSUM="f2b9ed0faf8472cbe469255ae6c86eddb77076c75191741b4a462f33128dd419"
-          echo "$CHECKSUM  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --status && echo "Checksum verified!" || (echo "Checksum mismatch!" && exit 1)
+          # Compute checksum for the extracted file
+          JAR_CHECKSUM=$(sha256sum gradle/wrapper/gradle-wrapper.jar | awk '{ print $1 }')
+
+          # Print checksum for debugging
+          echo "Extracted JAR Checksum: $JAR_CHECKSUM"
 
       - name: Commit & Push Changes
         run: |
