@@ -3,8 +3,8 @@ name: Fix Gradle Wrapper
 on:
   push:
     branches:
-      - main  # Adjust if using a different branch
-  workflow_dispatch:  # Allows manual trigger
+      - main  # Change if using another branch
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   fix-wrapper:
@@ -16,36 +16,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify & Replace Gradle Wrapper
+      - name: Download & Extract Gradle Wrapper JAR
         run: |
           GRADLE_VERSION="8.4"
-          CHECKSUM="f2b9ed0faf8472cbe469255ae6c86eddb77076c75191741b4a462f33128dd419"
           JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-          
-          # Download & Extract Gradle Wrapper
+
+          # Download Gradle distribution
           wget -q "$JAR_URL" -O gradle.zip
-          unzip -q gradle.zip -d gradle_temp
-          
-          # Move Verified Jar
-          mv gradle_temp/gradle-${GRADLE_VERSION}/lib/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
-          
-          # Verify Checksum
-          echo "$CHECKSUM  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --status
-          
-          # Clean up
-          rm -rf gradle.zip gradle_temp
+
+          # Extract only the gradle-wrapper.jar
+          unzip -j gradle.zip "**/gradle-wrapper.jar" -d gradle/wrapper/
+
+          # Cleanup
+          rm gradle.zip
+
+      - name: Verify Checksum
+        run: |
+          CHECKSUM="f2b9ed0faf8472cbe469255ae6c86eddb77076c75191741b4a462f33128dd419"
+          echo "$CHECKSUM  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --status && echo "Checksum verified!" || (echo "Checksum mismatch!" && exit 1)
 
       - name: Commit & Push Changes
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add gradle/wrapper/gradle-wrapper.jar
-          git commit -m "Fix: Replace corrupted Gradle Wrapper with verified version"
+          git commit -m "Fix: Replace corrupted Gradle Wrapper with verified version" || echo "No changes to commit"
           git push
-        continue-on-error: true  # Prevent failure if no changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true  # Avoids failure if no changes
 
       - name: Trigger Build Workflow
-        run: |
-          gh workflow run build.yml
+        run: gh workflow run build.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
