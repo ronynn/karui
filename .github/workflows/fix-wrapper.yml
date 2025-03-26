@@ -1,21 +1,13 @@
-name: Fix Gradle Wrapper
+name: Fetch Gradle Wrapper
 
 on:
-  push:
-    branches:
-      - main  
-  workflow_dispatch:  
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  fix-wrapper:
+  fetch-wrapper:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Download Gradle Distribution & Checksum
         run: |
           GRADLE_VERSION="8.4"
@@ -26,54 +18,28 @@ jobs:
           wget -q "$JAR_URL" -O gradle.zip
           wget -q "$CHECKSUM_URL" -O gradle.zip.sha256
 
-      - name: Verify ZIP Checksum (Manual Comparison)
+      - name: Verify ZIP Checksum
         run: |
-          # Read the checksum from file (removing any extra spaces/newlines)
           EXPECTED_CHECKSUM=$(cat gradle.zip.sha256 | tr -d ' \n')
-          
-          # Compute the actual checksum
           ACTUAL_CHECKSUM=$(sha256sum gradle.zip | awk '{ print $1 }')
 
           echo "Expected: $EXPECTED_CHECKSUM"
           echo "Actual:   $ACTUAL_CHECKSUM"
 
-          # Compare and fail if they don’t match
           if [[ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]; then
             echo "ZIP Checksum mismatch!"
             exit 1
-          else
-            echo "ZIP Checksum verified!"
           fi
 
-      - name: List ZIP Contents (Debugging)
-        run: unzip -l gradle.zip
-
-      - name: Extract and Rename Gradle Wrapper JAR
+      - name: Extract Gradle Wrapper JAR
         run: |
-          # Extract the correct JAR file
+          mkdir -p gradle/wrapper
           unzip -j gradle.zip "gradle-8.4/lib/plugins/gradle-wrapper-8.4.jar" -d gradle/wrapper/
-          
-          # Rename it to match expected filename
           mv gradle/wrapper/gradle-wrapper-8.4.jar gradle/wrapper/gradle-wrapper.jar
 
-          # Cleanup
-          rm gradle.zip gradle.zip.sha256
-
-      - name: Get Official Checksum for JAR
-        run: |
-          # Compute checksum for the extracted file
-          JAR_CHECKSUM=$(sha256sum gradle/wrapper/gradle-wrapper.jar | awk '{ print $1 }')
-
-          # Print checksum for debugging
-          echo "Extracted JAR Checksum: $JAR_CHECKSUM"
-
-      - name: Commit & Push Changes
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
-          git add gradle/wrapper/gradle-wrapper.jar
-          git commit -m "Fix: Replace corrupted Gradle Wrapper with verified version" || echo "No changes to commit"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true  
+      - name: Upload Wrapper JAR as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-wrapper
+          path: gradle/wrapper/gradle-wrapper.jar
+          retention-days: 7  # Keep for 7 days
