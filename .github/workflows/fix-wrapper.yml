@@ -27,10 +27,13 @@ jobs:
       - name: List ZIP Contents (Debugging)
         run: unzip -l gradle.zip
 
-      - name: Extract Gradle Wrapper JAR
+      - name: Extract and Rename Gradle Wrapper JAR
         run: |
-          # Find the correct path and extract the file
-          unzip -j gradle.zip "**/gradle-wrapper.jar" -d gradle/wrapper/ || (echo "Extraction failed! Check ZIP contents above." && exit 1)
+          # Extract the correct JAR file
+          unzip -j gradle.zip "gradle-8.4/lib/plugins/gradle-wrapper-8.4.jar" -d gradle/wrapper/
+          
+          # Rename it to match expected filename
+          mv gradle/wrapper/gradle-wrapper-8.4.jar gradle/wrapper/gradle-wrapper.jar
 
           # Cleanup
           rm gradle.zip
