@@ -1,45 +1,45 @@
-name: Fetch Gradle Wrapper
+name: Fix Gradle Wrapper
 
 on:
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  fetch-wrapper:
+  generate-wrapper:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Gradle Distribution & Checksum
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java & Gradle
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Generate New Gradle Wrapper
         run: |
           GRADLE_VERSION="8.4"
-          JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-all.zip"
-          CHECKSUM_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-all.zip.sha256"
 
-          # Download files
-          wget -q "$JAR_URL" -O gradle.zip
-          wget -q "$CHECKSUM_URL" -O gradle.zip.sha256
+          # Create a temporary Gradle project
+          mkdir gradle-temp && cd gradle-temp
+          gradle wrapper --gradle-version $GRADLE_VERSION
 
-      - name: Verify ZIP Checksum
-        run: |
-          EXPECTED_CHECKSUM=$(cat gradle.zip.sha256 | tr -d ' \n')
-          ACTUAL_CHECKSUM=$(sha256sum gradle.zip | awk '{ print $1 }')
+          # Move new wrapper files to artifact folder
+          mkdir -p ../gradle/wrapper
+          mv gradle/wrapper/gradle-wrapper.jar ../gradle/wrapper/
+          mv gradle/wrapper/gradle-wrapper.properties ../gradle/wrapper/
 
-          echo "Expected: $EXPECTED_CHECKSUM"
-          echo "Actual:   $ACTUAL_CHECKSUM"
-
-          if [[ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]; then
-            echo "ZIP Checksum mismatch!"
-            exit 1
-          fi
-
-      - name: Extract Gradle Wrapper JAR
-        run: |
-          mkdir -p gradle/wrapper
-          unzip -j gradle.zip "gradle-8.4/lib/plugins/gradle-wrapper-8.4.jar" -d gradle/wrapper/
-          mv gradle/wrapper/gradle-wrapper-8.4.jar gradle/wrapper/gradle-wrapper.jar
-
-      - name: Upload Wrapper JAR as Artifact
+      - name: Upload Gradle Wrapper JAR
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-wrapper
+          name: gradle-wrapper.jar
           path: gradle/wrapper/gradle-wrapper.jar
-          retention-days: 7  # Keep for 7 days
+          retention-days: 7
+
+      - name: Upload Gradle Wrapper Properties
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-wrapper.properties
+          path: gradle/wrapper/gradle-wrapper.properties
+          retention-days: 7
