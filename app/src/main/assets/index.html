@@ -1,321 +1,285 @@
 <!doctype html>
 <html lang="en" x-data="app()" x-init="init()" x-cloak>
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Karui To-Do</title>
-        <link rel="stylesheet" href="normalize.css" />
-        <link rel="stylesheet" href="milligram.css" />
-        <script src="alpine.cdn.min.js" defer></script>
-        <style>
-            /* Hide elements until Alpine is ready */
-            [x-cloak] {
-                display: none !important;
-            }
-            /* Slide animation classes */
-            .slide-left {
-                animation: slideLeft 0.1s forwards;
-            }
-            .slide-right {
-                animation: slideRight 0.2s forwards;
-            }
-            @keyframes slideLeft {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            @keyframes slideRight {
-                from {
-                    transform: translateX(-100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            /* Top bar (Windows Mobile pivot style) */
-            .top-bar {
-                display: flex;
-                overflow-x: auto;
-                white-space: nowrap;
-                border-bottom: 2px solid var(--border);
-                padding: 0.5rem 1rem;
-                margin-bottom: 1rem;
-            }
-            .top-bar span {
-                display: inline-block;
-                padding: 0.5rem 1rem;
-                cursor: pointer;
-                margin-right: 0.5rem;
-            }
-            .active-tab {
-                color: var(--button);
-                font-weight: bold;
-                border-bottom: 2px solid var(--button);
-            }
-            .inactive-tab {
-                color: gray;
-            }
-            /* Horizontal scrollable tab bar for note categories in Box 2 */
-            .category-tabs {
-                overflow-x: auto;
-                white-space: nowrap;
-                margin-bottom: 1rem;
-            }
-            .category-tabs span {
-                display: inline-block;
-                padding: 0.5rem 1rem;
-                cursor: pointer;
-                border: 1px solid var(--border);
-                margin-right: 0.5rem;
-            }
-            /* Import modal */
-            .modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            /* Draggable note list items */
-            li.dragging {
-                opacity: 0.5;
-            }
-            li {
-                position: relative;
-                padding-right: 2rem;
-                cursor: grab;
-            }
-            li.completed {
-                text-decoration: line-through;
-                color: gray;
-                opacity: 0.7;
-            }
-            /* Floating delete text */
-            .delete-text {
-                position: absolute;
-                right: 0;
-                top: 0;
-                padding: 0.5rem;
-                cursor: pointer;
-            }
-            
-        </style>
-    </head>
-    <body :data-theme="currentTheme" x-cloak>
-        <!-- Top Bar -->
-        <div class="top-bar" x-cloak>
-            <template x-for="tab in tabs" :key="tab">
-                <span
-                    x-text="tab"
-                    :class="activeTab === tab ? 'active-tab' : 'inactive-tab'"
-                    @click="activateTab(tab)"
-                ></span>
-            </template>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Karui To-Do</title>
+  <link rel="stylesheet" href="normalize.css" />
+  <link rel="stylesheet" href="milligram.css" />
+  <script src="alpine.cdn.min.js" defer></script>
+  <style>
+    /* Hide elements until Alpine is ready */
+    [x-cloak] {
+      display: none !important;
+    }
+
+    /* Slide animation classes */
+    .slide-left {
+      animation: slideLeft 0.2s forwards;
+    }
+
+    .slide-right {
+      animation: slideRight 0.2s forwards;
+    }
+
+    @keyframes slideLeft {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideRight {
+      from {
+        transform: translateX(-100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Top bar (Windows Mobile pivot style) */
+    .top-bar {
+      display: flex;
+      overflow-x: auto;
+      white-space: nowrap;
+      --border-bottom: 2px solid var(--border);
+      padding: 0.5rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .top-bar span {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      margin-right: 0.5rem;
+    }
+
+    .active-tab {
+      color: var(--button);
+      font-weight: bold;
+      border-bottom: 2px solid var(--button);
+    }
+
+    .inactive-tab {
+      color: gray;
+    }
+
+    /* Horizontal scrollable tab bar for note categories in Box 2 */
+    .category-tabs {
+      overflow-x: auto;
+      white-space: nowrap;
+      margin-bottom: 1rem;
+    }
+
+    .category-tabs span {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      margin-right: 0.5rem;
+    }
+
+    /* Import modal */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Draggable note list items */
+    li.dragging {
+      opacity: 0.5;
+    }
+
+    li {
+      position: relative;
+      padding-right: 2rem;
+      cursor: grab;
+    }
+
+    li.completed {
+      text-decoration: line-through;
+      color: gray;
+      opacity: 0.7;
+    }
+
+    /* Floating delete text */
+    .delete-text {
+      position: absolute;
+      right: 0;
+      top: 0;
+      padding: 0.5rem;
+      cursor: pointer;
+    }
+
+  </style>
+</head>
+
+<body :data-theme="currentTheme" x-cloak>
+  <!-- Top Bar -->
+  <div class="top-bar" x-cloak>
+    <template x-for="tab in tabs" :key="tab">
+      <span x-text="tab" :class="activeTab === tab ? 'active-tab' : 'inactive-tab'" @click="activateTab(tab)"></span>
+    </template>
+  </div>
+
+  <!-- View Wrapper with Slide Transition -->
+  <div x-ref="viewWrapper" :class="slideClass" x-cloak>
+    <template x-if="activeTab==='Home'">
+      <div>
+        <!-- Box 1: Input and Stats -->
+        <div class="box" x-cloak>
+          <label>Box 1:Notes Input</label>
+          <input type="text" placeholder="Type note or command" x-model="inputText" @keydown.enter="handleInput" />
+          <div style="margin-top: 1rem">
+            <span>Remaining: <span x-text="remainingCount"></span></span>
+            <span style="margin-left: 1rem">Completed: <span x-text="completedCount"></span></span>
+          </div>
         </div>
 
-        <!-- View Wrapper with Slide Transition -->
-        <div x-ref="viewWrapper" :class="slideClass" x-cloak>
-            <template x-if="activeTab==='Home'">
-                <div>
-                    <!-- Box 1: Input and Stats -->
-                    <div class="box" x-cloak>
-                        <label>Notes Input</label>
-                        <input
-                            type="text"
-                            placeholder="Type note or command"
-                            x-model="inputText"
-                            @keydown.enter="handleInput"
-                        />
-                        <div style="margin-top: 1rem">
-                            <span
-                                >Remaining: <span x-text="remainingCount"></span
-                            ></span>
-                            <span style="margin-left: 1rem"
-                                >Completed: <span x-text="completedCount"></span
-                            ></span>
-                        </div>
-                    </div>
-
-                    <!-- Box 2: Draggable Notes & Category Tabs -->
-                    <div class="box" x-cloak>
-                        <label>Notes List</label>
-                        <!-- Category tabs -->
-                        <div class="category-tabs">
-                            <template
-                                x-for="category in noteCategories"
-                                :key="category"
-                            >
-                                <span
-                                    x-text="category"
-                                    :class="activeCategory === category ? 'active-tab' : 'inactive-tab'"
-                                    @click="activeCategory = category"
-                                ></span>
-                            </template>
-                        </div>
-                        <!-- Draggable note list -->
-                        <ul
-                            style="min-height: 200px"
-                            x-ref="notesList"
-                            @dragover.prevent
-                            @drop="dropNote($event)"
-                        >
-                            <template
-                                x-for="(note, index) in filteredNotes"
-                                :key="note.id"
-                            >
-                                <li
-                                    draggable="true"
-                                    @dragstart="dragStart(note, $event)"
-                                    @dragend="dragEnd($event)"
-                                    :class="note.completed ? 'completed' : ''"
-                                >
-                                    <span
-                                        x-text="note.text"
-                                        @click="toggleComplete(note)"
-                                    ></span>
-                                    <span
-                                        class="delete-text"
-                                        @click="deleteNote(note)"
-                                        >√d</span
-                                    >
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
+        <!-- Box 2: Draggable Notes & Category Tabs -->
+        <div class="box" x-cloak>
+          <label>Box 2:Notes List</label>
+          <!-- Category tabs -->
+          <div class="category-tabs">
+            <template x-for="category in noteCategories" :key="category">
+              <span x-text="category" :class="activeCategory === category ? 'active-tab' : 'inactive-tab'" @click="activeCategory = category"></span>
             </template>
+          </div>
+          <!-- Draggable note list -->
+          <ul style="min-height: 200px" x-ref="notesList" @dragover.prevent @drop="dropNote($event)">
+            <template x-for="(note, index) in filteredNotes" :key="note.id">
+              <li draggable="true" @dragstart="dragStart(note, $event)" @dragend="dragEnd($event)" :class="note.completed ? 'completed' : ''">
+                <span x-text="note.text" @click="toggleComplete(note)"></span>
+                <span class="delete-text" @click="deleteNote(note)">√d</span>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </template>
 
-            <template x-if="activeTab==='Settings'">
-                <div>
-                    <!-- Box 3: Theme & Font Selector -->
-                    <div class="box" x-cloak>
-                        <label>Box 3: Theme & Font</label>
-<h2>Themes</h2>
-                        <div style="overflow-x: auto; white-space: nowrap">
-                            <template
-                                x-for="theme in themes.concat(['dynamic'])"
-                                :key="theme"
-                            >
-                                <button
-                                    @click="setTheme(theme)"
-                                    style="margin-right: 0.5rem"
-                                    x-text="theme"
-                                ></button>
-                            </template>
-                        </div>
-<h2>Fonts</h2>
-                        <div
-                            style="
+    <template x-if="activeTab==='Settings'">
+      <div>
+        <!-- Box 3: Theme & Font Selector -->
+        <div class="box" x-cloak>
+          <label>Box 3: Theme & Font</label>
+          <h2>Themes</h2>
+          <div style="overflow-x: auto; white-space: nowrap">
+            <template x-for="theme in themes.concat(['dynamic'])" :key="theme">
+              <button @click="setTheme(theme)" style="margin-right: 0.5rem" x-text="theme"></button>
+            </template>
+          </div>
+
+
+          <h2>Fonts</h2>
+          <div style="
                                 overflow-x: auto;
                                 white-space: nowrap;
                                 margin-top: 1rem;
-                            "
-                        >
-                            <template x-for="font in fonts" :key="font">
-                                <button
-                                    @click="setFont(font)"
-                                    style="margin-right: 0.5rem"
-                                    x-text="font"
-                                ></button>
-                            </template>
-                        </div>
-                    </div>
-                    <!-- Box 4: About -->
-                    <div class="box" x-cloak>
-                        <label>Box 4: About</label>
-                        <h2>About</h2>
-                        <p>
-                            Karui is a privacy friendly, lightweight, bloat‑free open
-                            source todo list/ note-taking app. More customizations will be added. <br/> Use
-                            <code>///</code> to add a new tab,
-                            <code>\\\</code> to remove a tab, slide theme
-                            buttons and check all the themes. √d is to delete a note, √r is to restore a note, √e is to clear the recycle bin. <br/> Check the github repo at github.com/ronynn/karui for more info, updates, licenses. Report issues at the issue tracker.
-                        </p>
-                    </div>
-                    <!-- Box 5: Deleted Items -->
-                    <!-- Box 5: Deleted Items -->
-                    <div class="box" x-cloak>
-                        <label>Box 5: Deleted Items</label>
-                        <div>
-                            <span
-                                style="float: right; cursor: pointer"
-                                @click="recycleBin = []; localStorage.setItem('recycleBin', JSON.stringify([]))"
-                                >√e</span
-                            >
-                            <h2>Recycle Bin</h2>
-                        </div>
-                        <ul>
-                            <template
-                                x-for="(note, index) in recycleBin"
-                                :key="note.id"
-                            >
-                                <li>
-                                    <span x-text="note.text"></span>
-                                    <span
-                                        style="
+                            ">
+            <template x-for="font in fonts" :key="font">
+              <button @click="setFont(font)" style="margin-right: 0.5rem" x-text="font"></button>
+            </template>
+          </div>
+
+          <h2>Font Size</h2>
+          <div style="margin-top: 1rem;">
+            <button @click="decreaseFontSize()" style="margin-right: 0.5rem">-</button>
+            <span x-text="fontSize + 'px'"></span>
+            <button @click="increaseFontSize()" style="margin-left: 0.5rem">+</button>
+          </div>
+
+        </div>
+
+
+        <!-- Box 4: About -->
+        <div class="box" x-cloak>
+          <label>Box 4: About</label>
+          <h2>About</h2>
+          <p>
+            Karui is a privacy friendly, lightweight, bloat‑free open
+            source todo list/ note-taking app. More customizations will be added. <br /> Use
+            <code>///</code> to add a new tab,
+            <code>\\\</code> to remove a tab, slide theme
+            buttons and check all the themes. √d is to delete a note, √r is to restore a note, √e is to clear the recycle bin. <br /> Check the github repo at github.com/ronynn/karui for more info, updates, licenses. Report issues at the issue tracker.
+          </p>
+        </div>
+        <!-- Box 5: Deleted Items -->
+        <!-- Box 5: Deleted Items -->
+        <div class="box" x-cloak>
+          <label>Box 5: Deleted Items</label>
+          <div>
+            <span style="float: right; cursor: pointer" @click="recycleBin = []; localStorage.setItem('recycleBin', JSON.stringify([]))">√e</span>
+            <h2>Recycle Bin</h2>
+          </div>
+          <ul>
+            <template x-for="(note, index) in recycleBin" :key="note.id">
+              <li>
+                <span x-text="note.text"></span>
+                <span style="
                                             float: right;
                                             cursor: pointer;
                                             margin-left: 1rem;
-                                        "
-                                        @click="restoreNote(index)"
-                                        >√r</span
-                                    >
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                    <!-- Box 6: Import/Export -->
-                    <div class="box" x-cloak>
-                        <label>Box 6: Import/Export</label>
-                        <div style="margin-bottom: 1rem">
-                            <button @click="exportNotes('json')">
-                                Save as JSON
-                            </button>
-                            <button @click="exportNotes('txt')">
-                                Save as TXT
-                            </button>
-                        </div>
-                        <div style="margin-bottom: 1rem">
-                            <button @click="importJsonFile">Import JSON</button>
-                            <button @click="openImportModal">Paste JSON</button>
-                        </div>
-                    </div>
-                </div>
+                                        " @click="restoreNote(index)">√r</span>
+              </li>
             </template>
+          </ul>
         </div>
-
-        <!-- Import Modal -->
-        <div x-show="showImportModal" class="modal" x-cloak>
-            <div class="box" style="max-width: 300px">
-                <label>Paste JSON</label>
-                <textarea
-                    x-model="importText"
-                    rows="5"
-                    style="width: 100%"
-                ></textarea>
-                <div style="margin-top: 1rem">
-                    <button @click="pasteImport">Import</button>
-                    <button @click="closeImportModal">Cancel</button>
-                </div>
-                <template x-if="importError">
-                    <p style="color: red" x-text="importError"></p>
-                </template>
-            </div>
+        <!-- Box 6: Import/Export -->
+        <div class="box" x-cloak>
+          <label>Box 6: Import/Export</label>
+          <div style="margin-bottom: 1rem">
+            <button @click="exportNotes('json')">
+              Save as JSON
+            </button>
+            <button @click="exportNotes('txt')">
+              Save as TXT
+            </button>
+          </div>
+          <div style="margin-bottom: 1rem">
+            <button @click="importJsonFile">Import JSON</button>
+            <button @click="openImportModal">Paste JSON</button>
+          </div>
         </div>
+      </div>
+    </template>
+  </div>
 
-        <script src="main.js">
-            
-        </script>
-    </body>
+  <!-- Import Modal -->
+  <div x-show="showImportModal" class="modal" x-cloak>
+    <div class="box" style="max-width: 300px">
+      <label>Paste JSON</label>
+      <textarea x-model="importText" rows="5" style="width: 100%"></textarea>
+      <div style="margin-top: 1rem">
+        <button @click="pasteImport">Import</button>
+        <button @click="closeImportModal">Cancel</button>
+      </div>
+      <template x-if="importError">
+        <p style="color: red" x-text="importError"></p>
+      </template>
+    </div>
+  </div>
+
+  <script src="main.js">
+
+  </script>
+</body>
+
 </html>

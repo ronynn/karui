@@ -1,0 +1,11 @@
+Notable additions in this release:
+- Slight design fixes, top bar's border bottom removed for a cleaner look
+- Font size changer added
+- Some new fonts added, check which ones are available for your android version
+
+Technical Notes
+- Code organization improved
+- Dependency blobs are removed
+- Gradle wrapper updated with Sha256Sum in properties mentioned
+- Images in correct folder in fastlane phoneScreenshots folder, new images added.
+- Releases are now tagged

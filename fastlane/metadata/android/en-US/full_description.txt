@@ -6,7 +6,7 @@ Features
 - Retro terminalesque design: Inspired by Unix customizations found online.
 - Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - Highly customizable: Offers many themes with plans to add more customizations such as fonts, font sizes, and border colors.
-- To add a new note tab, use the `///TabName` format.
-- To remove any tab (except the Main tab), use the `\\\TabName` format.
+- To add a new note tab: use the `///TabName` format.
+- To remove any tab (except the Main tab): use the `\\\TabName` format.
 
 For more details on features, usage, customizations, discussions, visit the github repo.

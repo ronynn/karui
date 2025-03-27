@@ -13,7 +13,12 @@ Inspired by the system-24 theme and the Windows Mobile design system, this app's
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Screenshot 1" width="45%" style="margin-right: 10px;">
+  
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Screenshot 2" width="45%">
+  
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" alt="Screenshot 3" width="45%">
+  
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Screenshot 4" width="45%">
 </div>
 
 ## Features
@@ -61,16 +66,16 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 
 - [ ] Get user feedback and suggestions to improve and expand the project scope.
 - [x] Fix import `.json` bugs.
-- [ ] Enhance accessibility with larger touch areas.
+- [x] Enhance accessibility with larger touch areas.
 - [ ] Pivot control styled tab switcher
 - [ ] Gesture flick to change tabs
 - [ ] Resolve dynamic color issues (😔 still figuring this one out—maybe a short break is needed).
-- [ ] Font size settings
-- [ ] Pressing active tab tries to do some animation (#bug)
+- [x] Font size settings
+- [x] Pressing active tab tries to do some animation (#bug)
 - [ ] Toggle option to use double tap √d to delete instead of a single tap.
 - [ ] Add translations.
 - [ ] Introduce more themes and font options.
-- [ ] Make the UI more responsive for tablets and larger screens.
+- [x] Make the UI more responsive for tablets and larger screens.
 - [ ] Develop widgets (e.g., Java fetching notes from localStorage, a static scrollable list of existing notes).
 - [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
 - [ ] Integrate app data piping to Obsidian or a new notes app.
@@ -79,4 +84,4 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 - [ ] Incorporate a QR library to generate QR codes from notes and read them using the system camera, facilitating easy note sharing between devices.
 
 
-If you are using the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
+If you like the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
