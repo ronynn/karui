@@ -11,7 +11,7 @@ jobs:
       - name: Download Gradle Distribution & Checksum
         run: |
           GRADLE_VERSION="8.4"
-          JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+          JAR_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-all.zip"
           CHECKSUM_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-all.zip.sha256"
 
           # Download files
