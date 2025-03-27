@@ -6,6 +6,5 @@ Notable additions in this release:
 Technical Notes
 - Code organization improved
 - Dependency blobs are removed
-- Gradle wrapper updated with Sha256Sum in properties mentioned
-- Images in correct folder in fastlane phoneScreenshots folder, new images added.
-- Releases are now tagged
+- Gradle wrapper updated
+- Images in correct folder in fastlane phoneScreenshots folder, new images added
