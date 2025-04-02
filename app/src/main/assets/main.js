@@ -3,7 +3,7 @@ function app() {
     // Screen management
     activeTab: "Home",
     tabs: ["Home", "Settings"],
-    slideDirection: "left",
+    slideDirection: "right",
     slideClass: "",
 
     // Note category management (persisted in local storage)
@@ -24,10 +24,13 @@ function app() {
       "monokai",
       "dracula",
       "nord",
+      "amoled",
       "solarized",
       "catppuccin",
+      "catpuccin-frappe",
       "tokyo-night",
-      "everforest"
+      "everforest",
+      "everforest-light"
     ],
 
     fonts: [
@@ -89,7 +92,7 @@ function app() {
     fontSize: 18,
 
     increaseFontSize() {
-      this.fontSize = Math.min(this.fontSize + 2, 26);
+      this.fontSize = Math.min(this.fontSize + 2, 20);
       document.body.style.fontSize = this.fontSize + "px";
       localStorage.setItem("fontSize", this.fontSize);
     },

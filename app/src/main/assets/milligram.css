@@ -123,6 +123,59 @@ body {
   --input-text: #d3c6aa;
 }
 
+
+
+
+
+
+[data-theme="amoled"] {
+  --bg: #000000;
+  --text: #ffffff;
+  --border: #444444;
+  --button: #888888;
+  --button-hover: #333333;
+  --input-bg: #111111;
+  --input-border: #666666;
+  --input-text: #ffffff;
+}
+
+[data-theme="catpuccin-frappe"] {
+  --bg: #303446;
+  --text: #c6d0f5;
+  --border: #414559;
+  --button: #f2d5cf;
+  --button-hover: #eebebe;
+  --input-bg: #292c3c;
+  --input-border: #626880;
+  --input-text: #c6d0f5;
+}
+
+[data-theme="everforest-light"] {
+  --bg: #fdf6e3;
+  --text: #5c6a72;
+  --border: #d3c6aa;
+  --button: #a7c080;
+  --button-hover: #8da572;
+  --input-bg: #e4e1cd;
+  --input-border: #d3c6aa;
+  --input-text: #5c6a72;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .box {
   width: 100%;
   --max-width: 400px;

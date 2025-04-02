@@ -55,6 +55,7 @@
       --border-bottom: 2px solid var(--border);
       padding: 0.5rem 1rem;
       margin-bottom: 1rem;
+      font-size:2.2em;
     }
 
     .top-bar span {
@@ -71,7 +72,7 @@
     }
 
     .inactive-tab {
-      color: gray;
+      color: #555444;
     }
 
     /* Horizontal scrollable tab bar for note categories in Box 2 */
@@ -145,17 +146,17 @@
       <div>
         <!-- Box 1: Input and Stats -->
         <div class="box" x-cloak>
-          <label>Box 1:Notes Input</label>
+          <label>Box 1: Notes Input</label>
           <input type="text" placeholder="Type note or command" x-model="inputText" @keydown.enter="handleInput" />
           <div style="margin-top: 1rem">
-            <span>Remaining: <span x-text="remainingCount"></span></span>
-            <span style="margin-left: 1rem">Completed: <span x-text="completedCount"></span></span>
+            <span style="margin-right: 1rem">️Remaining: <span x-text="remainingCount"></span></span>
+            <span>Completed: <span x-text="completedCount"></span></span>
           </div>
         </div>
 
         <!-- Box 2: Draggable Notes & Category Tabs -->
         <div class="box" x-cloak>
-          <label>Box 2:Notes List</label>
+          <label>Box 2: Notes List</label>
           <!-- Category tabs -->
           <div class="category-tabs">
             <template x-for="category in noteCategories" :key="category">
@@ -237,7 +238,7 @@
                                             float: right;
                                             cursor: pointer;
                                             margin-left: 1rem;
-                                        " @click="restoreNote(index)">√r</span>
+                                        " @click="restoreNote(index)">♻️</span>
               </li>
             </template>
           </ul>
@@ -247,10 +248,10 @@
           <label>Box 6: Import/Export</label>
           <div style="margin-bottom: 1rem">
             <button @click="exportNotes('json')">
-              Save as JSON
+              Export JSON
             </button>
             <button @click="exportNotes('txt')">
-              Save as TXT
+              Export TXT
             </button>
           </div>
           <div style="margin-bottom: 1rem">
