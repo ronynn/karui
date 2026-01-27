@@ -71,6 +71,7 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 - [ ] Gesture flick to change tabs
 - [ ] Resolve dynamic color issues (😔 still figuring this one out—maybe a short break is needed).
 - [x] Font size settings
+- [ ] Letting user to select their own fonts from file picker
 - [x] Pressing active tab tries to do some animation (#bug)
 - [ ] Toggle option to use double tap √d to delete instead of a single tap.
 - [ ] Add translations.
@@ -83,5 +84,9 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 - [ ] Karui opening theme should be gruvbox?
 - [ ] Incorporate a QR library to generate QR codes from notes and read them using the system camera, facilitating easy note sharing between devices.
 
+## Follow the Development
+
+Join us (well just my thought process and approach) on telegram: <https://t.me/+ExFFjoag-285OWJl>
+This app has been primarily made on my phone with Acode editor with alpine linux terminal.
 
 If you like the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
