@@ -53,6 +53,13 @@ This app is designed to operate entirely locally, with no cloud storage involved
 - You can get it from the izzyondroid f-droid repo: 
  [![Get it on IzzyOnDroid](IzzyOnDroid.png)](https://apt.izzysoft.de/fdroid/index/apk/io.github.ronynn.karui)
 
+
+![Downloads (all time)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fkitswas%2Ffdroid-metrics-dashboard%2Fraw%2Frefs%2Fheads%2Fmain%2Fprocessed%2Ftotal%2Fio.github.ronynn.karui.json&query=%24.total_downloads&logo=fdroid&label=Downloads%20(all%20time))
+
+
+Downloads from f-droid.
+
+
 ## Contact
 Github Issues are the fastest way to get in touch, for other means there's gitlab, bluesky, and my dev.to account, all linked in my account page on github and [homepage](https://ronynn.github.io).
 
