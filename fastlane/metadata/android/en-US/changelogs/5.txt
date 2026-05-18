@@ -1,0 +1,8 @@
+- Long press tabs to rename or delete them, or add new tabs.
+- Double tap to delete toggle to prevent accidental note deletes
+- Copy button added beside each note
+- Themes organised better in a new design
+- Custom font can now be applied
+- Gesture flick to switch between home and settings
+
+Lots of code changes, join the discussion on telegram <https://t.me/karuifoss>

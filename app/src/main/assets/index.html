@@ -43,7 +43,7 @@ button:active { filter: brightness(0.8); }
 .theme-btn { padding: 10px 4px; background: var(--surface); color: var(--gray); border: 1px solid var(--border); text-transform: uppercase; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
 .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
 
-.heading-large { font-size: 22px; margin: 15px 0 10px; font-weight: normal; color: var(--text); letter-spacing: 1px; }
+.heading-large { font-size: 22px; margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
 
 .note-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 0; background: var(--bg); cursor: pointer; transition: transform 0.2s, opacity 0.2s; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.05); }
 .note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; }
@@ -92,7 +92,7 @@ button:active { filter: brightness(0.8); }
   <div class="screen" id="settings-screen">
     <div class="box">
       <span class="box-title">Theme & Font</span>
-      <h2 class="heading-large">Themes</h2>
+      <h3 class="heading-large">Themes</h3>
       <div class="grid-btns" id="theme-btns">
         <button class="theme-btn" onclick="setTheme('gruvbox')">GRUVBOX</button>
         <button class="theme-btn" onclick="setTheme('dracula')">DRACULA</button>
@@ -108,7 +108,7 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" onclick="setTheme('tokyo-night')">TOKYO</button>
       </div>
       
-      <h2 class="heading-large">Fonts</h2>
+      <h3 class="heading-large">Fonts</h3>
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
@@ -415,7 +415,20 @@ function bindLongPress(el, type) {
 }
 
 function moveDragImg(x, y) { if(dragImg) { dragImg.style.left = (x - 20) + 'px'; dragImg.style.top = (y - 20) + 'px'; } }
-function cleanDrag() { clearTimeout(touchTimer); if (dragTarget) dragTarget.classList.remove('ghost'); if (dragImg) { dragImg.remove(); dragImg = null; } dragTarget = null; dragType = null; }
+
+function cleanDrag() {
+  clearTimeout(touchTimer);
+  if (dragTarget && dragType === 'note') {
+    const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
+    let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
+    let otherCatNotes = notes.filter(x => x.category !== activeCategory);
+    notes = [...currentCatNotes, ...otherCatNotes];
+    saveData();
+  }
+  if (dragTarget) dragTarget.classList.remove('ghost');
+  if (dragImg) { dragImg.remove(); dragImg = null; }
+  dragTarget = null; dragType = null;
+}
 
 function setupDragAndDrop() {
   document.getElementById('home-screen').addEventListener('touchmove', e => {
@@ -427,15 +440,6 @@ function setupDragAndDrop() {
     if (next) document.getElementById('notes-list').insertBefore(dragTarget, next);
     else document.getElementById('notes-list').appendChild(dragTarget);
   }, {passive:false});
-
-  document.getElementById('home-screen').addEventListener('touchend', () => {
-    if (!dragTarget || dragType !== 'note') return;
-    const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
-    let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
-    let otherCatNotes = notes.filter(x => x.category !== activeCategory);
-    notes = [...currentCatNotes, ...otherCatNotes];
-    saveData();
-  });
 }
 
 function exportData() {
