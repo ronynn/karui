@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 34
+    compileSdkVersion 36
     
     namespace "io.github.ronynn.karui"
 
@@ -9,8 +9,8 @@ android {
         applicationId "io.github.ronynn.karui"
         minSdkVersion 21
         targetSdkVersion 36
-        versionCode 4
-        versionName "1.4"
+        versionCode 5
+        versionName "1.5"
     }
     
     signingConfigs {
