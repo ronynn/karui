@@ -400,13 +400,14 @@ function addTab(n) {
 }
 function deleteTabClick() {
   let t = contextTab || activeCategory;
-  if (noteCategories.length > 1 && t !== "Main") {
+  if (noteCategories.length > 1) {
     noteCategories = noteCategories.filter(x => x !== t);
     notes = notes.filter(note => {
       if (note.category === t) { recycleBin.push(note); return false; }
       return true;
     });
-    activeCategory = noteCategories[0]; renderTabs(); renderNotes(); saveData();
+    if (activeCategory === t) activeCategory = noteCategories[0];
+    renderTabs(); renderNotes(); saveData();
   }
 }
 function moveTab(dir) {
@@ -502,6 +503,15 @@ function setupDragAndDrop() {
   }, {passive:false});
 }
 
+function mergeNotes(imported) {
+  if(!Array.isArray(imported)) return;
+  imported.forEach(n => {
+    if(n.category && !noteCategories.includes(n.category)) noteCategories.push(n.category);
+    if(!notes.some(x => x.id === n.id)) notes.push(n);
+  });
+  saveData(); renderTabs(); renderNotes();
+}
+
 function exportData() {
   let fileData = JSON.stringify(notes);
   if (window.Android && window.Android.saveFile) {
@@ -526,12 +536,13 @@ function triggerImport() {
 function importData(e) {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = ev => { try { notes = JSON.parse(ev.target.result); saveData(); init(); } catch(err) { alert("Import failed."); } };
+  r.onload = ev => { try { mergeNotes(JSON.parse(ev.target.result)); } catch(err) { alert("Import failed."); } };
   r.readAsText(f);
+  e.target.value = '';
 }
 
 window.setAndroidNotes = function(jsonString) {
-  try { notes = JSON.parse(jsonString); saveData(); init(); } catch(err) {}
+  try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
 };
 
 init();

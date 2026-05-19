@@ -1,0 +1,6 @@
+- Main tab can be deleted now without the neef to rename it as long as one other tab exists
+- on import of json backup, if prexisting tabs no longer exist they are now created
+- No duplication of imported notes, useful in P2P syncing
+- Notes can now be dragged and moved over to other tabs
+- Tabs can now be moved left or right
+- Custom font file selector now fixed
