@@ -36,7 +36,7 @@ button { background: var(--accent); color: var(--accent-txt); cursor: pointer; b
 button:active { filter: brightness(0.8); }
 
 .tabs-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; scrollbar-width: none; }
-.tab { padding: 8px 16px; background: var(--bg); color: var(--gray); border: 1px solid var(--border); white-space: nowrap; cursor: pointer; }
+.tab { padding: 8px 16px; background: var(--bg); color: var(--gray); border: 1px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
 
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -127,6 +127,10 @@ button:active { filter: brightness(0.8); }
         <span style="font-size: 14px;">Double Tap √d To Delete</span>
         <input type="checkbox" id="dt-toggle" onchange="toggleDt(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
       </div>
+      <div class="toggle-container" style="margin-top: 10px;">
+        <span style="font-size: 14px;">Add Notes To Bottom</span>
+        <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+      </div>
     </div>
     
     <div class="box">
@@ -153,6 +157,8 @@ button:active { filter: brightness(0.8); }
 </div>
 
 <div id="context-menu" class="menu">
+  <button id="btn-mv-l" onclick="moveTab(-1)">Move Left</button>
+  <button id="btn-mv-r" onclick="moveTab(1)">Move Right</button>
   <button onclick="openPrompt('Rename Tab', contextTab, val => { if(val) renameTab(val); })">Rename</button>
   <button onclick="deleteTabClick()">Delete</button>
   <button onclick="openPrompt('New Tab', '', val => { if(val) addTab(val); })">Add Tab</button>
@@ -178,6 +184,7 @@ let currentTheme = 'gruvbox';
 let currentFont = 'system-ui';
 let fontSize = 18;
 let doubleTapDelete = false;
+let addNoteBottom = false;
 let customFontData = '';
 
 let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0;
@@ -190,6 +197,7 @@ function init() {
   currentFont = localStorage.getItem("font") || "system-ui";
   fontSize = parseInt(localStorage.getItem("fontSize"), 10) || 18;
   doubleTapDelete = localStorage.getItem("doubleTapDelete") === "true";
+  addNoteBottom = localStorage.getItem("addNoteBottom") === "true";
   customFontData = localStorage.getItem("customFontData") || "";
 
   if(customFontData) injectCustomFont(customFontData);
@@ -197,6 +205,7 @@ function init() {
   setFont(currentFont); 
   updateSizeDisp();
   document.getElementById('dt-toggle').checked = doubleTapDelete;
+  document.getElementById('add-btm-toggle').checked = addNoteBottom;
   
   if(!noteCategories.includes(activeCategory)) activeCategory = noteCategories[0] || "Main";
   
@@ -213,6 +222,7 @@ function saveData() {
   localStorage.setItem("font", currentFont);
   localStorage.setItem("fontSize", fontSize);
   localStorage.setItem("doubleTapDelete", doubleTapDelete);
+  localStorage.setItem("addNoteBottom", addNoteBottom);
   localStorage.setItem("customFontData", customFontData);
 }
 
@@ -244,6 +254,7 @@ function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveD
 function chgSize(d) { fontSize = Math.max(10, Math.min(24, fontSize + d)); updateSizeDisp(); saveData(); }
 function updateSizeDisp() { document.body.style.fontSize = fontSize + 'px'; document.getElementById('f-size-disp').innerText = fontSize + 'px'; }
 function toggleDt(v) { doubleTapDelete = v; saveData(); }
+function toggleAddBtm(v) { addNoteBottom = v; saveData(); }
 
 function loadCustomFont(e) {
   const f = e.target.files[0]; if(!f) return;
@@ -321,7 +332,9 @@ document.getElementById('note-in').onkeydown = e => {
       deleteTabClick();
     }
     else {
-      notes.unshift({ id: Date.now(), text: v, completed: false, category: activeCategory });
+      let n = { id: Date.now(), text: v, completed: false, category: activeCategory };
+      if(addNoteBottom) notes.push(n);
+      else notes.unshift(n);
     }
     e.target.value = ''; renderNotes(); saveData();
   }
@@ -388,8 +401,26 @@ function deleteTabClick() {
     activeCategory = noteCategories[0]; renderTabs(); renderNotes(); saveData();
   }
 }
+function moveTab(dir) {
+  let idx = noteCategories.indexOf(contextTab);
+  if(idx < 0) return;
+  let nIdx = idx + dir;
+  if(nIdx >= 0 && nIdx < noteCategories.length) {
+    let t = noteCategories[idx];
+    noteCategories[idx] = noteCategories[nIdx];
+    noteCategories[nIdx] = t;
+    renderTabs(); saveData();
+  }
+  document.getElementById('context-menu').style.display = 'none';
+}
 
-function showMenu(x, y) { const m = document.getElementById('context-menu'); m.style.display = 'block'; m.style.left = x + 'px'; m.style.top = y + 'px'; }
+function showMenu(x, y) { 
+  const m = document.getElementById('context-menu'); 
+  m.style.display = 'block'; m.style.left = x + 'px'; m.style.top = y + 'px'; 
+  let idx = noteCategories.indexOf(contextTab);
+  document.getElementById('btn-mv-l').style.display = idx > 0 ? 'block' : 'none';
+  document.getElementById('btn-mv-r').style.display = idx < noteCategories.length - 1 ? 'block' : 'none';
+}
 window.onclick = (e) => { if(!e.target.closest('.menu')) document.getElementById('context-menu').style.display = 'none'; }
 
 function bindLongPress(el, type) {
@@ -418,6 +449,7 @@ function moveDragImg(x, y) { if(dragImg) { dragImg.style.left = (x - 20) + 'px';
 
 function cleanDrag() {
   clearTimeout(touchTimer);
+  document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
   if (dragTarget && dragType === 'note') {
     const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
     let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
@@ -435,11 +467,35 @@ function setupDragAndDrop() {
     if (!dragTarget || !dragImg || dragType !== 'note') return;
     e.preventDefault();
     const touch = e.touches[0];
-    const items = [...document.getElementById('notes-list').querySelectorAll('.note-item:not(.ghost)')];
-    const next = items.find(item => touch.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
-    if (next) document.getElementById('notes-list').insertBefore(dragTarget, next);
-    else document.getElementById('notes-list').appendChild(dragTarget);
+    
+    let elPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+    let dropTab = elPoint ? elPoint.closest('.tab') : null;
+    document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
+    if(dropTab) dropTab.style.opacity = '0.5';
+
+    if(!dropTab) {
+      const items = [...document.getElementById('notes-list').querySelectorAll('.note-item:not(.ghost)')];
+      const next = items.find(item => touch.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
+      if (next) document.getElementById('notes-list').insertBefore(dragTarget, next);
+      else document.getElementById('notes-list').appendChild(dragTarget);
+    }
   }, {passive:false});
+
+  document.getElementById('home-screen').addEventListener('touchend', e => {
+    if (!dragTarget || dragType !== 'note') return;
+    const touch = e.changedTouches[0];
+    let elPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+    let dropTab = elPoint ? elPoint.closest('.tab') : null;
+
+    if(dropTab) {
+      let tCat = dropTab.dataset.tab;
+      let nId = parseInt(dragTarget.dataset.id);
+      let n = notes.find(x => x.id === nId);
+      if(n && n.category !== tCat) { n.category = tCat; }
+      dragTarget.remove();
+      saveData(); renderNotes();
+    }
+  });
 }
 
 function exportData() {
