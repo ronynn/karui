@@ -187,7 +187,7 @@ let doubleTapDelete = false;
 let addNoteBottom = false;
 let customFontData = '';
 
-let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0;
+let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0, hoveredTab = null;
 
 function init() {
   noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"];
@@ -450,16 +450,27 @@ function moveDragImg(x, y) { if(dragImg) { dragImg.style.left = (x - 20) + 'px';
 function cleanDrag() {
   clearTimeout(touchTimer);
   document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
+  
   if (dragTarget && dragType === 'note') {
-    const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
-    let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
-    let otherCatNotes = notes.filter(x => x.category !== activeCategory);
-    notes = [...currentCatNotes, ...otherCatNotes];
+    if (hoveredTab) {
+      let tCat = hoveredTab.dataset.tab;
+      let nId = parseInt(dragTarget.dataset.id);
+      let n = notes.find(x => x.id === nId);
+      if(n && n.category !== tCat) { n.category = tCat; }
+      dragTarget.remove();
+    } else {
+      const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
+      let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
+      let otherCatNotes = notes.filter(x => x.category !== activeCategory);
+      notes = [...currentCatNotes, ...otherCatNotes];
+    }
     saveData();
+    if (hoveredTab) renderNotes();
   }
+
   if (dragTarget) dragTarget.classList.remove('ghost');
   if (dragImg) { dragImg.remove(); dragImg = null; }
-  dragTarget = null; dragType = null;
+  dragTarget = null; dragType = null; hoveredTab = null;
 }
 
 function setupDragAndDrop() {
@@ -469,33 +480,18 @@ function setupDragAndDrop() {
     const touch = e.touches[0];
     
     let elPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-    let dropTab = elPoint ? elPoint.closest('.tab') : null;
+    hoveredTab = elPoint ? elPoint.closest('.tab') : null;
     document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
-    if(dropTab) dropTab.style.opacity = '0.5';
-
-    if(!dropTab) {
+    
+    if(hoveredTab) {
+      hoveredTab.style.opacity = '0.5';
+    } else {
       const items = [...document.getElementById('notes-list').querySelectorAll('.note-item:not(.ghost)')];
       const next = items.find(item => touch.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
       if (next) document.getElementById('notes-list').insertBefore(dragTarget, next);
       else document.getElementById('notes-list').appendChild(dragTarget);
     }
   }, {passive:false});
-
-  document.getElementById('home-screen').addEventListener('touchend', e => {
-    if (!dragTarget || dragType !== 'note') return;
-    const touch = e.changedTouches[0];
-    let elPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-    let dropTab = elPoint ? elPoint.closest('.tab') : null;
-
-    if(dropTab) {
-      let tCat = dropTab.dataset.tab;
-      let nId = parseInt(dragTarget.dataset.id);
-      let n = notes.find(x => x.id === nId);
-      if(n && n.category !== tCat) { n.category = tCat; }
-      dragTarget.remove();
-      saveData(); renderNotes();
-    }
-  });
 }
 
 function exportData() {
