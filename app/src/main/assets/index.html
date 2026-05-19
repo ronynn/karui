@@ -298,7 +298,15 @@ function renderNotes() {
                    <span onclick="trashNote(event, ${n.id})" style="color:var(--gray); padding: 0 5px; flex-shrink: 0;">√d</span>`;
     d.onclick = (e) => {
       if (e.target.tagName === 'SPAN' && e.target.innerText.includes('√')) return;
-      n.completed = !n.completed; if (navigator.vibrate) navigator.vibrate(30); renderNotes(); saveData();
+      n.completed = !n.completed; 
+      if (navigator.vibrate) navigator.vibrate(30); 
+      
+      let txt = n.text.trim();
+      if(/^https?:\/\//i.test(txt) || /^www\./i.test(txt)) {
+        window.location.href = txt.startsWith('http') ? txt : 'https://' + txt;
+      }
+      
+      renderNotes(); saveData();
     };
     bindLongPress(d, 'note'); list.appendChild(d);
   });
