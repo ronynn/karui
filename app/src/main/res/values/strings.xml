@@ -2,5 +2,6 @@
 <resources>
 
     <string name="app_name">Karui</string>
+    <string name="no_app_to_open_link">No app found to open this link</string>
 
 </resources>
