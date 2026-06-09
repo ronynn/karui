@@ -3,6 +3,7 @@ package io.github.ronynn.karui;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -15,6 +16,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -66,7 +68,11 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                view.getContext().startActivity(intent);
+                try {
+                    view.getContext().startActivity(intent);
+                } catch (ActivityNotFoundException e) {
+                    Toast.makeText(view.getContext(), R.string.no_app_to_open_link, Toast.LENGTH_SHORT).show();
+                }
                 return true;
             }
 
