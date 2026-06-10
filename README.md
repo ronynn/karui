@@ -36,7 +36,8 @@ Inspired by the system-24 theme and the Windows Mobile design system, this app's
 - **Editing a note:** Experience shows that editing a todo list can lead to chaining multiple tasks. The purpose here is to quickly jot down ideas and tasks, not for deep thinking. For that, a dedicated text editor is more appropriate. (Open to discussion!)
 
 
-<div style="max-width: 56vh;"><div style="left: 0; width: 100%; height: 0; position: relative; padding-bottom: 177.7778%;"><iframe src="https://www.youtube.com/embed/QCDx0tuOL2g?rel=0" style="top: 0; left: 0; width: 100%; height: 100%; position: absolute; border: 0;" allowfullscreen scrolling="no" allow="accelerometer *; clipboard-write *; encrypted-media *; gyroscope *; picture-in-picture *; web-share *;" referrerpolicy="strict-origin"></iframe></div></div>
+Click and Watch the Youtube Demo
+[![Watch the demo](https://img.youtube.com/vi/QCDx0tuOL2g/0.jpg)](https://www.youtube.com/shorts/QCDx0tuOL2g)
 
 
 ## No Cloud Integration
