@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Karui</title>
 <style>
+html {padding-top:3%}
+a {color:gray}
 :root { --bg: #282828; --surface: #3c3836; --border: #d79921; --text: #ebdbb2; --accent: #fabd2f; --accent-txt: #282828; --gray: #928374; }
 [data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
 [data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #75715e; }
@@ -92,7 +94,7 @@ button:active { filter: brightness(0.8); }
   <div class="screen" id="settings-screen">
     <div class="box">
       <span class="box-title">Theme & Font</span>
-      <h3 class="heading-large">Themes</h3>
+      <h3>Themes</h3> <br/>
       <div class="grid-btns" id="theme-btns">
         <button class="theme-btn" onclick="setTheme('gruvbox')">GRUVBOX</button>
         <button class="theme-btn" onclick="setTheme('dracula')">DRACULA</button>
@@ -107,8 +109,8 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" onclick="setTheme('everforest-light')">EV-LIGHT</button>
         <button class="theme-btn" onclick="setTheme('tokyo-night')">TOKYO</button>
       </div>
-      
-      <h3 class="heading-large">Fonts</h3>
+      <br/>
+      <h3>Fonts</h3><br/>
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
@@ -136,9 +138,12 @@ button:active { filter: brightness(0.8); }
     <div class="box">
       <span class="box-title">About</span>
       <div class="about-text">
-        Karui<br>
-        A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br><br>
-        Use <code>///</code> to add a new tab, <code>\\\</code> to remove current tab. Long press any tab to rename or delete it or add a new tab. <code>√c</code> copies a note, <code>√d</code> deletes a note, <code>√r</code> restores a note.
+        <h2>Karui</h2>
+        - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
+        - Use <code>///</code> to add a new tab, <code>\\\</code> to remove current tab. Long press any tab to rename or delete it or add a new tab. <code>√c</code> copies a note, <code>√d</code> deletes a note, <code>√r</code> restores a note.<br/>
+				- The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
+				- Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and any issues. You can find links there to our telegram group, discord server, youtube channel, and the subreddit where you can discuss foss apps, retro aesthetics, and showcase your own projects.
+				
       </div>
     </div>
 

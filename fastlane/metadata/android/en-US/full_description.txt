@@ -1,4 +1,4 @@
-An open source, privacy focussed, todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is set to evolve into something even more eye-catching.
+An open source, privacy focussed, 64kB aesthetic todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is set to evolve into something even more eye-catching.
 
 Features
 
@@ -6,8 +6,16 @@ Features
 - Retro terminalesque design: Inspired by Unix customizations found online.
 - Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - Highly customizable: Offers many themes with option for custom fonts.
-- To add a new note tab: use the `///TabName` format.
+- To add a new note tab: use the `///TabName` format. Bringing some Linux Terminal vibes.
 - To remove any tab (except the Main tab): use the `\\\TabName` format.
-- Or just long-press any tab to rename, delete or add new tab.
+- Or just long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes)
+- Support for custom fonts, so pick and select any .ttf files you like from your files system
 
-For more details on features, usage, customizations, discussions, visit the github repo and telegram group.
+Some upcoming features include
+- Turning your todo tab into a text editor tab
+- Export your notes tabs as just .txt files
+- Markdown support when in text editing mode
+- Optimized notes dragging
+- Input focus button at lower right of screen for increased accessibility
+
+For more details on features, usage, customizations, discussions, visit the github repo. We have recently created a telegram group, discord server, subreddit and a youtube channel focussed on developing foss apps with optimized interfaces, so check out those links in the repo readme, and share your apps and games too. Github issues are still the fastest way to reach out.

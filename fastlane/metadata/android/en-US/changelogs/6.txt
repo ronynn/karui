@@ -1,6 +1,9 @@
-- Main tab can be deleted now without the neef to rename it as long as one other tab exists
-- on import of json backup, if prexisting tabs no longer exist they are now created
+- Main tab can be deleted now without the need to rename it as long as one other tab exists
+- On import of json backup, if prexisting tabs no longer exist they are now created
 - No duplication of imported notes, useful in P2P syncing
 - Notes can now be dragged and moved over to other tabs
 - Tabs can now be moved left or right
+- Edge to edge support improvement as asked
 - Custom font file selector now fixed
+
+We now have telegram group, discord server, subreddit and youtube channel for foss discussion on retro aesthetics and design showcase, check out the github repo readme for more info.
