@@ -71,9 +71,9 @@
 
 ## Latest Releases for Download
 
-|Github | [![Get it on GitHub](https://img.shields.io/badge/Get_it_on-GitHub-181717?logo=github&logoColor=white&style=for-the-badge)](https://github.com/ronynn/karui/releases) |
+|Github | <center>[![Get it on GitHub](https://img.shields.io/badge/Get_it_on-GitHub-181717?logo=github&logoColor=white&style=for-the-badge)](https://github.com/ronynn/karui/releases) </center>|
 |---|---|
-|IzzyOnDroid | [<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroidButtonGreyBorder_nofont.png" height="60" alt="Get it at IzzyOnDroid">](https://apt.izzysoft.de/packages/io.github.ronynn.karui) |
+|IzzyOnDroid | <center>[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroidButtonGreyBorder_nofont.png" height="53" alt="Get it at IzzyOnDroid">](https://apt.izzysoft.de/packages/io.github.ronynn.karui)</center> |
 |F-droid | [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://f-droid.org/packages/io.github.ronynn.karui)  | 
 
 - ![Downloads (all time)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgithub.com%2Fkitswas%2Ffdroid-metrics-dashboard%2Fraw%2Frefs%2Fheads%2Fmain%2Fprocessed%2Ftotal%2Fio.github.ronynn.karui.json&query=%24.total_downloads&logo=fdroid&label=Downloads%20(all%20time))
@@ -123,24 +123,24 @@ Cancelled items from roadmap
 
 This app has been primarily made on my phone with Acode editor with alpine linux terminal (now on termux), while the dev environment doesn't matter, if you are building something with retro aesthetics or just with a minimalist design approach, show us your projects.
 
-- ![telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
-) : Join us on telegram: <https://t.me/karuifoss>  Here you can find my thought process and approach with other's opinions.
-- ![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white
-) : We now have recently created a discord server, here's the invite link:  <https://discord.gg/sYFsGN69rZ>, you can join and chat (on foss development) [![](https://dcbadge.limes.pink/api/server/sYFsGN69rZ)](https://discord.gg/sYFsGN69rZ)
+- [![telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
+)](https://t.me/karuifoss) : Join us on telegram: <https://t.me/karuifoss>  Here you can find my thought process and approach with other's opinions.
+- [![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white
+)](https://discord.gg/sYFsGN69rZ) : We now have recently created a discord server, here's the invite link:  <https://discord.gg/sYFsGN69rZ>, you can join and chat (on foss development) [![](https://dcbadge.limes.pink/api/server/sYFsGN69rZ)](https://discord.gg/sYFsGN69rZ)
   
-- ![reddit](https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white) : And also a subreddit: <https://reddit.com/r/karuifoss>, would love it if you showcase your projects here and get cool discussions rolling
+- [![reddit](https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://reddit.com/r/karuifoss) : And also a subreddit: <https://reddit.com/r/karuifoss>, would love it if you showcase your projects here and get cool discussions rolling
 
 ---
 
-- ![Bluesky](https://img.shields.io/badge/Bluesky-0285FF?logo=bluesky&logoColor=fff&style=for-the-badge) : Occasional thoughts on <https://bsky.app/profile/amayorilabs.bsky.social>, on rare occasions experts find my posts and share their insights.
+- [![Bluesky](https://img.shields.io/badge/Bluesky-0285FF?logo=bluesky&logoColor=fff&style=for-the-badge)](https://bsky.app/profile/amayorilabs.bsky.social) : Occasional thoughts on <https://bsky.app/profile/amayorilabs.bsky.social>, on rare occasions experts find my posts and share their insights.
 
-- ![Youtube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white) : ronynn's findings <https://m.youtube.com/@ronynn89> on all things tech, art, and filmmaking
+- [![Youtube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://m.youtube.com/@ronynn89) : ronynn's findings <https://m.youtube.com/@ronynn89> on all things tech, art, and filmmaking
 
-- ![dev.to](https://img.shields.io/badge/dev.to-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white
-) : My blog <https://dev.to/ronynn> for tech opinions and findings
+- [![dev.to](https://img.shields.io/badge/dev.to-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white
+)](https://dev.to/ronynn) : My blog <https://dev.to/ronynn> for tech opinions and findings
 
-- ![Homepage](https://img.shields.io/badge/GitHub%20Pages-222222?style=for-the-badge&logo=github%20Pages&logoColor=white) : My [homepage](https://ronynn.github.io) has a threejs interactive wireframe of a globe, uses github api to fetch and link some of my repos.
-- ![github](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white) : Github Issues are still the fastest way to get in touch.
+- [![Homepage](https://img.shields.io/badge/GitHub%20Pages-222222?style=for-the-badge&logo=github%20Pages&logoColor=white)](https://ronynn.github.io) : My [homepage](https://ronynn.github.io) has a threejs interactive wireframe of a globe, uses github api to fetch and link some of my repos.
+- [![github](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ronynn/karui/issues) : Github Issues are still the fastest way to get in touch.
 
 If you like the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
 
