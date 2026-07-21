@@ -108,6 +108,7 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 - [x] Letting user to select their own fonts from file picker
 - [x] Pressing active tab tries to do some animation (#bug)
 - [x] Toggle option to use double tap √d to delete instead of a single tap
+- [ ] Tab adding bar position fix
 
 Cancelled items from roadmap
 - [ ] Add translations (didn't face the need)
