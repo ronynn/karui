@@ -7,9 +7,13 @@ on:
 jobs:
   get_data:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@master
+        uses: actions/checkout@v4  # Changed from @master to @v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Update diagram
         uses: githubocto/repo-visualizer@main
         with:
