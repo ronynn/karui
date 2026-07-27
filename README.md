@@ -143,5 +143,10 @@ This app has been primarily made on my phone with Acode editor with alpine linux
 - [![Homepage](https://img.shields.io/badge/GitHub%20Pages-222222?style=for-the-badge&logo=github%20Pages&logoColor=white)](https://ronynn.github.io) : My [homepage](https://ronynn.github.io) has a threejs interactive wireframe of a globe, uses github api to fetch and link some of my repos.
 - [![github](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ronynn/karui/issues) : Github Issues are still the fastest way to get in touch.
 
+
+
+![Visualization of this repo](./diagram.svg)
+
+
 If you like the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
 
