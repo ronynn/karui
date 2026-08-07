@@ -3,9 +3,18 @@ package io.github.ronynn.karui;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -31,6 +40,9 @@ public class MainActivity extends Activity {
     private static final int CREATE_FILE_REQUEST_CODE = 1;
     private static final int IMPORT_FILE_REQUEST_CODE = 2;
     private static final int FILECHOOSER_RESULTCODE = 3;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
+    private static final String CHANNEL_ID = "note_reply_channel";
+    private static final int NOTIFICATION_ID = 1;
 
     private WebView mWebView;
     private View splashScreen;
@@ -38,8 +50,11 @@ public class MainActivity extends Activity {
     private String pendingFileName;
     private String pendingFileData;
     private String pendingFileType;
-    
+
     private ValueCallback<Uri[]> mFilePathCallback;
+
+    private boolean isNotificationActive = false;
+    private String inboxTabName = "Inbox";
 
     @Override
     @SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
@@ -107,12 +122,124 @@ public class MainActivity extends Activity {
         });
 
         mWebView.loadUrl("file:///android_asset/index.html");
+
+        // Load persisted inbox tab name
+        SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
+        inboxTabName = prefs.getString("inbox_tab_name", "Inbox");
+
+        createNotificationChannel();
     }
+
+    // ---------- NOTIFICATION METHODS (NO AndroidX) ----------
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("Allows adding notes from the status bar");
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) manager.createNotificationChannel(channel);
+        }
+    }
+
+    @SuppressLint("NewApi") // RemoteInput is API 20, we check
+    private void showNotification() {
+        // Build open-app pending intent
+        Intent openAppIntent = new Intent(this, MainActivity.class);
+        PendingIntent openPendingIntent = PendingIntent.getActivity(
+                this, 0, openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0));
+
+        // Build the direct reply action
+        RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
+                .setLabel("Add Note")
+                .build();
+
+        Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
+        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(
+                this, 1, replyIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0));
+
+        Notification.Action replyAction = new Notification.Action.Builder(
+                android.R.drawable.ic_menu_send,
+                "Add Note",
+                replyPendingIntent)
+                .addRemoteInput(remoteInput)
+                .build();
+
+        Notification notification;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notification = new Notification.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Quick Note")
+                    .setContentText("Swipe down to add a note")
+                    .setContentIntent(openPendingIntent)
+                    .addAction(replyAction)
+                    .setOngoing(true)
+                    .build();
+        } else {
+            // Fallback for older APIs (unlikely you target below 21, but just in case)
+            notification = new Notification.Builder(this)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Quick Note")
+                    .setContentText("Swipe down to add a note")
+                    .setContentIntent(openPendingIntent)
+                    .addAction(replyAction.getIcon(), replyAction.title, replyAction.actionIntent)
+                    .setOngoing(true)
+                    .build();
+        }
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.notify(NOTIFICATION_ID, notification);
+        isNotificationActive = true;
+    }
+
+    private void cancelNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.cancel(NOTIFICATION_ID);
+        isNotificationActive = false;
+    }
+
+    // ---------- PENDING NOTES INJECTION ----------
+
+    private void injectPendingNotes() {
+        SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
+        String pendingNotes = prefs.getString("pending_notes", "");
+        String pendingTabs = prefs.getString("pending_notes_tabs", "");
+        if (pendingNotes.isEmpty()) return;
+
+        prefs.edit().remove("pending_notes").remove("pending_notes_tabs").apply();
+
+        String[] notes = pendingNotes.split("\n");
+        String[] tabs = pendingTabs.split("\n");
+
+        for (int i = 0; i < notes.length; i++) {
+            if (notes[i].trim().isEmpty()) continue;
+            String tabName = (i < tabs.length) ? tabs[i] : inboxTabName;
+            String escapedNote = notes[i]
+                    .replace("\\", "\\\\")
+                    .replace("'", "\\'")
+                    .replace("\n", "\\n");
+            String escapedTab = tabName
+                    .replace("\\", "\\\\")
+                    .replace("'", "\\'");
+            String js = String.format("syncNoteFromAndroid('%s', '%s')", escapedNote, escapedTab);
+            mWebView.evaluateJavascript(js, null);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        injectPendingNotes();
+    }
+
+    // ---------- ACTIVITY RESULT ----------
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        
+
         if (requestCode == CREATE_FILE_REQUEST_CODE && resultCode == RESULT_OK) {
             if (data != null && data.getData() != null && pendingFileData != null) {
                 try {
@@ -137,7 +264,7 @@ public class MainActivity extends Activity {
                     }
                     reader.close();
                     String jsonContent = sb.toString();
-                    
+
                     String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
                     mWebView.evaluateJavascript(jsCode, null);
                 } catch (IOException e) {
@@ -173,7 +300,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mWebView != null) mWebView.destroy();
+    }
+
+    // ---------- JAVASCRIPT INTERFACE (no AndroidX) ----------
+
     public class WebAppInterface {
+
         @JavascriptInterface
         public void saveFile(String fileName, String fileData, String fileType) {
             pendingFileName = fileName;
@@ -193,6 +329,48 @@ public class MainActivity extends Activity {
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("application/json");
             startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+        }
+
+        @JavascriptInterface
+        public void toggleNotification(boolean enable) {
+            runOnUiThread(() -> {
+                if (enable) {
+                    // Android 13+ requires runtime permission, but only if target SDK >= 33
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        // Check if the permission is already granted
+                        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                                != PackageManager.PERMISSION_GRANTED) {
+                            // Request the permission (this will show system dialog)
+                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                                    NOTIFICATION_PERMISSION_REQUEST);
+                            return; // wait for the permission callback
+                        }
+                    }
+                    showNotification();
+                } else {
+                    cancelNotification();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setInboxTabName(String tabName) {
+            if (tabName == null || tabName.trim().isEmpty()) tabName = "Inbox";
+            inboxTabName = tabName.trim();
+            getSharedPreferences("note_queue", MODE_PRIVATE)
+                    .edit().putString("inbox_tab_name", inboxTabName).apply();
+        }
+    }
+
+    // Permission result callback (no AndroidX)
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                showNotification();
+            } else {
+                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }
