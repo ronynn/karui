@@ -133,6 +133,20 @@ button:active { filter: brightness(0.8); }
         <span style="font-size: 14px;">Add Notes To Bottom</span>
         <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
       </div>
+    
+      
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Enable Quick Note</span>
+        <input type="checkbox" id="notification-toggle" onchange="toggleNotification(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+      </div>
+      <div style="margin-top: 10px;">
+        <label for="inbox-tab-name" style="font-size: 14px;">Target Tab Name:</label>
+        <input type="text" id="inbox-tab-name" value="Inbox" onchange="updateInboxTab(this.value)" style="margin-top:5px;">
+      </div>
+    
+
+
+		
     </div>
     
     <div class="box">
@@ -550,7 +564,62 @@ window.setAndroidNotes = function(jsonString) {
   try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
 };
 
+// Status bar notes integration
+function loadNotificationSettings() {
+  let notifEnabled = localStorage.getItem("notificationEnabled") === "true";
+  document.getElementById('notification-toggle').checked = notifEnabled;
+
+  let savedTab = localStorage.getItem("inboxTabName") || "Inbox";
+  document.getElementById('inbox-tab-name').value = savedTab;
+  // Ensure the tab exists without switching to it
+  ensureTabExists(savedTab);
+  // Sync to Android
+  if (window.Android) {
+    window.Android.setInboxTabName(savedTab);
+    if (notifEnabled) window.Android.toggleNotification(true);
+  }
+}
+
+function toggleNotification(enable) {
+  localStorage.setItem("notificationEnabled", enable);
+  if (window.Android) {
+    window.Android.toggleNotification(enable);
+  }
+}
+
+function updateInboxTab(name) {
+  name = name.trim() || "Inbox";
+  localStorage.setItem("inboxTabName", name);
+  ensureTabExists(name);
+  if (window.Android) {
+    window.Android.setInboxTabName(name);
+  }
+}
+
+// Helper: add a tab if it doesn't exist, without changing active category
+function ensureTabExists(name) {
+  if (!noteCategories.includes(name)) {
+    noteCategories.push(name);
+    saveData();
+    renderTabs();
+  }
+}
+
+// Modified note receiver: adds note to the specified tab
+window.syncNoteFromAndroid = function(text, tabName) {
+  tabName = tabName || 'Inbox';
+  ensureTabExists(tabName);
+  let note = { id: Date.now(), text: text, completed: false, category: tabName };
+  notes.unshift(note);
+  saveData();
+  if (activeCategory === tabName) {
+    renderNotes();
+  }
+  // Also update stats if needed (but it's okay)
+};
+
 init();
+loadNotificationSettings();
 </script>
 </body>
 </html>
