@@ -14,6 +14,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -131,7 +138,33 @@ public class MainActivity extends Activity {
         createNotificationChannel();
     }
 
-    // ---------- NOTIFICATION METHODS (safe, no AndroidX) ----------
+    // ---------- NOTIFICATION ICON GENERATOR (no file required) ----------
+
+    /**
+     * Creates a simple white circle bitmap that works as a valid notification small icon.
+     */
+    private Bitmap createNotificationIconBitmap() {
+        int size = 96; // 24dp * 4 for crisp edges
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f * 0.8f, paint);
+        return bitmap;
+    }
+
+    /**
+     * Returns an Icon object (API 23+) or null for older APIs.
+     */
+    @SuppressLint("NewApi")
+    private Icon getNotificationIcon() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Icon.createWithBitmap(createNotificationIconBitmap());
+        }
+        return null;
+    }
+
+    // ---------- NOTIFICATION CHANNEL ----------
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -143,32 +176,34 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- SHOW / CANCEL NOTIFICATION ----------
+
     @SuppressLint("NewApi")
     private void showNotification() {
-        // 1. First, ensure the channel exists (idempotent)
+        // Ensure channel exists
         createNotificationChannel();
 
-        // 2. Check if notifications are enabled (API 24+)
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) {
             Toast.makeText(this, "Notification service unavailable", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        // Check global notification enablement (API 24+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             if (!manager.areNotificationsEnabled()) {
-                Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
-                // Optionally open the app's notification settings
+                Toast.makeText(this, "Notifications are disabled in system settings", Toast.LENGTH_LONG).show();
+                // Open notification settings for the app
                 try {
-                    Intent settingsIntent = new Intent();
+                    Intent intent = new Intent();
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        settingsIntent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                        settingsIntent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                        intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                        intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
                     } else {
-                        settingsIntent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                        intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        intent.setData(Uri.parse("package:" + getPackageName()));
                     }
-                    startActivity(settingsIntent);
+                    startActivity(intent);
                 } catch (Exception e) {
                     // ignore
                 }
@@ -176,10 +211,9 @@ public class MainActivity extends Activity {
             }
         }
 
-        // 3. Build and post notification
+        // Build notification
         try {
-            int iconRes = R.mipmap.ic_launcher;   // guaranteed to exist
-
+            // Open app intent
             Intent openAppIntent = new Intent(this, MainActivity.class);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -187,6 +221,7 @@ public class MainActivity extends Activity {
             }
             PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags);
 
+            // Remote input for direct reply
             RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
                     .setLabel("Add Note")
                     .build();
@@ -194,36 +229,55 @@ public class MainActivity extends Activity {
             Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
             PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
 
-            Notification.Action replyAction = new Notification.Action.Builder(
-                    iconRes, "Add Note", replyPendingIntent)
-                    .addRemoteInput(remoteInput)
-                    .build();
-
-            Notification notification;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                notification = new Notification.Builder(this, CHANNEL_ID)
-                        .setSmallIcon(iconRes)
-                        .setContentTitle("Quick Note")
-                        .setContentText("Swipe down to add a note")
-                        .setContentIntent(openPendingIntent)
-                        .addAction(replyAction)
-                        .setOngoing(true)
+            // Notification action with the generated icon
+            Notification.Action replyAction;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                replyAction = new Notification.Action.Builder(
+                        getNotificationIcon(),   // Icon object (safe)
+                        "Add Note",
+                        replyPendingIntent)
+                        .addRemoteInput(remoteInput)
                         .build();
             } else {
-                notification = new Notification.Builder(this)
-                        .setSmallIcon(iconRes)
-                        .setContentTitle("Quick Note")
-                        .setContentText("Swipe down to add a note")
-                        .setContentIntent(openPendingIntent)
-                        .addAction(replyAction)
-                        .setOngoing(true)
+                // Fallback for API 21–22: use a built-in resource (no Icon class)
+                replyAction = new Notification.Action.Builder(
+                        android.R.drawable.ic_menu_send,
+                        "Add Note",
+                        replyPendingIntent)
+                        .addRemoteInput(remoteInput)
                         .build();
             }
 
+            // Build notification itself
+            Notification.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                builder = new Notification.Builder(this, CHANNEL_ID);
+            } else {
+                builder = new Notification.Builder(this);
+            }
+
+            // Set small icon depending on API
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                builder.setSmallIcon(getNotificationIcon());   // Icon object
+            } else {
+                builder.setSmallIcon(android.R.drawable.ic_dialog_info); // built-in
+            }
+
+            builder.setContentTitle("Quick Note")
+                    .setContentText("Swipe down to add a note")
+                    .setContentIntent(openPendingIntent)
+                    .addAction(replyAction)
+                    .setOngoing(true);
+
+            Notification notification = builder.build();
             manager.notify(NOTIFICATION_ID, notification);
             isNotificationActive = true;
+
         } catch (Exception e) {
-            Toast.makeText(this, "Couldn't show notification: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            // Detailed error for debugging
+            String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
+            if (e.getCause() != null) msg += "\nCause: " + e.getCause().toString();
+            Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -369,7 +423,7 @@ public class MainActivity extends Activity {
         public void toggleNotification(boolean enable) {
             runOnUiThread(() -> {
                 if (enable) {
-                    // Android 13+ (API 33) runtime permission for notifications
+                    // Android 13+ runtime permission
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                                 != PackageManager.PERMISSION_GRANTED) {
@@ -395,7 +449,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Permission result (for notification on API 33+)
+    // Permission result
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
