@@ -135,25 +135,51 @@ public class MainActivity extends Activity {
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                NotificationChannel channel = new NotificationChannel(
-                        CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
-                channel.setDescription("Add notes from status bar");
-                NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                if (manager != null) manager.createNotificationChannel(channel);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("Add notes from status bar");
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) manager.createNotificationChannel(channel);
         }
     }
 
     @SuppressLint("NewApi")
     private void showNotification() {
-        try {
-            // Use the app's own launcher icon (guaranteed to exist)
-            int iconRes = R.mipmap.ic_launcher;
+        // 1. First, ensure the channel exists (idempotent)
+        createNotificationChannel();
 
-            // Open app pending intent
+        // 2. Check if notifications are enabled (API 24+)
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) {
+            Toast.makeText(this, "Notification service unavailable", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (!manager.areNotificationsEnabled()) {
+                Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
+                // Optionally open the app's notification settings
+                try {
+                    Intent settingsIntent = new Intent();
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        settingsIntent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                        settingsIntent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                    } else {
+                        settingsIntent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                    }
+                    startActivity(settingsIntent);
+                } catch (Exception e) {
+                    // ignore
+                }
+                return;
+            }
+        }
+
+        // 3. Build and post notification
+        try {
+            int iconRes = R.mipmap.ic_launcher;   // guaranteed to exist
+
             Intent openAppIntent = new Intent(this, MainActivity.class);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -161,7 +187,6 @@ public class MainActivity extends Activity {
             }
             PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags);
 
-            // Remote input and reply action
             RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
                     .setLabel("Add Note")
                     .build();
@@ -170,13 +195,10 @@ public class MainActivity extends Activity {
             PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
 
             Notification.Action replyAction = new Notification.Action.Builder(
-                    iconRes,                // safe icon
-                    "Add Note",
-                    replyPendingIntent)
+                    iconRes, "Add Note", replyPendingIntent)
                     .addRemoteInput(remoteInput)
                     .build();
 
-            // Build notification
             Notification notification;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 notification = new Notification.Builder(this, CHANNEL_ID)
@@ -198,26 +220,18 @@ public class MainActivity extends Activity {
                         .build();
             }
 
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (manager != null) {
-                manager.notify(NOTIFICATION_ID, notification);
-                isNotificationActive = true;
-            }
+            manager.notify(NOTIFICATION_ID, notification);
+            isNotificationActive = true;
         } catch (Exception e) {
-            // Prevent crash – show error and move on
             Toast.makeText(this, "Couldn't show notification: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
 
     private void cancelNotification() {
-        try {
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (manager != null) manager.cancel(NOTIFICATION_ID);
-            isNotificationActive = false;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.cancel(NOTIFICATION_ID);
+        isNotificationActive = false;
     }
 
     // ---------- PENDING NOTES INJECTION ----------
