@@ -131,75 +131,93 @@ public class MainActivity extends Activity {
         createNotificationChannel();
     }
 
-    // ---------- NOTIFICATION METHODS (no AndroidX, works API 21+) ----------
+    // ---------- NOTIFICATION METHODS (safe, no AndroidX) ----------
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Add notes from status bar");
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (manager != null) manager.createNotificationChannel(channel);
+            try {
+                NotificationChannel channel = new NotificationChannel(
+                        CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
+                channel.setDescription("Add notes from status bar");
+                NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                if (manager != null) manager.createNotificationChannel(channel);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
     @SuppressLint("NewApi")
     private void showNotification() {
-        // Open app pending intent
-        Intent openAppIntent = new Intent(this, MainActivity.class);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags);
+        try {
+            // Use the app's own launcher icon (guaranteed to exist)
+            int iconRes = R.mipmap.ic_launcher;
 
-        // Remote input and action
-        RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
-                .setLabel("Add Note")
-                .build();
+            // Open app pending intent
+            Intent openAppIntent = new Intent(this, MainActivity.class);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+            PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags);
 
-        Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
-        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
-
-        Notification.Action replyAction = new Notification.Action.Builder(
-                android.R.drawable.ic_menu_send,
-                "Add Note",
-                replyPendingIntent)
-                .addRemoteInput(remoteInput)
-                .build();
-
-        // Build notification using correct constructor based on API level
-        Notification notification;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notification = new Notification.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle("Quick Note")
-                    .setContentText("Swipe down to add a note")
-                    .setContentIntent(openPendingIntent)
-                    .addAction(replyAction)   // works API 20+
-                    .setOngoing(true)
+            // Remote input and reply action
+            RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
+                    .setLabel("Add Note")
                     .build();
-        } else {
-            // API 21–25 fallback (no channel, but supports action and remote input)
-            notification = new Notification.Builder(this)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle("Quick Note")
-                    .setContentText("Swipe down to add a note")
-                    .setContentIntent(openPendingIntent)
-                    .addAction(replyAction)
-                    .setOngoing(true)
-                    .build();
-        }
 
-        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager != null) manager.notify(NOTIFICATION_ID, notification);
-        isNotificationActive = true;
+            Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
+            PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
+
+            Notification.Action replyAction = new Notification.Action.Builder(
+                    iconRes,                // safe icon
+                    "Add Note",
+                    replyPendingIntent)
+                    .addRemoteInput(remoteInput)
+                    .build();
+
+            // Build notification
+            Notification notification;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notification = new Notification.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(iconRes)
+                        .setContentTitle("Quick Note")
+                        .setContentText("Swipe down to add a note")
+                        .setContentIntent(openPendingIntent)
+                        .addAction(replyAction)
+                        .setOngoing(true)
+                        .build();
+            } else {
+                notification = new Notification.Builder(this)
+                        .setSmallIcon(iconRes)
+                        .setContentTitle("Quick Note")
+                        .setContentText("Swipe down to add a note")
+                        .setContentIntent(openPendingIntent)
+                        .addAction(replyAction)
+                        .setOngoing(true)
+                        .build();
+            }
+
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                manager.notify(NOTIFICATION_ID, notification);
+                isNotificationActive = true;
+            }
+        } catch (Exception e) {
+            // Prevent crash – show error and move on
+            Toast.makeText(this, "Couldn't show notification: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
     }
 
     private void cancelNotification() {
-        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager != null) manager.cancel(NOTIFICATION_ID);
-        isNotificationActive = false;
+        try {
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) manager.cancel(NOTIFICATION_ID);
+            isNotificationActive = false;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // ---------- PENDING NOTES INJECTION ----------
@@ -337,14 +355,14 @@ public class MainActivity extends Activity {
         public void toggleNotification(boolean enable) {
             runOnUiThread(() -> {
                 if (enable) {
-                    // Android 13+ (API 33) requires runtime permission for notifications
+                    // Android 13+ (API 33) runtime permission for notifications
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                                 != PackageManager.PERMISSION_GRANTED) {
                             requestPermissions(
                                     new String[]{Manifest.permission.POST_NOTIFICATIONS},
                                     NOTIFICATION_PERMISSION_REQUEST);
-                            return; // callback will handle showNotification()
+                            return;
                         }
                     }
                     showNotification();
