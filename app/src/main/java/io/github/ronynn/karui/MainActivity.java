@@ -1,5 +1,6 @@
 package io.github.ronynn.karui;
 
+import android.Manifest;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -130,35 +131,35 @@ public class MainActivity extends Activity {
         createNotificationChannel();
     }
 
-    // ---------- NOTIFICATION METHODS (NO AndroidX) ----------
+    // ---------- NOTIFICATION METHODS (no AndroidX, works API 21+) ----------
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Allows adding notes from the status bar");
+            channel.setDescription("Add notes from status bar");
             NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (manager != null) manager.createNotificationChannel(channel);
         }
     }
 
-    @SuppressLint("NewApi") // RemoteInput is API 20, we check
+    @SuppressLint("NewApi")
     private void showNotification() {
-        // Build open-app pending intent
+        // Open app pending intent
         Intent openAppIntent = new Intent(this, MainActivity.class);
-        PendingIntent openPendingIntent = PendingIntent.getActivity(
-                this, 0, openAppIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0));
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, flags);
 
-        // Build the direct reply action
+        // Remote input and action
         RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
                 .setLabel("Add Note")
                 .build();
 
         Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
-        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(
-                this, 1, replyIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0));
+        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
 
         Notification.Action replyAction = new Notification.Action.Builder(
                 android.R.drawable.ic_menu_send,
@@ -167,6 +168,7 @@ public class MainActivity extends Activity {
                 .addRemoteInput(remoteInput)
                 .build();
 
+        // Build notification using correct constructor based on API level
         Notification notification;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notification = new Notification.Builder(this, CHANNEL_ID)
@@ -174,17 +176,17 @@ public class MainActivity extends Activity {
                     .setContentTitle("Quick Note")
                     .setContentText("Swipe down to add a note")
                     .setContentIntent(openPendingIntent)
-                    .addAction(replyAction)
+                    .addAction(replyAction)   // works API 20+
                     .setOngoing(true)
                     .build();
         } else {
-            // Fallback for older APIs (unlikely you target below 21, but just in case)
+            // API 21–25 fallback (no channel, but supports action and remote input)
             notification = new Notification.Builder(this)
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .setContentTitle("Quick Note")
                     .setContentText("Swipe down to add a note")
                     .setContentIntent(openPendingIntent)
-                    .addAction(replyAction.getIcon(), replyAction.title, replyAction.actionIntent)
+                    .addAction(replyAction)
                     .setOngoing(true)
                     .build();
         }
@@ -306,7 +308,7 @@ public class MainActivity extends Activity {
         if (mWebView != null) mWebView.destroy();
     }
 
-    // ---------- JAVASCRIPT INTERFACE (no AndroidX) ----------
+    // ---------- JAVASCRIPT INTERFACE ----------
 
     public class WebAppInterface {
 
@@ -335,15 +337,14 @@ public class MainActivity extends Activity {
         public void toggleNotification(boolean enable) {
             runOnUiThread(() -> {
                 if (enable) {
-                    // Android 13+ requires runtime permission, but only if target SDK >= 33
+                    // Android 13+ (API 33) requires runtime permission for notifications
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        // Check if the permission is already granted
                         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                                 != PackageManager.PERMISSION_GRANTED) {
-                            // Request the permission (this will show system dialog)
-                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                            requestPermissions(
+                                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
                                     NOTIFICATION_PERMISSION_REQUEST);
-                            return; // wait for the permission callback
+                            return; // callback will handle showNotification()
                         }
                     }
                     showNotification();
@@ -362,7 +363,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Permission result callback (no AndroidX)
+    // Permission result (for notification on API 33+)
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
