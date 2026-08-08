@@ -133,6 +133,10 @@ button:active { filter: brightness(0.8); }
         <span style="font-size: 14px;">Add Notes To Bottom</span>
         <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
       </div>
+      <div class="toggle-container" style="margin-top: 10px;">
+  <span style="font-size: 14px;">Disable Screenshots</span>
+  <input type="checkbox" id="disable-screenshots-toggle" onchange="toggleScreenshots(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+</div>
     
       
       <div class="toggle-container">
@@ -617,6 +621,31 @@ window.syncNoteFromAndroid = function(text, tabName) {
   }
   // Also update stats if needed (but it's okay)
 };
+
+function toggleScreenshots(disabled)
+{
+  if (window.Android && window.Android.toggleScreenshots)
+  {
+    window.Android.toggleScreenshots(disabled)
+  }
+  localStorage.setItem('disableScreenshots', disabled)
+}
+
+function initScreenshotSetting()
+{
+  const isDisabled = localStorage.getItem('disableScreenshots') === 'true'
+  const toggleEl = document.getElementById('disable-screenshots-toggle')
+  if (toggleEl)
+  {
+    toggleEl.checked = isDisabled
+  }
+  if (window.Android && window.Android.toggleScreenshots)
+  {
+    window.Android.toggleScreenshots(isDisabled)
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initScreenshotSetting)
 
 init();
 loadNotificationSettings();

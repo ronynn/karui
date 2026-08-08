@@ -21,6 +21,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -84,6 +85,8 @@ public class MainActivity extends Activity
 
     mWebView = findViewById(R.id.activity_main_webview);
     splashScreen = findViewById(R.id.splash_screen);
+
+    mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
     WebSettings webSettings = mWebView.getSettings();
     webSettings.setJavaScriptEnabled(true);
@@ -171,6 +174,62 @@ public class MainActivity extends Activity
     {
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
+
+    handleProcessTextIntent(getIntent());
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent)
+  {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    handleProcessTextIntent(intent);
+  }
+
+  // ---------- PROCESS TEXT INTENT ----------
+
+  private void handleProcessTextIntent(Intent intent)
+  {
+    if (intent != null && Intent.ACTION_PROCESS_TEXT.equals(intent.getAction()))
+    {
+      CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
+      if (text != null && text.length() > 0)
+      {
+        String noteText = text.toString().trim();
+        if (!noteText.isEmpty())
+        {
+          saveNoteToQueue(noteText);
+          Toast.makeText(this, "Saved to Karui", Toast.LENGTH_SHORT).show();
+          if (isPageLoaded)
+          {
+            injectPendingNotes();
+          }
+        }
+      }
+    }
+  }
+
+  private void saveNoteToQueue(String noteText)
+  {
+    SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
+    String existingNotes = prefs.getString("pending_notes", "");
+    String existingTabs = prefs.getString("pending_notes_tabs", "");
+
+    if (existingNotes.isEmpty())
+    {
+      existingNotes = noteText;
+      existingTabs = inboxTabName;
+    }
+    else
+    {
+      existingNotes += "\n" + noteText;
+      existingTabs += "\n" + inboxTabName;
+    }
+
+    prefs.edit()
+      .putString("pending_notes", existingNotes)
+      .putString("pending_notes_tabs", existingTabs)
+      .apply();
   }
 
   // ---------- NOTIFICATION HANDLING ----------
@@ -548,6 +607,21 @@ public class MainActivity extends Activity
       inboxTabName = tabName.trim();
       getSharedPreferences("note_queue", MODE_PRIVATE)
         .edit().putString("inbox_tab_name", inboxTabName).apply();
+    }
+
+    @JavascriptInterface
+    public void toggleScreenshots(boolean disable)
+    {
+      runOnUiThread(() -> {
+        if (disable)
+        {
+          getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+        else
+        {
+          getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+      });
     }
   }
 
