@@ -19,10 +19,11 @@ jobs:
 
       - name: Generate New Gradle Wrapper
         run: |
-          GRADLE_VERSION="8.4"
-
-          # Run inside your repo so settings.gradle is found
-          gradle wrapper --gradle-version $GRADLE_VERSION
+         GRADLE_VERSION="8.4"
+         GRADLE_SHA256="3e1af3ae886920c3ac87f7a91f816c0c7c436f276a6eefdb3da152100fef72ae"
+    
+         # Run inside your repo so settings.gradle is found
+         gradle wrapper --gradle-version $GRADLE_VERSION --gradle-distribution-sha256-sum $GRADLE_SHA256
 
       - name: Upload Gradle Wrapper JAR
         uses: actions/upload-artifact@v4
