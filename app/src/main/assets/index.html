@@ -610,17 +610,34 @@ function ensureTabExists(name) {
 }
 
 // Modified note receiver: adds note to the specified tab
-window.syncNoteFromAndroid = function(text, tabName) {
-  tabName = tabName || 'Inbox';
-  ensureTabExists(tabName);
-  let note = { id: Date.now(), text: text, completed: false, category: tabName };
-  notes.unshift(note);
-  saveData();
-  if (activeCategory === tabName) {
-    renderNotes();
+window.syncNotesArrayFromAndroid = function(jsonInput)
+{
+  try
+  {
+    let items = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput
+    if (!Array.isArray(items)) return
+    let now = Date.now()
+    items.forEach((item, idx) => {
+      if (!item.text) return
+      let tabName = item.tab || 'Inbox'
+      ensureTabExists(tabName)
+      let note = { id: now + idx, text: item.text, completed: false, category: tabName }
+      if (addNoteBottom) notes.push(note)
+      else notes.unshift(note)
+    })
+    saveData()
+    if (noteCategories.includes(activeCategory))
+    {
+      renderNotes()
+    }
   }
-  // Also update stats if needed (but it's okay)
-};
+  catch(e) {}
+}
+
+window.syncNoteFromAndroid = function(text, tabName)
+{
+  window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
+}
 
 function toggleScreenshots(disabled)
 {

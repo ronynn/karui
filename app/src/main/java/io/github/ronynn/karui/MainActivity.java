@@ -174,62 +174,6 @@ public class MainActivity extends Activity
     {
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
-
-    handleProcessTextIntent(getIntent());
-  }
-
-  @Override
-  protected void onNewIntent(Intent intent)
-  {
-    super.onNewIntent(intent);
-    setIntent(intent);
-    handleProcessTextIntent(intent);
-  }
-
-  // ---------- PROCESS TEXT INTENT ----------
-
-  private void handleProcessTextIntent(Intent intent)
-  {
-    if (intent != null && Intent.ACTION_PROCESS_TEXT.equals(intent.getAction()))
-    {
-      CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
-      if (text != null && text.length() > 0)
-      {
-        String noteText = text.toString().trim();
-        if (!noteText.isEmpty())
-        {
-          saveNoteToQueue(noteText);
-          Toast.makeText(this, "Saved to Karui", Toast.LENGTH_SHORT).show();
-          if (isPageLoaded)
-          {
-            injectPendingNotes();
-          }
-        }
-      }
-    }
-  }
-
-  private void saveNoteToQueue(String noteText)
-  {
-    SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
-    String existingNotes = prefs.getString("pending_notes", "");
-    String existingTabs = prefs.getString("pending_notes_tabs", "");
-
-    if (existingNotes.isEmpty())
-    {
-      existingNotes = noteText;
-      existingTabs = inboxTabName;
-    }
-    else
-    {
-      existingNotes += "\n" + noteText;
-      existingTabs += "\n" + inboxTabName;
-    }
-
-    prefs.edit()
-      .putString("pending_notes", existingNotes)
-      .putString("pending_notes_tabs", existingTabs)
-      .apply();
   }
 
   // ---------- NOTIFICATION HANDLING ----------
@@ -391,35 +335,17 @@ public class MainActivity extends Activity
     }
 
     SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
-    String pendingNotes = prefs.getString("pending_notes", "");
-    String pendingTabs = prefs.getString("pending_notes_tabs", "");
-    if (pendingNotes.isEmpty())
+    String jsonStr = prefs.getString("pending_notes_json", "[]");
+
+    if (jsonStr.equals("[]") || jsonStr.isEmpty())
     {
       return;
     }
 
-    prefs.edit().remove("pending_notes").remove("pending_notes_tabs").apply();
+    prefs.edit().remove("pending_notes_json").apply();
 
-    String[] notes = pendingNotes.split("\n");
-    String[] tabs = pendingTabs.split("\n");
-
-    for (int i = 0; i < notes.length; i++)
-    {
-      if (notes[i].trim().isEmpty())
-      {
-        continue;
-      }
-      String tabName = (i < tabs.length) ? tabs[i] : inboxTabName;
-      String escapedNote = notes[i]
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
-        .replace("\n", "\\n");
-      String escapedTab = tabName
-        .replace("\\", "\\\\")
-        .replace("'", "\\'");
-      String js = String.format("syncNoteFromAndroid('%s', '%s')", escapedNote, escapedTab);
-      mWebView.evaluateJavascript(js, null);
-    }
+    String js = "if(window.syncNotesArrayFromAndroid) window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + ");";
+    mWebView.evaluateJavascript(js, null);
   }
 
   @Override

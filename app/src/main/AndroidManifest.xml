@@ -22,8 +22,22 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
 
+    </activity>
+
+    <activity
+      android:name=".ProcessTextActivity"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:excludeFromRecents="true"
+      android:exported="true">
+
       <intent-filter android:label="Copy to Karui">
         <action android:name="android.intent.action.PROCESS_TEXT" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+      </intent-filter>
+
+      <intent-filter android:label="Karui">
+        <action android:name="android.intent.action.SEND" />
         <category android:name="android.intent.category.DEFAULT" />
         <data android:mimeType="text/plain" />
       </intent-filter>

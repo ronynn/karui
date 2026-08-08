@@ -7,7 +7,6 @@ import android.app.RemoteInput;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
@@ -30,7 +29,7 @@ public class NoteReplyReceiver extends BroadcastReceiver
         String noteText = input.toString().trim();
         if (!noteText.isEmpty())
         {
-          saveNoteToPreferences(context, noteText);
+          ProcessTextActivity.saveNoteToQueue(context, noteText);
 
           Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
           updateIntent.setPackage(context.getPackageName());
@@ -40,30 +39,6 @@ public class NoteReplyReceiver extends BroadcastReceiver
     }
 
     updateNotification(context);
-  }
-
-  private void saveNoteToPreferences(Context context, String noteText)
-  {
-    SharedPreferences prefs = context.getSharedPreferences("note_queue", Context.MODE_PRIVATE);
-    String existingNotes = prefs.getString("pending_notes", "");
-    String existingTabs = prefs.getString("pending_notes_tabs", "");
-    String inboxTab = prefs.getString("inbox_tab_name", "Inbox");
-
-    if (existingNotes.isEmpty())
-    {
-      existingNotes = noteText;
-      existingTabs = inboxTab;
-    }
-    else
-    {
-      existingNotes += "\n" + noteText;
-      existingTabs += "\n" + inboxTab;
-    }
-
-    prefs.edit()
-      .putString("pending_notes", existingNotes)
-      .putString("pending_notes_tabs", existingTabs)
-      .apply();
   }
 
   private void updateNotification(Context context)
