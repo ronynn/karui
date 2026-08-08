@@ -14,12 +14,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
@@ -138,32 +132,6 @@ public class MainActivity extends Activity {
         createNotificationChannel();
     }
 
-    // ---------- NOTIFICATION ICON GENERATOR (no file required) ----------
-
-    /**
-     * Creates a simple white circle bitmap that works as a valid notification small icon.
-     */
-    private Bitmap createNotificationIconBitmap() {
-        int size = 96; // 24dp * 4 for crisp edges
-        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.WHITE);
-        canvas.drawCircle(size / 2f, size / 2f, size / 2f * 0.8f, paint);
-        return bitmap;
-    }
-
-    /**
-     * Returns an Icon object (API 23+) or null for older APIs.
-     */
-    @SuppressLint("NewApi")
-    private Icon getNotificationIcon() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return Icon.createWithBitmap(createNotificationIconBitmap());
-        }
-        return null;
-    }
-
     // ---------- NOTIFICATION CHANNEL ----------
 
     private void createNotificationChannel() {
@@ -176,9 +144,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ---------- SHOW / CANCEL NOTIFICATION ----------
+    // ---------- SHOW NOTIFICATION (safe, uses R.drawable.ic_note) ----------
 
-    @SuppressLint("NewApi")
     private void showNotification() {
         // Ensure channel exists
         createNotificationChannel();
@@ -189,29 +156,23 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // Check global notification enablement (API 24+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            if (!manager.areNotificationsEnabled()) {
-                Toast.makeText(this, "Notifications are disabled in system settings", Toast.LENGTH_LONG).show();
-                // Open notification settings for the app
-                try {
-                    Intent intent = new Intent();
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                        intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
-                    } else {
-                        intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        intent.setData(Uri.parse("package:" + getPackageName()));
-                    }
-                    startActivity(intent);
-                } catch (Exception e) {
-                    // ignore
+        // Check if notifications are enabled globally
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !manager.areNotificationsEnabled()) {
+            Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
+            try {
+                Intent intent = new Intent();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                    intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+                } else {
+                    intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
                 }
-                return;
-            }
+                startActivity(intent);
+            } catch (Exception ignored) {}
+            return;
         }
 
-        // Build notification
         try {
             // Open app intent
             Intent openAppIntent = new Intent(this, MainActivity.class);
@@ -229,26 +190,26 @@ public class MainActivity extends Activity {
             Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
             PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, flags);
 
-            // Notification action with the generated icon
+            // Notification action with the drawable icon
             Notification.Action replyAction;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 replyAction = new Notification.Action.Builder(
-                        getNotificationIcon(),   // Icon object (safe)
+                        Icon.createWithResource(this, R.drawable.ic_note),
                         "Add Note",
                         replyPendingIntent)
                         .addRemoteInput(remoteInput)
                         .build();
             } else {
-                // Fallback for API 21–22: use a built-in resource (no Icon class)
+                // Pre-Marshmallow fallback
                 replyAction = new Notification.Action.Builder(
-                        android.R.drawable.ic_menu_send,
+                        R.drawable.ic_note,
                         "Add Note",
                         replyPendingIntent)
                         .addRemoteInput(remoteInput)
                         .build();
             }
 
-            // Build notification itself
+            // Build notification
             Notification.Builder builder;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 builder = new Notification.Builder(this, CHANNEL_ID);
@@ -256,11 +217,11 @@ public class MainActivity extends Activity {
                 builder = new Notification.Builder(this);
             }
 
-            // Set small icon depending on API
+            // Set the small icon
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                builder.setSmallIcon(getNotificationIcon());   // Icon object
+                builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
             } else {
-                builder.setSmallIcon(android.R.drawable.ic_dialog_info); // built-in
+                builder.setSmallIcon(R.drawable.ic_note);
             }
 
             builder.setContentTitle("Quick Note")
@@ -274,7 +235,6 @@ public class MainActivity extends Activity {
             isNotificationActive = true;
 
         } catch (Exception e) {
-            // Detailed error for debugging
             String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
             if (e.getCause() != null) msg += "\nCause: " + e.getCause().toString();
             Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
