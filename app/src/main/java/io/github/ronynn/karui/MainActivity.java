@@ -10,8 +10,10 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.RemoteInput;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Icon;
@@ -39,6 +41,8 @@ import java.io.OutputStream;
 
 public class MainActivity extends Activity
 {
+  public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
+
   private static final int CREATE_FILE_REQUEST_CODE = 1;
   private static final int IMPORT_FILE_REQUEST_CODE = 2;
   private static final int FILECHOOSER_RESULTCODE = 3;
@@ -56,7 +60,20 @@ public class MainActivity extends Activity
   private ValueCallback<Uri[]> mFilePathCallback;
 
   private boolean isNotificationActive = false;
+  private boolean isPageLoaded = false;
   private String inboxTabName = "Inbox";
+
+  private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
+  {
+    @Override
+    public void onReceive(Context context, Intent intent)
+    {
+      if (isPageLoaded)
+      {
+        injectPendingNotes();
+      }
+    }
+  };
 
   @Override
   @SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
@@ -109,6 +126,9 @@ public class MainActivity extends Activity
 
         splashScreen.setVisibility(View.GONE);
         mWebView.setVisibility(View.VISIBLE);
+
+        isPageLoaded = true;
+        injectPendingNotes();
       }
     });
 
@@ -142,6 +162,15 @@ public class MainActivity extends Activity
     inboxTabName = prefs.getString("inbox_tab_name", "Inbox");
 
     createNotificationChannel();
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+    {
+      registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED), Context.RECEIVER_NOT_EXPORTED);
+    }
+    else
+    {
+      registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
+    }
   }
 
   // ---------- NOTIFICATION HANDLING ----------
@@ -297,6 +326,11 @@ public class MainActivity extends Activity
 
   private void injectPendingNotes()
   {
+    if (!isPageLoaded)
+    {
+      return;
+    }
+
     SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
     String pendingNotes = prefs.getString("pending_notes", "");
     String pendingTabs = prefs.getString("pending_notes_tabs", "");
@@ -333,7 +367,10 @@ public class MainActivity extends Activity
   protected void onResume()
   {
     super.onResume();
-    injectPendingNotes();
+    if (isPageLoaded)
+    {
+      injectPendingNotes();
+    }
   }
 
   // ---------- ACTIVITY RESULTS & LIFECYCLE ----------
@@ -434,6 +471,14 @@ public class MainActivity extends Activity
   protected void onDestroy()
   {
     super.onDestroy();
+    try
+    {
+      unregisterReceiver(noteReceiver);
+    }
+    catch (Exception ignored)
+    {
+    }
+
     if (mWebView != null)
     {
       mWebView.destroy();
