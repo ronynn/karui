@@ -31,11 +31,14 @@ public class NoteReplyReceiver extends BroadcastReceiver
         if (!noteText.isEmpty())
         {
           saveNoteToPreferences(context, noteText);
+
+          Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+          updateIntent.setPackage(context.getPackageName());
+          context.sendBroadcast(updateIntent);
         }
       }
     }
 
-    // Re-publishing notification stops the spinning loader in status bar
     updateNotification(context);
   }
 
