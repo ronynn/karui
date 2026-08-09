@@ -1,1 +1,1 @@
-An open source, privacy focussed, 64kB aesthetic todo list app.
+An open source, privacy focussed, 90kB aesthetic todo list app with easter eggs.

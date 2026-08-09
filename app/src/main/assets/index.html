@@ -50,7 +50,7 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transf
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 
-input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family:inherit;}
+input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; }
 input[type="text"]:focus { border-color: var(--accent); }
 input:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
 button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
@@ -77,7 +77,7 @@ button:active { filter: brightness(0.8); }
 
 .heading-large { font-size: calc(22px * var(--ui-scale)); margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
 
-.note-item { display: flex; justify-content: space-between; align-items: center; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
+.note-item { display: flex; justify-between: space-between; align-items: center; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
 .note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; display: inline-block; }
 .note-item.done span:first-of-type { opacity: 0.55; transition: opacity 0.3s; }
 .note-item.done span:first-of-type::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; background: var(--accent); transform-origin: left center; animation: scratch-anim 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
@@ -181,13 +181,8 @@ button:active { filter: brightness(0.8); }
       </div>
 
       <h4 style="padding-top:10px">Fonts</h4>
-      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
-        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
-        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('serif')">SERIF</button>
-        <button class="theme-btn" style="width:auto; flex:1; border-style: dashed;" onclick="document.getElementById('font-file').click()">+ CUSTOM</button>
-        <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" style="display:none" onchange="loadCustomFont(event)">
-      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;" id="font-buttons-container"></div>
+      <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" style="display:none" onchange="loadCustomFont(event)">
 
       <h4 style="padding-top:10px;">UI Size</h4>
       <div class="ui-size-ctrl" id="ui-size-btns">
@@ -269,7 +264,7 @@ button:active { filter: brightness(0.8); }
           </label>
         </div>
         <div style="margin-top: 3px;">
-          <label for="inbox-tab-name" style="font-size: calc(14px * var(--ui-scale)); font-weight: bold; display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
+          <label for="inbox-tab-name" style="font-size: calc(14px * var(--ui-scale)); font-weight: block; display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
           <input type="text" id="inbox-tab-name" style="margin-top: 2px;" value="Inbox" onchange="updateInboxTab(this.value)">
         </div>
       </div>
@@ -285,7 +280,7 @@ button:active { filter: brightness(0.8); }
         - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will semingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
         - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
         - The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
-        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and file issues for bugs if any are found. Also a small treasure hunt for you - the game has two easter eggs, the codes for which you can find in the source on github.
+        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and file issues for bugs if any are found. Also a small treasure hunt for you - the game has two easter eggs, the codes for which you can find in the source on github. Share your highscores on our reddit or discord, links available on Github readme.
       </div>
     </div>
 
@@ -350,7 +345,7 @@ let buttonRipples = false
 let showFab = false
 let sortAlphabetical = false
 let addNoteBottom = false
-let customFontData = ''
+let customFonts = []
 let audioCtx = null
 let currentScreenIdx = 0
 
@@ -363,7 +358,7 @@ function closeAllMenus()
   document.getElementById('note-dropdown').style.display = 'none'
 }
 
-function init()
+async function init()
 {
   noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"]
   notes = JSON.parse(localStorage.getItem("notes")) || []
@@ -379,12 +374,14 @@ function init()
   showFab = localStorage.getItem("showFab") === "true"
   sortAlphabetical = localStorage.getItem("sortAlphabetical") === "true"
   addNoteBottom = localStorage.getItem("addNoteBottom") === "true"
-  customFontData = localStorage.getItem("customFontData") || ""
 
-  if (customFontData) injectCustomFont(customFontData)
+  loadCustomFontsFromStorage()
+  await registerAllCustomFonts()
+
   setTheme(currentTheme) 
   setFont(currentFont) 
   applyUiScale(uiScale)
+  renderFontButtons()
   
   document.getElementById('dt-toggle').checked = doubleTapDelete
   document.getElementById('celebration-toggle').checked = celebrationMode
@@ -435,12 +432,10 @@ function setupVisualViewport()
     {
       let vv = window.visualViewport
       
-      // Calculate how far the visual viewport has collapsed/scrolled
       let keyboardHeight = window.innerHeight - vv.height
       let layoutScrollTop = window.scrollY || document.documentElement.scrollTop
       let visualOffsetTop = vv.offsetTop
 
-      // If keyboard is open or page is scrolled/panned within visual viewport
       if (keyboardHeight > 100 || visualOffsetTop > 0)
       {
         let translateY = -(keyboardHeight + (visualOffsetTop - layoutScrollTop))
@@ -493,7 +488,6 @@ function saveData()
   localStorage.setItem("showFab", showFab)
   localStorage.setItem("sortAlphabetical", sortAlphabetical)
   localStorage.setItem("addNoteBottom", addNoteBottom)
-  localStorage.setItem("customFontData", customFontData)
 }
 
 function showToast(msg)
@@ -619,54 +613,116 @@ function toggleAddBtm(v) { addNoteBottom = v; saveData(); }
 
 // Section: Font Management
 
+function loadCustomFontsFromStorage()
+{
+  try 
+  {
+    customFonts = JSON.parse(localStorage.getItem("customFonts")) || []
+  } 
+  catch(e) 
+  {
+    customFonts = []
+  }
+}
+
+async function registerAllCustomFonts()
+{
+  for (const fontItem of customFonts) 
+  {
+    try 
+    {
+      const font = new FontFace(fontItem.name, `url(${fontItem.data})`)
+      const loadedFont = await font.load()
+      document.fonts.add(loadedFont)
+    } 
+    catch (err) 
+    {
+      console.error(`Failed to register font ${fontItem.name}:`, err)
+    }
+  }
+}
+
+function renderFontButtons()
+{
+  const container = document.getElementById('font-buttons-container')
+  if (!container) return
+
+  container.innerHTML = ''
+
+  const defaultFonts = [
+    { name: 'SYSTEM', val: 'system-ui' },
+    { name: 'MONO', val: 'monospace' },
+    { name: 'SERIF', val: 'serif' }
+  ]
+
+  defaultFonts.forEach(f => {
+    const btn = document.createElement('button')
+    btn.className = `theme-btn ${currentFont === f.val ? 'active' : ''}`
+    btn.textContent = f.name
+    btn.onclick = () => setFont(f.val)
+    container.appendChild(btn)
+  })
+
+  customFonts.forEach(f => {
+    const btn = document.createElement('button')
+    btn.className = `theme-btn ${currentFont === f.name ? 'active' : ''}`
+    btn.textContent = f.label.toUpperCase()
+    btn.onclick = () => setFont(f.name)
+    container.appendChild(btn)
+  })
+
+  const addBtn = document.createElement('button')
+  addBtn.className = 'theme-btn'
+  addBtn.style.borderStyle = 'dashed'
+  addBtn.textContent = '+ CUSTOM'
+  addBtn.onclick = () => document.getElementById('font-file').click()
+  container.appendChild(addBtn)
+}
+
 function setFont(f) 
 { 
   currentFont = f
-  document.body.style.fontFamily = f === 'CustomFont' ? "'CustomFont', system-ui, sans-serif" : f
+  document.body.style.fontFamily = f.startsWith('CustomFont_') ? `'${f}', system-ui, sans-serif` : f
+  renderFontButtons()
   saveData() 
 }
 
 function loadCustomFont(e)
 {
-  const f = e.target.files[0]
-  if (!f) return
+  const file = e.target.files[0]
+  if (!file) return
+
+  const cleanName = file.name.replace(/\.[^/.]+$/, "")
+  const fontIdentifier = `CustomFont_${Date.now()}`
 
   const r = new FileReader()
-  r.onload = (ev) => 
+  r.onload = async (ev) => 
   {
-    customFontData = ev.target.result
-    injectCustomFont(customFontData)
-      .then(() => 
-      {
-        setFont('CustomFont')
+    const fontData = ev.target.result
+    
+    try 
+    {
+      const font = new FontFace(fontIdentifier, `url(${fontData})`)
+      const loadedFont = await font.load()
+      document.fonts.add(loadedFont)
+
+      customFonts.push({
+        name: fontIdentifier,
+        label: cleanName,
+        data: fontData
       })
-      .catch(err => console.error("Error loading custom font:", err))
+
+      localStorage.setItem("customFonts", JSON.stringify(customFonts))
+      setFont(fontIdentifier)
+    } 
+    catch(err) 
+    {
+      alert("Failed to load font file. Please ensure it is a valid TTF, OTF, WOFF, or WOFF2 file.")
+      console.error(err)
+    }
   }
-  r.readAsDataURL(f)
+  r.readAsDataURL(file)
 }
-
-async function injectCustomFont(data)
-{
-  if (!data) return
-
-  try 
-  {
-    const font = new FontFace('CustomFont', `url(${data})`)
-    const loadedFont = await font.load()
-    document.fonts.add(loadedFont)
-  } 
-  catch (e) 
-  {
-    console.error("FontFace loading failed:", e)
-  }
-}
-
-
-
-
-
-
-  
 
 function renderTabs()
 {
@@ -1077,7 +1133,6 @@ function ensureTabExists(name)
     renderTabs()
   }
 }
-
 
 
 init()

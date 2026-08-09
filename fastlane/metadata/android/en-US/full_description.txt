@@ -1,4 +1,4 @@
-An open source, privacy focussed, 64kB aesthetic todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is set to evolve into something even more eye-catching.
+An open source, privacy focussed, 64kB aesthetic todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
 
 Features
 
@@ -11,11 +11,32 @@ Features
 - Or just long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes)
 - Support for custom fonts, so pick and select any .ttf files you like from your files system
 
-Some upcoming features include
+New features
+
+So many new features might as well call it Karui++ now. Almost all new features are toggleable and don't add any bloat
+
+- Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
+- Bolder New UI Design, leaning slightly more into windows-8 metro and windows mobile aesthetics
+- Notes sorting and drag and drop optimized and now looks better
+- UI size options
+- Floating button on bottom right of the app to bring input box in focus
+- Sort Alphabetically
+- Add a % symbol on any tabname and it automatically counts percentage of tasks completed
+- Optionally disable screenshots for privacy when screensharing or in general
+- Optional UI Sounds
+- Optional celebration mode with confetti
+- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird and Snake. 
+- Optional button ripple effects
+- Previously I said editing notes features won't be added but now you can edit notes, √c and √d options replaced by a : dropdown
+
+Bug Fixes/Additional options
+- Keep keyboard on when switching tabs
+- Longpressing tab now always puts the dropdown in the center
+
+Some upcoming features/ ideas I have for the app include
 - Turning your todo tab into a text editor tab
 - Export your notes tabs as just .txt files
 - Markdown support when in text editing mode
-- Optimized notes dragging
-- Input focus button at lower right of screen for increased accessibility
+- Biometrics supports needs lot of library bloat so I'm thinking of just pin or password based lock but should it lock the whole app or just specific tabs or both? Open for discussion (tbh everything is open for discussion)
 
 For more details on features, usage, customizations, discussions, visit the github repo. We have recently created a telegram group, discord server, subreddit and a youtube channel focussed on developing foss apps with optimized interfaces, so check out those links in the repo readme, and share your apps and games too. Github issues are still the fastest way to reach out.
