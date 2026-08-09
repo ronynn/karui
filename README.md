@@ -13,14 +13,21 @@
 ![node](https://img.shields.io/badge/Node%20js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![notepad++](https://img.shields.io/badge/Notepad++-90E59A.svg?style=for-the-badge&logo=notepad%2B%2B&logoColor=black)
 ![alpine](https://img.shields.io/badge/Alpine_Linux-0D597F?style=for-the-badge&logo=alpine-linux&logoColor=white)
-![arch](https://img.shields.io/badge/Arch_Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white)
-![mint](https://img.shields.io/badge/Linux_Mint-87CF3E?style=for-the-badge&logo=linux-mint&logoColor=white)
 ![android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![tauri](https://img.shields.io/badge/Tauri-FFC131?style=for-the-badge&logo=Tauri&logoColor=white)
 ![androidstudio](https://img.shields.io/badge/Android_Studio-3DDC84?style=for-the-badge&logo=android-studio&logoColor=white)
-![academia](https://img.shields.io/badge/Academia-41454A?style=for-the-badge&logo=academia&logoColor=white)
 ![gpl3](https://img.shields.io/badge/GPL--3.0-red?style=for-the-badge)
 [![RB Status](https://shields.rbtlog.dev/simple/io.github.ronynn.karui?style=for-the-badge)](https://shields.rbtlog.dev/io.github.ronynn.karui)
+
+<!--
+![academia](https://img.shields.io/badge/Academia-41454A?style=for-the-badge&logo=academia&logoColor=white)
+
+![mint](https://img.shields.io/badge/Linux_Mint-87CF3E?style=for-the-badge&logo=linux-mint&logoColor=white)
+
+![arch](https://img.shields.io/badge/Arch_Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white)
+
+
+-->
 
 - An open source Google Tasks alternative to quickly jot down things to do, inspired by the system-24 theme and the Windows Mobile design system.
 - This app's design is set to evolve into something even more eye-catching.
@@ -47,9 +54,30 @@
 - **Lightweight:** Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - **Highly customizable:** Offers many themes with plans to add more customizations such as fonts, font sizes, and border colors.
 
-## Features That Won't Be Added
 
-- **Editing a note:** Experience shows that editing a todo list can lead to chaining multiple tasks. The purpose here is to quickly jot down ideas and tasks, not for deep thinking. For that, a dedicated text editor is more appropriate. (Open to discussion!)
+## Recently Added New Features
+
+So many new features might as well call it Karui++ now. Almost all new features are toggleable and don't add any bloat per say
+
+- Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
+- Bolder New UI Design, leaning slightly more into windows8 metro aspects
+- UI size options
+- Floating button on bottom right of the app to bring input box in focus
+- Sort Alphabetically
+- Add a % symbol on any tabname and it automatically counts percentage of tasks completed
+- Optionally disable screenshots for privacy when screensharing or in general
+- Optional UI Sounds
+- Optional celebration mode with confetti
+- Easter egg games (what? my todolist has games?), following the trend from back in the days
+- Optional button ripple effects
+
+~~Features That Won't Be Added:  **Editing a note:** Experience shows that editing a todo list can lead to chaining multiple tasks. The purpose here is to quickly jot down ideas and tasks, not for deep thinking. For that, a dedicated text editor is more appropriate. (Open to discussion!)~~
+- Now you can edit notes, √c and √d options replaced by a : dropdown
+
+Bug Fixes/Additional options
+- Keep keyboard on when switching tabs
+- Longpressing tab now always puts the dropdown in the center
+
 
 ## Working Demos before downloading
 
@@ -68,6 +96,8 @@
 - To remove any tab (except the Main tab), use the `\\\TabName` format.
 - Long press any tab to rename or delete it, or add new tab.
 - Custom fonts are now supported.
+- Add a % symbol on any tabname and it automatically counts percentage of tasks completed
+- Easter Eggs: Read the source code to find codes that unlock easter egg games in the app.
 
 ## Latest Releases for Download
 
@@ -108,7 +138,7 @@ Contributions are welcome, setting up takes nothing more than forking the projec
 - [x] Letting user to select their own fonts from file picker
 - [x] Pressing active tab tries to do some animation (#bug)
 - [x] Toggle option to use double tap √d to delete instead of a single tap
-- [ ] Tab adding bar position fix
+- [x] Tab adding bar position fix
 
 Cancelled items from roadmap
 - [ ] Add translations (didn't face the need)

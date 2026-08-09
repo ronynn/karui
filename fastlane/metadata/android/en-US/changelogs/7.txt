@@ -1,0 +1,11 @@
+So many new features might as well call it Karui++ now.
+Please check the release notes for all details coz of the 500 chars limit here.
+
+- Add notes from status bar, or from other apps when selecting text
+- Sort Alphabetically
+- Add a % symbol on any tabname and it automatically counts percentage of tasks completed
+- Now you can edit notes
+
+Bug Fixes/Additional options
+- Keep keyboard on when switching tabs
+- Longpressing tab now always puts the dropdown in the center
