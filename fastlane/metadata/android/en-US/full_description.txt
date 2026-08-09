@@ -21,6 +21,7 @@ So many new features might as well call it Karui++ now. Almost all new features 
 - UI size options
 - Floating button on bottom right of the app to bring input box in focus
 - Sort Alphabetically
+- Notify when deleting or copying a note, system notifications when copying a note to Karui from another app
 - Add a % symbol on any tabname and it automatically counts percentage of tasks completed
 - Optionally disable screenshots for privacy when screensharing or in general
 - Optional UI Sounds
