@@ -2,24 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Karui</title>
-<script src="confetti.browser.min.js"></script>
-<script src="flap.js"></script>
-<script src="snake.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.min.js"></script>
 <style>
 a { color: gray; }
-:root { 
-  --bg: #282828; 
-  --surface: #3c3836; 
-  --border: #d79921; 
-  --text: #ebdbb2; 
-  --accent: #fabd2f; 
-  --accent-txt: #282828; 
-  --gray: #928374;
-  --ui-scale: 1;
-}
+:root { --bg: #282828; --surface: #3c3836; --border: #d79921; --text: #ebdbb2; --accent: #fabd2f; --accent-txt: #282828; --gray: #928374; }
 [data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
 [data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #e6db74; }
 [data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #d8dee9; --accent: #81a1c1; --accent-txt: #2e3440; --gray: #4c566a; }
@@ -32,108 +20,77 @@ a { color: gray; }
 [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
 [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
 
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 4px;}
-body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
-header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
-#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 2px; line-height: 1; overflow: hidden; transform: translateY(0); }
+header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 15px 20px 10px; transition: all 0.25s ease-out; }
+#app-title { font-size: 46px; font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: 55px; margin-bottom: 2px; line-height: 1; overflow: hidden; transform: translateY(0); }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transform: translateY(-30px); pointer-events: none; }
 
-.pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
-.pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
+.pivot-container { display: flex; gap: 30px; overflow: hidden; }
+.pivot-item { font-size: 26px; font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
 .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
 
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
-.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(120px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 120px 20px 120px; display: block; min-height: 100vh; }
 
-.box { border: 2px solid var(--border); padding: calc(25px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
-.box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
+.box { border: 2px solid var(--border); padding: 25px 15px 15px; position: relative; background: var(--bg); margin-bottom: 25px; }
+.box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: 12px; color: var(--accent); font-weight: bold; line-height: 1; }
 
-input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; }
-input[type="text"]:focus { border-color: var(--accent); }
+input, select, button { width: 100%; padding: 12px; background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: 16px; outline: none; }
 input:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
 button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
 button:active { filter: brightness(0.8); }
 
-.toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
-.toggle-container:last-of-type { border-bottom: none; }
-
-.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--surface); border: 2px solid var(--border); transition: 0.2s ease; }
-.slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 4px; bottom: 4px; background-color: var(--gray); transition: 0.2s ease; }
-.switch input:checked + .slider { background-color: var(--accent); }
-.switch input:checked + .slider:before { transform: translateX(18px); background-color: var(--accent-txt); }
-.switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--accent); border: 2px solid var(--border); background: var(--surface); cursor: pointer; outline: 1px solid var(--border); }
+[data-theme="amoled"] input[type="checkbox"] { border: 2px solid #ffffff; outline: 1px solid #ffffff; background: #000000; accent-color: #ffffff; }
 
 .tabs-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; scrollbar-width: none; }
-.tab { padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
+.tab { padding: 8px 16px; background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
 
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.theme-btn { padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: calc(11px * var(--ui-scale)); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+.theme-btn { padding: 10px 4px; background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
 .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
 
-.heading-large { font-size: calc(22px * var(--ui-scale)); margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
+.heading-large { font-size: 22px; margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
 
-.note-item { display: flex; justify-content: space-between; align-items: center; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
+.note-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 10px; background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); }
 .note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; display: inline-block; }
 .note-item.done span:first-of-type { opacity: 0.55; transition: opacity 0.3s; }
 .note-item.done span:first-of-type::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; background: var(--accent); transform-origin: left center; animation: scratch-anim 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 @keyframes scratch-anim { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
 
 .ghost { opacity: 0.25; border: 2px dashed var(--accent) !important; background: var(--surface) !important; }
-.drag-image { position: fixed; z-index: 9999; pointer-events: none; background: var(--surface); border: 2px solid var(--accent); padding: calc(12px * var(--ui-scale)); --transform: scale(1.03) rotate(-1deg); box-shadow: 6px 6px 0 rgba(0,0,0,0.6); color: var(--text); display: flex; align-items: center; width: calc(100vw - 70px); white-space: normal; word-break: break-word; overflow-wrap: break-word; font-size: calc(16px * var(--ui-scale)); }
+.drag-image { position: fixed; z-index: 9999; pointer-events: none; background: var(--surface); border: 2px solid var(--accent); padding: 12px; transform: scale(1.03) rotate(-1deg); box-shadow: 6px 6px 0 rgba(0,0,0,0.6); color: var(--text); display: flex; align-items: center; width: calc(100vw - 70px); }
 
 .menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 12px; z-index: 300; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); }
 .menu button { margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); }
 .menu button:last-child { margin-bottom: 0; }
 
 #context-menu { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; max-width: 320px; }
-.menu-title { font-size: calc(14px * var(--ui-scale)); font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
+.menu-title { font-size: 14px; font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
 
-.ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
-.ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
-.ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
+.font-size-ctrl { display: flex; align-items: center; justify-content: flex-start; gap: 15px; font-size: 16px; margin-top: 20px; }
+.font-size-ctrl button { width: 45px; height: 45px; padding: 0; font-size: 24px; background: var(--surface); color: var(--text); border: 2px solid var(--border); }
 
-.about-text { font-size: calc(14px * var(--ui-scale)); line-height: 1.5; color: var(--text); opacity: 0.9; }
+.about-text { font-size: 14px; line-height: 1.5; color: var(--text); opacity: 0.9; }
 .about-text code { color: var(--accent); }
 
 #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
 .modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
 
-#toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.toggle-container { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border); }
+
+#toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: 14px; z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
 #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
 .has-ripple { position: relative; overflow: hidden; }
 .ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
 @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
 
-#fab-btn {
-  position: fixed;
-  bottom: 25px;
-  right: 25px;
-  width: calc(52px * var(--ui-scale));
-  height: calc(52px * var(--ui-scale));
-  background: var(--accent);
-  color: var(--accent-txt);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-family: monospace;
-  font-size: calc(20px * var(--ui-scale));
-  font-weight: bold;
-  cursor: pointer;
-  z-index: 999;
-  transition: transform 0.15s ease-out;
-}
-
-#fab-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
-}
+#fab-btn { position: fixed; bottom: 25px; right: 25px; width: 52px; height: 52px; background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6); display: none; align-items: center; justify-content: center; font-family: monospace; font-size: 20px; font-weight: bold; cursor: pointer; z-index: 150; transition: transform 0.1s, bottom 0.2s ease-out; }
+#fab-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6); }
 </style>
 </head>
 <body>
@@ -151,7 +108,7 @@ button:active { filter: brightness(0.8); }
     <div class="box">
       <span class="box-title">Box 1: Notes Input</span>
       <input type="text" id="note-in" placeholder="Type note or command">
-      <div style="margin-top:10px; font-size:calc(14px * var(--ui-scale)); color: var(--gray);" id="stats">Remaining: 0 &nbsp;&nbsp; Completed: 0</div>
+      <div style="margin-top:10px; font-size:14px; color: var(--gray);" id="stats">Remaining: 0 &nbsp;&nbsp; Completed: 0</div>
     </div>
     <div class="box">
       <span class="box-title">Box 2: Notes List</span>
@@ -162,8 +119,8 @@ button:active { filter: brightness(0.8); }
 
   <div class="screen" id="settings-screen">
     <div class="box">
-      <span class="box-title">Box 3: Visuals & Usage</span>
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin-bottom: 8px;">Themes</h3>
+      <span class="box-title">Box 3: Themes & Fonts</span>
+      <h3>Themes</h3> <br/>
       <div class="grid-btns" id="theme-btns">
         <button class="theme-btn" onclick="setTheme('gruvbox')">GRUVBOX</button>
         <button class="theme-btn" onclick="setTheme('dracula')">DRACULA</button>
@@ -178,8 +135,8 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" onclick="setTheme('everforest-light')">EV-LIGHT</button>
         <button class="theme-btn" onclick="setTheme('tokyo-night')">TOKYO</button>
       </div>
-
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin: 15px 0 8px;">Fonts</h3>
+      <br/>
+      <h3>Fonts</h3><br/>
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
@@ -187,115 +144,82 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" style="width:auto; flex:1; border-style: dashed;" onclick="document.getElementById('font-file').click()">+ CUSTOM</button>
         <input type="file" id="font-file" accept=".ttf,.otf" style="display:none" onchange="loadCustomFont(event)">
       </div>
-
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin: 15px 0 8px;">UI Size</h3>
-      <div class="ui-size-ctrl" id="ui-size-btns">
-        <button onclick="setUiSize(0.85, this)">S</button>
-        <button onclick="setUiSize(1, this)">M</button>
-        <button onclick="setUiSize(1.15, this)">L</button>
-        <button onclick="setUiSize(1.3, this)">XL</button>
-      </div>
-
-      <div style="margin-top: 20px; border-top: 1px dashed var(--border); padding-top: 10px;">
-        <div class="toggle-container">
-          <span>Button ripples</span>
-          <label class="switch">
-            <input type="checkbox" id="ripples-toggle" onchange="toggleButtonRipples(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Floating Quick Input Button (&gt;_)</span>
-          <label class="switch">
-            <input type="checkbox" id="fab-toggle" onchange="toggleFab(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Celebration mode</span>
-          <label class="switch">
-            <input type="checkbox" id="celebration-toggle" onchange="toggleCelebration(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Keep keyboard when switching tabs</span>
-          <label class="switch">
-            <input type="checkbox" id="keep-keyboard-toggle" onchange="toggleKeepKeyboard(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>UI Sounds</span>
-          <label class="switch">
-            <input type="checkbox" id="ui-sounds-toggle" onchange="toggleUiSounds(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Sort notes alphabetically</span>
-          <label class="switch">
-            <input type="checkbox" id="sort-alpha-toggle" onchange="toggleSortAlpha(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Add Notes To Bottom</span>
-          <label class="switch">
-            <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Double Tap Delete To Delete</span>
-          <label class="switch">
-            <input type="checkbox" id="dt-toggle" onchange="toggleDt(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Disable Screenshots</span>
-          <label class="switch">
-            <input type="checkbox" id="disable-screenshots-toggle" onchange="toggleScreenshots(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Enable Quick Note</span>
-          <label class="switch">
-            <input type="checkbox" id="notification-toggle" onchange="toggleNotification(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div style="margin-top: 15px;">
-          <label for="inbox-tab-name" style="font-size: calc(14px * var(--ui-scale)); font-weight: bold; display: block; margin-bottom: 6px;">Target Tab Name:</label>
-          <input type="text" id="inbox-tab-name" value="Inbox" onchange="updateInboxTab(this.value)">
-        </div>
+      
+      <div class="font-size-ctrl">
+        <button onclick="chgSize(-2)">-</button>
+        <span id="f-size-disp">18px</span>
+        <button onclick="chgSize(2)">+</button>
       </div>
     </div>
 
     <div class="box">
-      <span class="box-title">Box 4: About Karui</span>
+      <span class="box-title">Box 4: Visuals & Usage</span>
+      <div class="toggle-container" style="margin-top: 0; padding-top: 0; border-top: none;">
+        <span style="font-size: 14px;">Button ripples</span>
+        <input type="checkbox" id="ripples-toggle" onchange="toggleButtonRipples(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Floating Quick Input Button (&gt;_)</span>
+        <input type="checkbox" id="fab-toggle" onchange="toggleFab(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Celebration mode</span>
+        <input type="checkbox" id="celebration-toggle" onchange="toggleCelebration(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Keep keyboard when switching tabs</span>
+        <input type="checkbox" id="keep-keyboard-toggle" onchange="toggleKeepKeyboard(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">UI Sounds</span>
+        <input type="checkbox" id="ui-sounds-toggle" onchange="toggleUiSounds(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Sort notes alphabetically</span>
+        <input type="checkbox" id="sort-alpha-toggle" onchange="toggleSortAlpha(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Double Tap Delete To Delete</span>
+        <input type="checkbox" id="dt-toggle" onchange="toggleDt(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Add Notes To Bottom</span>
+        <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)">
+      </div>
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Disable Screenshots</span>
+        <input type="checkbox" id="disable-screenshots-toggle" onchange="toggleScreenshots(this.checked)">
+      </div>
+    
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Enable Quick Note</span>
+        <input type="checkbox" id="notification-toggle" onchange="toggleNotification(this.checked)">
+      </div>
+      <div style="margin-top: 15px;">
+        <label for="inbox-tab-name" style="font-size: 14px;">Target Tab Name:</label>
+        <input type="text" id="inbox-tab-name" value="Inbox" onchange="updateInboxTab(this.value)" style="margin-top:5px;">
+      </div>
+    </div>
+    
+    <div class="box">
+      <span class="box-title">Box 5: About Karui</span>
       <div class="about-text">
         <h2>Karui</h2>
         - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
-        - Use <code>///tabName</code> to add a new tab, <code>\\\tabName</code> to remove a tab or just <code>///</code> to delete current tab. <br/>
-        - You can just long press any tab to rename or delete it or add a new tab. Tap <code>:</code> to copy, edit or delete notes.<br/>
-        - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will semingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
-        - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
-        - The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
-        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and file issues for bugs if any are found. Also a small treasure hunt for you - the game has two easter eggs, the codes for which you can find in the source on github.
+        - Use <code>///</code> to add a new tab, <code>\\\</code> to remove current tab. Long press any tab to rename or delete it or add a new tab. Tap <code>:</code> to copy, edit or delete notes.<br/>
+				- The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
+				- Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and any issues.
       </div>
     </div>
 
     <div class="box">
-      <span class="box-title">Box 5: Data & Recycle Bin</span>
+      <span class="box-title">Box 6: Data & Recycle Bin</span>
       <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <button onclick="exportData()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(14px * var(--ui-scale));">Export JSON</button>
-        <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(14px * var(--ui-scale));">Import JSON</button>
+        <button onclick="exportData()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:14px;">Export JSON</button>
+        <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:14px;">Import JSON</button>
         <input type="file" id="import-file" style="display:none" onchange="importData(event)">
       </div>
-      <h3 class="heading-large" style="font-size: calc(16px * var(--ui-scale));">Recycle Bin</h3>
+      <h3 class="heading-large" style="font-size: 16px;">Recycle Bin</h3>
       <div id="trash-list"></div>
       <button onclick="clearTrash()" style="margin-top:15px; background:var(--bg); color:var(--text); border:2px solid var(--border);">Clear Recycle Bin</button>
     </div>
@@ -340,7 +264,7 @@ let notes = []
 let recycleBin = []
 let currentTheme = 'gruvbox'
 let currentFont = 'system-ui'
-let uiScale = 1
+let fontSize = 18
 let doubleTapDelete = false
 let celebrationMode = false
 let keepKeyboard = false
@@ -355,7 +279,6 @@ let currentScreenIdx = 0
 
 let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0, hoveredTab = null, activeNoteMenuId = null, toastTimer = null
 
-// Audio and UI handlers
 function playSound(type = 'click')
 {
   if (!uiSounds) return
@@ -370,7 +293,7 @@ function playSound(type = 'click')
       audioCtx.resume()
     }
 
-    if (type === 'add' || type === 'scratch')
+    if (type === 'add')
     {
       let osc = audioCtx.createOscillator()
       let gain = audioCtx.createGain()
@@ -383,6 +306,29 @@ function playSound(type = 'click')
       gain.connect(audioCtx.destination)
       osc.start()
       osc.stop(audioCtx.currentTime + 0.12)
+    }
+    else if (type === 'scratch')
+    {
+      let bufSize = audioCtx.sampleRate * 0.12
+      let buffer = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate)
+      let data = buffer.getChannelData(0)
+      for (let i = 0; i < bufSize; i++)
+      {
+        data[i] = Math.random() * 2 - 1
+      }
+      let noise = audioCtx.createBufferSource()
+      noise.buffer = buffer
+      let filter = audioCtx.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.value = 1500
+      filter.Q.value = 3
+      let gain = audioCtx.createGain()
+      gain.gain.setValueAtTime(0.35, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12)
+      noise.connect(filter)
+      filter.connect(gain)
+      gain.connect(audioCtx.destination)
+      noise.start()
     }
     else if (type === 'tab')
     {
@@ -430,7 +376,6 @@ window.addEventListener('click', e => {
 
 function createRipple(e, btn)
 {
-  if (!buttonRipples) return
   btn.classList.add('has-ripple')
   let rect = btn.getBoundingClientRect()
   let circle = document.createElement('span')
@@ -445,9 +390,6 @@ function createRipple(e, btn)
   if (existing) existing.remove()
   
   btn.appendChild(circle)
-  setTimeout(() => {
-    if (circle.parentNode) circle.remove()
-  }, 1000)
 }
 
 function closeAllMenus()
@@ -463,7 +405,7 @@ function init()
   recycleBin = JSON.parse(localStorage.getItem("recycleBin")) || []
   currentTheme = localStorage.getItem("theme") || "gruvbox"
   currentFont = localStorage.getItem("font") || "system-ui"
-  uiScale = parseFloat(localStorage.getItem("uiScale")) || 1
+  fontSize = parseInt(localStorage.getItem("fontSize"), 10) || 18
   doubleTapDelete = localStorage.getItem("doubleTapDelete") === "true"
   celebrationMode = localStorage.getItem("celebrationMode") === "true"
   keepKeyboard = localStorage.getItem("keepKeyboard") === "true"
@@ -477,8 +419,7 @@ function init()
   if (customFontData) injectCustomFont(customFontData)
   setTheme(currentTheme) 
   setFont(currentFont) 
-  applyUiScale(uiScale)
-  
+  updateSizeDisp()
   document.getElementById('dt-toggle').checked = doubleTapDelete
   document.getElementById('celebration-toggle').checked = celebrationMode
   document.getElementById('keep-keyboard-toggle').checked = keepKeyboard
@@ -520,53 +461,24 @@ function setupScrollHeader()
 
 function setupVisualViewport()
 {
-  const updateFab = () => {
-    let fab = document.getElementById('fab-btn')
-    if (!fab) return
-
-    if (window.visualViewport)
-    {
-      let vv = window.visualViewport
-      
-      // Calculate how far the visual viewport has collapsed/scrolled
-      let keyboardHeight = window.innerHeight - vv.height
-      let layoutScrollTop = window.scrollY || document.documentElement.scrollTop
-      let visualOffsetTop = vv.offsetTop
-
-      // If keyboard is open or page is scrolled/panned within visual viewport
-      if (keyboardHeight > 100 || visualOffsetTop > 0)
-      {
-        let translateY = -(keyboardHeight + (visualOffsetTop - layoutScrollTop))
-        fab.style.transform = `translateY(${translateY}px)`
-      }
-      else
-      {
-        fab.style.transform = 'translateY(0px)'
-      }
-    }
-  }
-
   if (window.visualViewport)
   {
-    window.visualViewport.addEventListener('resize', updateFab)
-    window.visualViewport.addEventListener('scroll', updateFab)
+    window.visualViewport.addEventListener('resize', () => {
+      let fab = document.getElementById('fab-btn')
+      let hDiff = window.innerHeight - window.visualViewport.height
+      fab.style.bottom = (hDiff > 50 ? hDiff + 25 : 25) + 'px'
+    })
   }
-
-  window.addEventListener('resize', updateFab)
-  window.addEventListener('scroll', updateFab)
-  
-  updateFab()
 }
 
 function setupInputFocusScroll()
 {
-  document.addEventListener('focusin', e => {
-    if (e.target.tagName === 'INPUT' && e.target.type === 'text')
-    {
+  document.querySelectorAll('input[type="text"]').forEach(inp => {
+    inp.addEventListener('focus', e => {
       setTimeout(() => {
         e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }, 250)
-    }
+      }, 150)
+    })
   })
 }
 
@@ -577,7 +489,7 @@ function saveData()
   localStorage.setItem("recycleBin", JSON.stringify(recycleBin))
   localStorage.setItem("theme", currentTheme)
   localStorage.setItem("font", currentFont)
-  localStorage.setItem("uiScale", uiScale)
+  localStorage.setItem("fontSize", fontSize)
   localStorage.setItem("doubleTapDelete", doubleTapDelete)
   localStorage.setItem("celebrationMode", celebrationMode)
   localStorage.setItem("keepKeyboard", keepKeyboard)
@@ -661,41 +573,13 @@ function setTheme(t)
 }
 
 function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
-
-function setUiSize(s, btn)
-{
-  uiScale = s
-  applyUiScale(s)
-  saveData()
-}
-
-function applyUiScale(s)
-{
-  document.documentElement.style.setProperty('--ui-scale', s)
-  let btns = document.querySelectorAll('#ui-size-btns button')
-  btns.forEach(b => {
-    let scaleVal = 1
-    if (b.innerText === 'S') scaleVal = 0.85
-    else if (b.innerText === 'M') scaleVal = 1
-    else if (b.innerText === 'L') scaleVal = 1.15
-    else if (b.innerText === 'XL') scaleVal = 1.3
-    b.classList.toggle('active', Math.abs(scaleVal - s) < 0.05)
-  })
-}
-
+function chgSize(d) { fontSize = Math.max(10, Math.min(24, fontSize + d)); updateSizeDisp(); saveData(); }
+function updateSizeDisp() { document.body.style.fontSize = fontSize + 'px'; document.getElementById('f-size-disp').innerText = fontSize + 'px'; }
 function toggleDt(v) { doubleTapDelete = v; saveData(); }
 function toggleCelebration(v) { celebrationMode = v; saveData(); }
 function toggleKeepKeyboard(v) { keepKeyboard = v; saveData(); }
 function toggleUiSounds(v) { uiSounds = v; saveData(); }
-function toggleButtonRipples(v)
-{
-  buttonRipples = v
-  if (!v)
-  {
-    document.querySelectorAll('.ripple-span').forEach(el => el.remove())
-  }
-  saveData()
-}
+function toggleButtonRipples(v) { buttonRipples = v; saveData(); }
 function toggleFab(v)
 {
   showFab = v
@@ -761,26 +645,11 @@ function renderTabs()
   })
 }
 
-function updateStats()
-{
-  let rem = 0, comp = 0
-  let currentCatNotes = notes.filter(n => n.category === activeCategory)
-  currentCatNotes.forEach(n => n.completed ? comp++ : rem++)
-  let statsTxt = `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`
-  if (activeCategory.includes('%'))
-  {
-    let total = rem + comp
-    let pct = total > 0 ? Math.round((comp / total) * 100) : 0
-    statsTxt += ` \u00A0\u00A0 (${pct}%)`
-  }
-  document.getElementById('stats').textContent = statsTxt
-}
-
 function renderNotes()
 {
   closeAllMenus()
   const list = document.getElementById('notes-list'), trash = document.getElementById('trash-list')
-  list.innerHTML = ''; trash.innerHTML = ''
+  list.innerHTML = ''; trash.innerHTML = ''; let rem = 0, comp = 0
   
   let currentCatNotes = notes.filter(n => n.category === activeCategory)
   if (sortAlphabetical)
@@ -789,6 +658,7 @@ function renderNotes()
   }
 
   currentCatNotes.forEach(n => {
+    n.completed ? comp++ : rem++
     const d = document.createElement('div')
     d.className = `note-item ${n.completed ? 'done' : ''}`; d.dataset.id = n.id
     d.innerHTML = `<span>${n.text}</span>
@@ -812,10 +682,8 @@ function renderNotes()
         window.location.href = txt.startsWith('http') ? txt : 'https://' + txt
       }
       
-      d.classList.toggle('done', n.completed)
-      updateStats()
       renderTabs()
-      saveData()
+      renderNotes(); saveData()
     }
     bindLongPress(d, 'note'); list.appendChild(d)
   })
@@ -826,7 +694,14 @@ function renderNotes()
     trash.appendChild(d)
   })
   
-  updateStats()
+  let statsTxt = `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`
+  if (activeCategory.includes('%'))
+  {
+    let total = rem + comp
+    let pct = total > 0 ? Math.round((comp / total) * 100) : 0
+    statsTxt += ` \u00A0\u00A0 (${pct}%)`
+  }
+  document.getElementById('stats').textContent = statsTxt
 }
 
 function openNoteMenu(e, id)
@@ -900,24 +775,9 @@ function actionDeleteNote()
   }
 }
 
-const easterEggs = {
-  'FLAPTHEBIRD': () => startFlapGame(),
-  'SLITHER': () => startSnakeGame()
-}
-
-document.getElementById('note-in').onkeydown = e => 
-{
-  if (e.key === 'Enter' && e.target.value.trim()) 
-  {
+document.getElementById('note-in').onkeydown = e => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
     let v = e.target.value.trim()
-    
-    if (easterEggs[v]) 
-    {
-      easterEggs[v]()
-      e.target.value = ''
-      return
-    }
-
     if (v.startsWith('///'))
     {
       let t = v.slice(3).trim()
@@ -934,10 +794,7 @@ document.getElementById('note-in').onkeydown = e =>
       if (addNoteBottom) notes.push(n)
       else notes.unshift(n)
     }
-    e.target.value = ''
-    renderTabs()
-    renderNotes()
-    saveData()
+    e.target.value = ''; renderTabs(); renderNotes(); saveData()
   }
 }
 

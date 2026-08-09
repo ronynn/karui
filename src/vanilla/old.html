@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Karui</title>
+<style>
+html {padding-top:3%}
+a {color:gray}
+:root { --bg: #282828; --surface: #3c3836; --border: #d79921; --text: #ebdbb2; --accent: #fabd2f; --accent-txt: #282828; --gray: #928374; }
+[data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
+[data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #75715e; }
+[data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #d8dee9; --accent: #81a1c1; --accent-txt: #2e3440; --gray: #4c566a; }
+[data-theme="purple"] { --bg: #ffffff; --surface: #f5f5f5; --border: #8e24aa; --text: #333333; --accent: #8e24aa; --accent-txt: #ffffff; --gray: #888888; }
+[data-theme="amoled"] { --bg: #000000; --surface: #121212; --border: #ffffff; --text: #ffffff; --accent: #ffffff; --accent-txt: #000000; --gray: #555555; }
+[data-theme="cupcake"] { --bg: #faf7f5; --surface: #efeae6; --border: #ffb6c1; --text: #2e282a; --accent: #ffb6c1; --accent-txt: #2e282a; --gray: #b0a8a6; }
+[data-theme="catppuccin"] { --bg: #1e1e2e; --surface: #313244; --border: #cba6f7; --text: #cdd6f4; --accent: #cba6f7; --accent-txt: #11111b; --gray: #6c7086; }
+[data-theme="catppuccin-frappe"] { --bg: #303446; --surface: #414559; --border: #ca9ee6; --text: #c6d0f5; --accent: #ca9ee6; --accent-txt: #232634; --gray: #737994; }
+[data-theme="everforest"] { --bg: #2d353b; --surface: #3d484d; --border: #a7c080; --text: #d3c6aa; --accent: #a7c080; --accent-txt: #232a2e; --gray: #859289; }
+[data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
+[data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+header { display: flex; justify-content: flex-start; gap: 20px; padding: 20px 20px 10px; font-size: 26px; background: var(--bg); z-index: 10; }
+header div { opacity: 0.4; transition: opacity 0.2s; padding-bottom: 5px; cursor: pointer; }
+header div.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); margin-bottom: -2px; }
+
+#viewport { display: flex; flex: 1; width: 200vw; height: calc(100vh - 65px); transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; display: block; }
+
+.box { border: 1px solid var(--border); padding: 25px 15px 15px; position: relative; background: var(--bg); margin-bottom: 25px; }
+.box-title { position: absolute; top: -10px; left: 10px; background: var(--bg); padding: 0 5px; font-size: 12px; color: var(--text); font-weight: bold; }
+
+input, select, button { width: 100%; padding: 12px; background: var(--surface); color: var(--text); border: 1px solid var(--border); font-size: 16px; outline: none; }
+button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
+button:active { filter: brightness(0.8); }
+
+.tabs-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; scrollbar-width: none; }
+.tab { padding: 8px 16px; background: var(--bg); color: var(--gray); border: 1px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; }
+.tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
+
+.grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.theme-btn { padding: 10px 4px; background: var(--surface); color: var(--gray); border: 1px solid var(--border); text-transform: uppercase; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+.theme-btn.active { background: var(--accent); color: var(--accent-txt); }
+
+.heading-large { font-size: 22px; margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
+
+.note-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 0; background: var(--bg); cursor: pointer; transition: transform 0.2s, opacity 0.2s; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.05); }
+.note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; }
+.note-item.done span:first-of-type { text-decoration: line-through; opacity: 0.5; }
+
+.ghost { opacity: 0.2; }
+.drag-image { position: fixed; z-index: 9999; pointer-events: none; background: var(--surface); border: 1px solid var(--border); padding: 12px; transform: scale(1.02) rotate(1deg); box-shadow: 0 10px 20px rgba(0,0,0,0.5); color: var(--text); display: flex; align-items: center; width: calc(100vw - 70px); }
+
+.menu { position: fixed; background: var(--surface); border: 1px solid var(--border); padding: 10px; z-index: 100; display: none; box-shadow: 5px 5px 0 var(--border); }
+.menu button { margin-bottom: 5px; background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.menu button:last-child { margin-bottom: 0; }
+
+.font-size-ctrl { display: flex; align-items: center; justify-content: flex-start; gap: 15px; font-size: 16px; margin-top: 20px; }
+.font-size-ctrl button { width: 45px; height: 45px; padding: 0; font-size: 24px; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+.about-text { font-size: 14px; line-height: 1.5; color: var(--text); opacity: 0.9; }
+.about-text code { color: var(--accent); }
+
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+
+.toggle-container { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <div id="tab-home" class="active" onclick="switchScreen(0)">Home</div>
+  <div id="tab-settings" onclick="switchScreen(1)">Settings</div>
+</header>
+
+<div id="viewport">
+  <div class="screen" id="home-screen">
+    <div class="box">
+      <span class="box-title">Notes Input</span>
+      <input type="text" id="note-in" placeholder="Type note or command">
+      <div style="margin-top:10px; font-size:14px; color: var(--gray);" id="stats">Remaining: 0 &nbsp;&nbsp; Completed: 0</div>
+    </div>
+    <div class="box">
+      <span class="box-title">Notes List</span>
+      <div class="tabs-container" id="tabs-bar"></div>
+      <div id="notes-list"></div>
+    </div>
+  </div>
+
+  <div class="screen" id="settings-screen">
+    <div class="box">
+      <span class="box-title">Theme & Font</span>
+      <h3>Themes</h3> <br/>
+      <div class="grid-btns" id="theme-btns">
+        <button class="theme-btn" onclick="setTheme('gruvbox')">GRUVBOX</button>
+        <button class="theme-btn" onclick="setTheme('dracula')">DRACULA</button>
+        <button class="theme-btn" onclick="setTheme('monokai')">MONOKAI</button>
+        <button class="theme-btn" onclick="setTheme('nord')">NORD</button>
+        <button class="theme-btn" onclick="setTheme('purple')">PURPLE</button>
+        <button class="theme-btn" onclick="setTheme('amoled')">AMOLED</button>
+        <button class="theme-btn" onclick="setTheme('cupcake')">CUPCAKE</button>
+        <button class="theme-btn" onclick="setTheme('catppuccin')">CATPPUCCIN</button>
+        <button class="theme-btn" onclick="setTheme('catppuccin-frappe')">FRAPPE</button>
+        <button class="theme-btn" onclick="setTheme('everforest')">EVERFOREST</button>
+        <button class="theme-btn" onclick="setTheme('everforest-light')">EV-LIGHT</button>
+        <button class="theme-btn" onclick="setTheme('tokyo-night')">TOKYO</button>
+      </div>
+      <br/>
+      <h3>Fonts</h3><br/>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
+        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
+        <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('serif')">SERIF</button>
+        <button class="theme-btn" style="width:auto; flex:1; border-style: dashed;" onclick="document.getElementById('font-file').click()">+ CUSTOM</button>
+        <input type="file" id="font-file" accept=".ttf,.otf" style="display:none" onchange="loadCustomFont(event)">
+      </div>
+      
+      <div class="font-size-ctrl">
+        <button onclick="chgSize(-2)">-</button>
+        <span id="f-size-disp">18px</span>
+        <button onclick="chgSize(2)">+</button>
+      </div>
+      
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Double Tap √d To Delete</span>
+        <input type="checkbox" id="dt-toggle" onchange="toggleDt(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+      </div>
+      <div class="toggle-container" style="margin-top: 10px;">
+        <span style="font-size: 14px;">Add Notes To Bottom</span>
+        <input type="checkbox" id="add-btm-toggle" onchange="toggleAddBtm(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+      </div>
+      <div class="toggle-container" style="margin-top: 10px;">
+  <span style="font-size: 14px;">Disable Screenshots</span>
+  <input type="checkbox" id="disable-screenshots-toggle" onchange="toggleScreenshots(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+</div>
+    
+      
+      <div class="toggle-container">
+        <span style="font-size: 14px;">Enable Quick Note</span>
+        <input type="checkbox" id="notification-toggle" onchange="toggleNotification(this.checked)" style="width:24px; height:24px; accent-color:var(--accent);">
+      </div>
+      <div style="margin-top: 10px;">
+        <label for="inbox-tab-name" style="font-size: 14px;">Target Tab Name:</label>
+        <input type="text" id="inbox-tab-name" value="Inbox" onchange="updateInboxTab(this.value)" style="margin-top:5px;">
+      </div>
+    
+
+
+		
+    </div>
+    
+    <div class="box">
+      <span class="box-title">About</span>
+      <div class="about-text">
+        <h2>Karui</h2>
+        - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
+        - Use <code>///</code> to add a new tab, <code>\\\</code> to remove current tab. Long press any tab to rename or delete it or add a new tab. <code>√c</code> copies a note, <code>√d</code> deletes a note, <code>√r</code> restores a note.<br/>
+				- The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
+				- Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and any issues. You can find links there to our telegram group, discord server, youtube channel, and the subreddit where you can discuss foss apps, retro aesthetics, and showcase your own projects.
+				
+      </div>
+    </div>
+
+    <div class="box">
+      <span class="box-title">Data & Bin</span>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <button onclick="exportData()" style="background:var(--surface); color:var(--text); border:1px solid var(--border); font-size:14px;">Export JSON</button>
+        <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:1px solid var(--border); font-size:14px;">Import JSON</button>
+        <input type="file" id="import-file" style="display:none" onchange="importData(event)">
+      </div>
+      <h3 class="heading-large" style="font-size: 16px;">Recycle Bin</h3>
+      <div id="trash-list"></div>
+      <button onclick="clearTrash()" style="margin-top:15px; background:var(--bg); color:var(--text); border:1px solid var(--border);">Clear Recycle Bin</button>
+    </div>
+  </div>
+</div>
+
+<div id="context-menu" class="menu">
+  <button id="btn-mv-l" onclick="moveTab(-1)">Move Left</button>
+  <button id="btn-mv-r" onclick="moveTab(1)">Move Right</button>
+  <button onclick="openPrompt('Rename Tab', contextTab, val => { if(val) renameTab(val); })">Rename</button>
+  <button onclick="deleteTabClick()">Delete</button>
+  <button onclick="openPrompt('New Tab', '', val => { if(val) addTab(val); })">Add Tab</button>
+</div>
+
+<div id="modal-overlay">
+  <div class="modal-box">
+    <div id="modal-title" style="font-weight:bold;"></div>
+    <input type="text" id="modal-input">
+    <div style="display:flex; gap:10px;">
+      <button style="background:var(--surface); color:var(--text);" onclick="closeModal(false)">Cancel</button>
+      <button onclick="closeModal(true)">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let noteCategories = ['Main'];
+let activeCategory = 'Main';
+let notes = [];
+let recycleBin = [];
+let currentTheme = 'gruvbox';
+let currentFont = 'system-ui';
+let fontSize = 18;
+let doubleTapDelete = false;
+let addNoteBottom = false;
+let customFontData = '';
+
+let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0, hoveredTab = null;
+
+function init() {
+  noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"];
+  notes = JSON.parse(localStorage.getItem("notes")) || [];
+  recycleBin = JSON.parse(localStorage.getItem("recycleBin")) || [];
+  currentTheme = localStorage.getItem("theme") || "gruvbox";
+  currentFont = localStorage.getItem("font") || "system-ui";
+  fontSize = parseInt(localStorage.getItem("fontSize"), 10) || 18;
+  doubleTapDelete = localStorage.getItem("doubleTapDelete") === "true";
+  addNoteBottom = localStorage.getItem("addNoteBottom") === "true";
+  customFontData = localStorage.getItem("customFontData") || "";
+
+  if(customFontData) injectCustomFont(customFontData);
+  setTheme(currentTheme); 
+  setFont(currentFont); 
+  updateSizeDisp();
+  document.getElementById('dt-toggle').checked = doubleTapDelete;
+  document.getElementById('add-btm-toggle').checked = addNoteBottom;
+  
+  if(!noteCategories.includes(activeCategory)) activeCategory = noteCategories[0] || "Main";
+  
+  renderTabs(); 
+  renderNotes(); 
+  setupDragAndDrop();
+}
+
+function saveData() {
+  localStorage.setItem("noteCategories", JSON.stringify(noteCategories));
+  localStorage.setItem("notes", JSON.stringify(notes));
+  localStorage.setItem("recycleBin", JSON.stringify(recycleBin));
+  localStorage.setItem("theme", currentTheme);
+  localStorage.setItem("font", currentFont);
+  localStorage.setItem("fontSize", fontSize);
+  localStorage.setItem("doubleTapDelete", doubleTapDelete);
+  localStorage.setItem("addNoteBottom", addNoteBottom);
+  localStorage.setItem("customFontData", customFontData);
+}
+
+function switchScreen(idx) {
+  document.getElementById('viewport').style.transform = `translateX(-${idx * 100}vw)`;
+  document.getElementById('tab-home').classList.toggle('active', idx === 0);
+  document.getElementById('tab-settings').classList.toggle('active', idx === 1);
+}
+
+let startX, startY, isSwipe = false;
+window.addEventListener('touchstart', e => {
+  if (e.target.closest('#notes-list') || e.target.closest('.grid-btns') || e.target.closest('#tabs-bar') || e.target.closest('input') || e.target.closest('#modal-overlay') || e.target.closest('button')) return;
+  startX = e.touches[0].clientX; startY = e.touches[0].clientY; isSwipe = true;
+}, {passive:true});
+window.addEventListener('touchmove', e => {
+  if (!isSwipe) return;
+  let dX = e.touches[0].clientX - startX, dY = e.touches[0].clientY - startY;
+  if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 35) { switchScreen(dX > 0 ? 0 : 1); isSwipe = false; }
+}, {passive:true});
+
+function setTheme(t) {
+  currentTheme = t; document.body.setAttribute('data-theme', t);
+  document.querySelectorAll('#theme-btns .theme-btn').forEach(b => {
+    b.classList.toggle('active', b.innerText.toLowerCase() === t || (t==='catppuccin-frappe' && b.innerText==='FRAPPE') || (t==='everforest-light' && b.innerText==='EV-LIGHT') || (t==='tokyo-night' && b.innerText==='TOKYO'));
+  });
+  saveData();
+}
+function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
+function chgSize(d) { fontSize = Math.max(10, Math.min(24, fontSize + d)); updateSizeDisp(); saveData(); }
+function updateSizeDisp() { document.body.style.fontSize = fontSize + 'px'; document.getElementById('f-size-disp').innerText = fontSize + 'px'; }
+function toggleDt(v) { doubleTapDelete = v; saveData(); }
+function toggleAddBtm(v) { addNoteBottom = v; saveData(); }
+
+function loadCustomFont(e) {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    customFontData = ev.target.result;
+    injectCustomFont(customFontData);
+    setFont('CustomFont');
+    saveData();
+  };
+  r.readAsDataURL(f);
+}
+function injectCustomFont(data) {
+  let s = document.getElementById('c-font');
+  if(!s) { s = document.createElement('style'); s.id = 'c-font'; document.head.appendChild(s); }
+  s.textContent = `@font-face { font-family: 'CustomFont'; src: url('${data}'); }`;
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabs-bar'); bar.innerHTML = '';
+  noteCategories.forEach(t => {
+    const d = document.createElement('div');
+    d.className = `tab ${activeCategory === t ? 'active' : ''}`;
+    d.textContent = t; d.dataset.tab = t;
+    d.onclick = () => { activeCategory = t; renderTabs(); renderNotes(); };
+    bindLongPress(d, 'tab'); bar.appendChild(d);
+  });
+}
+
+function renderNotes() {
+  const list = document.getElementById('notes-list'), trash = document.getElementById('trash-list');
+  list.innerHTML = ''; trash.innerHTML = ''; let rem = 0, comp = 0;
+  
+  notes.forEach(n => {
+    if (n.category !== activeCategory) return;
+    n.completed ? comp++ : rem++;
+    const d = document.createElement('div');
+    d.className = `note-item ${n.completed ? 'done' : ''}`; d.dataset.id = n.id;
+    d.innerHTML = `<span>${n.text}</span>
+                   <span onclick="copyNote(event, ${n.id})" style="color:var(--gray); padding: 0 5px; margin-right: 10px; flex-shrink: 0;">√c</span>
+                   <span onclick="trashNote(event, ${n.id})" style="color:var(--gray); padding: 0 5px; flex-shrink: 0;">√d</span>`;
+    d.onclick = (e) => {
+      if (e.target.tagName === 'SPAN' && e.target.innerText.includes('√')) return;
+      n.completed = !n.completed; 
+      if (navigator.vibrate) navigator.vibrate(30); 
+      
+      let txt = n.text.trim();
+      if(/^https?:\/\//i.test(txt) || /^www\./i.test(txt)) {
+        window.location.href = txt.startsWith('http') ? txt : 'https://' + txt;
+      }
+      
+      renderNotes(); saveData();
+    };
+    bindLongPress(d, 'note'); list.appendChild(d);
+  });
+
+  recycleBin.forEach((n, idx) => {
+    const d = document.createElement('div'); d.className = 'note-item'; d.style.padding = '8px 0';
+    d.innerHTML = `<span>${n.text}</span><span onclick="restoreNote(${idx})" style="color:var(--gray); padding: 0 5px; flex-shrink: 0;">√r</span>`;
+    trash.appendChild(d);
+  });
+  
+  document.getElementById('stats').textContent = `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`;
+}
+
+function copyNote(e, id) {
+  e.stopPropagation();
+  let n = notes.find(x => x.id === id);
+  if(n) {
+    navigator.clipboard.writeText(n.text);
+    if (navigator.vibrate) navigator.vibrate(15);
+  }
+}
+
+document.getElementById('note-in').onkeydown = e => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    let v = e.target.value.trim();
+    if(v.startsWith('///')) {
+      let t = v.slice(3).trim();
+      if(t) addTab(t);
+    }
+    else if(v.startsWith('\\\\\\')) {
+      deleteTabClick();
+    }
+    else {
+      let n = { id: Date.now(), text: v, completed: false, category: activeCategory };
+      if(addNoteBottom) notes.push(n);
+      else notes.unshift(n);
+    }
+    e.target.value = ''; renderNotes(); saveData();
+  }
+};
+
+function trashNote(e, id) {
+  e.stopPropagation();
+  if (doubleTapDelete) {
+    let now = Date.now();
+    if (now - lastTrashTap < 300) { executeTrash(id); }
+    else { if (navigator.vibrate) navigator.vibrate(15); }
+    lastTrashTap = now;
+  } else { executeTrash(id); }
+}
+function executeTrash(id) {
+  let idx = notes.findIndex(x => x.id === id);
+  if(idx > -1) {
+    let n = notes.splice(idx, 1)[0];
+    recycleBin.push(n);
+    renderNotes(); saveData();
+  }
+}
+function restoreNote(index) {
+  let n = recycleBin.splice(index, 1)[0];
+  if(n) {
+    notes.push(n);
+    renderNotes(); saveData();
+  }
+}
+function clearTrash() { recycleBin = []; renderNotes(); saveData(); }
+
+function openPrompt(title, defaultVal, cb) {
+  document.getElementById('modal-title').innerText = title;
+  const inp = document.getElementById('modal-input'); inp.value = defaultVal;
+  document.getElementById('modal-overlay').style.display = 'flex';
+  setTimeout(() => inp.focus(), 100); modalCb = cb;
+}
+function closeModal(saveAction) {
+  document.getElementById('modal-overlay').style.display = 'none';
+  if(saveAction && modalCb) modalCb(document.getElementById('modal-input').value.trim());
+}
+
+function renameTab(n) {
+  if (n && !noteCategories.includes(n)) {
+    notes.forEach(x => { if(x.category === contextTab) x.category = n; });
+    recycleBin.forEach(x => { if(x.category === contextTab) x.category = n; });
+    noteCategories[noteCategories.indexOf(contextTab)] = n;
+    activeCategory = n; renderTabs(); renderNotes(); saveData();
+  }
+}
+function addTab(n) {
+  if (n && !noteCategories.includes(n)) {
+    noteCategories.push(n); activeCategory = n; renderTabs(); renderNotes(); saveData();
+  }
+}
+function deleteTabClick() {
+  let t = contextTab || activeCategory;
+  if (noteCategories.length > 1) {
+    noteCategories = noteCategories.filter(x => x !== t);
+    notes = notes.filter(note => {
+      if (note.category === t) { recycleBin.push(note); return false; }
+      return true;
+    });
+    if (activeCategory === t) activeCategory = noteCategories[0];
+    renderTabs(); renderNotes(); saveData();
+  }
+}
+function moveTab(dir) {
+  let idx = noteCategories.indexOf(contextTab);
+  if(idx < 0) return;
+  let nIdx = idx + dir;
+  if(nIdx >= 0 && nIdx < noteCategories.length) {
+    let t = noteCategories[idx];
+    noteCategories[idx] = noteCategories[nIdx];
+    noteCategories[nIdx] = t;
+    renderTabs(); saveData();
+  }
+  document.getElementById('context-menu').style.display = 'none';
+}
+
+function showMenu(x, y) { 
+  const m = document.getElementById('context-menu'); 
+  m.style.display = 'block'; m.style.left = x + 'px'; m.style.top = y + 'px'; 
+  let idx = noteCategories.indexOf(contextTab);
+  document.getElementById('btn-mv-l').style.display = idx > 0 ? 'block' : 'none';
+  document.getElementById('btn-mv-r').style.display = idx < noteCategories.length - 1 ? 'block' : 'none';
+}
+window.onclick = (e) => { if(!e.target.closest('.menu')) document.getElementById('context-menu').style.display = 'none'; }
+
+function bindLongPress(el, type) {
+  el.addEventListener('touchstart', e => {
+    touchTimer = setTimeout(() => {
+      if (navigator.vibrate) navigator.vibrate(60);
+      dragType = type; dragTarget = el;
+      if (type === 'tab') { contextTab = el.dataset.tab; showMenu(e.touches[0].clientX, e.touches[0].clientY); return; }
+      el.classList.add('ghost');
+      dragImg = el.cloneNode(true); dragImg.className = 'drag-image'; document.body.appendChild(dragImg);
+      moveDragImg(e.touches[0].clientX, e.touches[0].clientY);
+    }, 250);
+  }, {passive:true});
+  el.addEventListener('touchend', cleanDrag);
+  el.addEventListener('touchmove', e => {
+    if(!dragImg) {
+      clearTimeout(touchTimer);
+    } else {
+      if(dragType === 'note') e.preventDefault();
+      moveDragImg(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, {passive:false});
+}
+
+function moveDragImg(x, y) { if(dragImg) { dragImg.style.left = (x - 20) + 'px'; dragImg.style.top = (y - 20) + 'px'; } }
+
+function cleanDrag() {
+  clearTimeout(touchTimer);
+  document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
+  
+  if (dragTarget && dragType === 'note') {
+    if (hoveredTab) {
+      let tCat = hoveredTab.dataset.tab;
+      let nId = parseInt(dragTarget.dataset.id);
+      let n = notes.find(x => x.id === nId);
+      if(n && n.category !== tCat) { n.category = tCat; }
+      dragTarget.remove();
+    } else {
+      const ids = [...document.getElementById('notes-list').querySelectorAll('.note-item')].map(x => parseInt(x.dataset.id));
+      let currentCatNotes = ids.map(id => notes.find(x => x.id === id)).filter(Boolean);
+      let otherCatNotes = notes.filter(x => x.category !== activeCategory);
+      notes = [...currentCatNotes, ...otherCatNotes];
+    }
+    saveData();
+    if (hoveredTab) renderNotes();
+  }
+
+  if (dragTarget) dragTarget.classList.remove('ghost');
+  if (dragImg) { dragImg.remove(); dragImg = null; }
+  dragTarget = null; dragType = null; hoveredTab = null;
+}
+
+function setupDragAndDrop() {
+  document.getElementById('home-screen').addEventListener('touchmove', e => {
+    if (!dragTarget || !dragImg || dragType !== 'note') return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    
+    let elPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+    hoveredTab = elPoint ? elPoint.closest('.tab') : null;
+    document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1');
+    
+    if(hoveredTab) {
+      hoveredTab.style.opacity = '0.5';
+    } else {
+      const items = [...document.getElementById('notes-list').querySelectorAll('.note-item:not(.ghost)')];
+      const next = items.find(item => touch.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
+      if (next) document.getElementById('notes-list').insertBefore(dragTarget, next);
+      else document.getElementById('notes-list').appendChild(dragTarget);
+    }
+  }, {passive:false});
+}
+
+function mergeNotes(imported) {
+  if(!Array.isArray(imported)) return;
+  imported.forEach(n => {
+    if(n.category && !noteCategories.includes(n.category)) noteCategories.push(n.category);
+    if(!notes.some(x => x.id === n.id)) notes.push(n);
+  });
+  saveData(); renderTabs(); renderNotes();
+}
+
+function exportData() {
+  let fileData = JSON.stringify(notes);
+  if (window.Android && window.Android.saveFile) {
+    window.Android.saveFile("notes.json", fileData, "application/json");
+  } else {
+    const blob = new Blob([fileData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = "notes.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+function triggerImport() {
+  if (window.Android && window.Android.importJsonFile) {
+    window.Android.importJsonFile();
+  } else {
+    document.getElementById('import-file').click();
+  }
+}
+
+function importData(e) {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ev => { try { mergeNotes(JSON.parse(ev.target.result)); } catch(err) { alert("Import failed."); } };
+  r.readAsText(f);
+  e.target.value = '';
+}
+
+window.setAndroidNotes = function(jsonString) {
+  try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
+};
+
+// Status bar notes integration
+function loadNotificationSettings() {
+  let notifEnabled = localStorage.getItem("notificationEnabled") === "true";
+  document.getElementById('notification-toggle').checked = notifEnabled;
+
+  let savedTab = localStorage.getItem("inboxTabName") || "Inbox";
+  document.getElementById('inbox-tab-name').value = savedTab;
+  // Ensure the tab exists without switching to it
+  ensureTabExists(savedTab);
+  // Sync to Android
+  if (window.Android) {
+    window.Android.setInboxTabName(savedTab);
+    if (notifEnabled) window.Android.toggleNotification(true);
+  }
+}
+
+function toggleNotification(enable) {
+  localStorage.setItem("notificationEnabled", enable);
+  if (window.Android) {
+    window.Android.toggleNotification(enable);
+  }
+}
+
+function updateInboxTab(name) {
+  name = name.trim() || "Inbox";
+  localStorage.setItem("inboxTabName", name);
+  ensureTabExists(name);
+  if (window.Android) {
+    window.Android.setInboxTabName(name);
+  }
+}
+
+// Helper: add a tab if it doesn't exist, without changing active category
+function ensureTabExists(name) {
+  if (!noteCategories.includes(name)) {
+    noteCategories.push(name);
+    saveData();
+    renderTabs();
+  }
+}
+
+// Modified note receiver: adds note to the specified tab
+window.syncNotesArrayFromAndroid = function(jsonInput)
+{
+  try
+  {
+    let items = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput
+    if (!Array.isArray(items)) return
+    let now = Date.now()
+    items.forEach((item, idx) => {
+      if (!item.text) return
+      let tabName = item.tab || 'Inbox'
+      ensureTabExists(tabName)
+      let note = { id: now + idx, text: item.text, completed: false, category: tabName }
+      if (addNoteBottom) notes.push(note)
+      else notes.unshift(note)
+    })
+    saveData()
+    if (noteCategories.includes(activeCategory))
+    {
+      renderNotes()
+    }
+  }
+  catch(e) {}
+}
+
+window.syncNoteFromAndroid = function(text, tabName)
+{
+  window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
+}
+
+function toggleScreenshots(disabled)
+{
+  if (window.Android && window.Android.toggleScreenshots)
+  {
+    window.Android.toggleScreenshots(disabled)
+  }
+  localStorage.setItem('disableScreenshots', disabled)
+}
+
+function initScreenshotSetting()
+{
+  const isDisabled = localStorage.getItem('disableScreenshots') === 'true'
+  const toggleEl = document.getElementById('disable-screenshots-toggle')
+  if (toggleEl)
+  {
+    toggleEl.checked = isDisabled
+  }
+  if (window.Android && window.Android.toggleScreenshots)
+  {
+    window.Android.toggleScreenshots(isDisabled)
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initScreenshotSetting)
+
+init();
+loadNotificationSettings();
+</script>
+</body>
+</html>

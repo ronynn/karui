@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Karui</title>
+<script src="confetti.browser.min.js"></script>
+<style>
+a { color: gray; }
+:root { 
+  --bg: #282828; 
+  --surface: #3c3836; 
+  --border: #d79921; 
+  --text: #ebdbb2; 
+  --accent: #fabd2f; 
+  --accent-txt: #282828; 
+  --gray: #928374;
+  --ui-scale: 1;
+}
+[data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
+[data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #e6db74; }
+[data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #d8dee9; --accent: #81a1c1; --accent-txt: #2e3440; --gray: #4c566a; }
+[data-theme="purple"] { --bg: #ffffff; --surface: #f5f5f5; --border: #8e24aa; --text: #333333; --accent: #8e24aa; --accent-txt: #ffffff; --gray: #888888; }
+[data-theme="amoled"] { --bg: #000000; --surface: #121212; --border: #ffffff; --text: #ffffff; --accent: #ffffff; --accent-txt: #000000; --gray: #888888; }
+[data-theme="cupcake"] { --bg: #faf7f5; --surface: #efeae6; --border: #ffb6c1; --text: #2e282a; --accent: #ffb6c1; --accent-txt: #2e282a; --gray: #b0a8a6; }
+[data-theme="catppuccin"] { --bg: #1e1e2e; --surface: #313244; --border: #cba6f7; --text: #cdd6f4; --accent: #cba6f7; --accent-txt: #11111b; --gray: #6c7086; }
+[data-theme="catppuccin-frappe"] { --bg: #303446; --surface: #414559; --border: #ca9ee6; --text: #c6d0f5; --accent: #ca9ee6; --accent-txt: #232634; --gray: #737994; }
+[data-theme="everforest"] { --bg: #2d353b; --surface: #3d484d; --border: #a7c080; --text: #d3c6aa; --accent: #a7c080; --accent-txt: #232a2e; --gray: #859289; }
+[data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
+[data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
+
+header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
+#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 2px; line-height: 1; overflow: hidden; transform: translateY(0); }
+header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transform: translateY(-30px); pointer-events: none; }
+
+.pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
+.pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
+.pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+#viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(120px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
+
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+.modal-box input { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; }
+.modal-box button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; font-weight: bold; text-transform: uppercase; }
+
+#toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+.has-ripple { position: relative; overflow: hidden; }
+.ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
+@keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+#fab-btn { position: fixed; bottom: 25px; right: 25px; width: calc(52px * var(--ui-scale)); height: calc(52px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6); display: none; align-items: center; justify-content: center; font-family: monospace; font-size: calc(20px * var(--ui-scale)); font-weight: bold; cursor: pointer; z-index: 999; transition: transform 0.1s, bottom 0.1s ease-out; }
+#fab-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6); }
+</style>
+</head>
+<body>
+
+<header id="top-bar">
+  <div id="app-title">Karui</div>
+  <div class="pivot-container">
+    <div id="tab-home" class="pivot-item active" onclick="switchScreen(0)">home</div>
+    <div id="tab-settings" class="pivot-item" onclick="switchScreen(1)">settings</div>
+  </div>
+</header>
+
+<div id="viewport">
+  <div class="screen" id="home-screen">
+    <note-screen id="note-cmp"></note-screen>
+  </div>
+  <div class="screen" id="settings-screen">
+    <usage-settings id="usage-cmp"></usage-settings>
+    <about-screen id="about-cmp"></about-screen>
+  </div>
+</div>
+
+<div id="fab-btn" onclick="focusNoteInput()">&gt;_</div>
+
+<div id="modal-overlay">
+  <div class="modal-box">
+    <div id="modal-title" style="font-weight:bold;"></div>
+    <input type="text" id="modal-input">
+    <div style="display:flex; gap:10px;">
+      <button style="background:var(--surface); color:var(--text);" onclick="closeModal(false)">Cancel</button>
+      <button onclick="closeModal(true)">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="notescreen.js"></script>
+<script src="usage.js"></script>
+<script src="about.js"></script>
+
+<script>
+
+let noteCategories = ['Main']
+let activeCategory = 'Main'
+let notes = []
+let recycleBin = []
+let currentTheme = 'gruvbox'
+let currentFont = 'system-ui'
+let uiScale = 1
+let doubleTapDelete = false
+let celebrationMode = false
+let keepKeyboard = false
+let uiSounds = false
+let buttonRipples = false
+let showFab = false
+let sortAlphabetical = false
+let addNoteBottom = false
+let customFontData = ''
+let audioCtx = null
+let currentScreenIdx = 0
+let modalCb = null, toastTimer = null
+
+// Audio and UI handlers
+function playSound(type = 'click')
+{
+  if (!uiSounds) return
+  try
+  {
+    if (!audioCtx)
+    {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    }
+    if (audioCtx.state === 'suspended')
+    {
+      audioCtx.resume()
+    }
+
+    if (type === 'add' || type === 'scratch')
+    {
+      let osc = audioCtx.createOscillator()
+      let gain = audioCtx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(320, audioCtx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(850, audioCtx.currentTime + 0.12)
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start()
+      osc.stop(audioCtx.currentTime + 0.12)
+    }
+    else if (type === 'tab')
+    {
+      let osc = audioCtx.createOscillator()
+      let gain = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(600, audioCtx.currentTime)
+      osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.04)
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start()
+      osc.stop(audioCtx.currentTime + 0.08)
+    }
+    else
+    {
+      let osc = audioCtx.createOscillator()
+      let gain = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.03)
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start()
+      osc.stop(audioCtx.currentTime + 0.03)
+    }
+  }
+  catch(e) {}
+}
+
+window.addEventListener('click', e => {
+  playSound('click')
+  if (buttonRipples)
+  {
+    let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
+    if (targetBtn)
+    {
+      createRipple(e, targetBtn)
+    }
+  }
+}, true)
+
+function createRipple(e, btn)
+{
+  if (!buttonRipples) return
+  btn.classList.add('has-ripple')
+  let rect = btn.getBoundingClientRect()
+  let circle = document.createElement('span')
+  let diameter = Math.max(rect.width, rect.height)
+  let radius = diameter / 2
+  circle.style.width = circle.style.height = `${diameter}px`
+  circle.style.left = `${e.clientX - rect.left - radius}px`
+  circle.style.top = `${e.clientY - rect.top - radius}px`
+  circle.classList.add('ripple-span')
+  
+  let existing = btn.getElementsByClassName('ripple-span')[0]
+  if (existing) existing.remove()
+  
+  btn.appendChild(circle)
+  setTimeout(() => {
+    if (circle.parentNode) circle.remove()
+  }, 1000)
+}
+
+function init()
+{
+  noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"]
+  notes = JSON.parse(localStorage.getItem("notes")) || []
+  recycleBin = JSON.parse(localStorage.getItem("recycleBin")) || []
+  currentTheme = localStorage.getItem("theme") || "gruvbox"
+  currentFont = localStorage.getItem("font") || "system-ui"
+  uiScale = parseFloat(localStorage.getItem("uiScale")) || 1
+  doubleTapDelete = localStorage.getItem("doubleTapDelete") === "true"
+  celebrationMode = localStorage.getItem("celebrationMode") === "true"
+  keepKeyboard = localStorage.getItem("keepKeyboard") === "true"
+  uiSounds = localStorage.getItem("uiSounds") === "true"
+  buttonRipples = localStorage.getItem("buttonRipples") === "true"
+  showFab = localStorage.getItem("showFab") === "true"
+  sortAlphabetical = localStorage.getItem("sortAlphabetical") === "true"
+  addNoteBottom = localStorage.getItem("addNoteBottom") === "true"
+  customFontData = localStorage.getItem("customFontData") || ""
+
+  if (customFontData) injectCustomFont(customFontData)
+  setTheme(currentTheme) 
+  setFont(currentFont) 
+  applyUiScale(uiScale)
+  
+  document.getElementById('fab-btn').style.display = showFab ? 'flex' : 'none'
+
+  if (!noteCategories.includes(activeCategory)) activeCategory = noteCategories[0] || "Main"
+
+  renderAllComponents()
+  setupScrollHeader()
+  setupVisualViewport()
+  setupInputFocusScroll()
+}
+
+function renderAllComponents()
+{
+  const noteCmp = document.getElementById('note-cmp')
+  const usageCmp = document.getElementById('usage-cmp')
+  const aboutCmp = document.getElementById('about-cmp')
+  
+  if (noteCmp && noteCmp.render) noteCmp.render()
+  if (usageCmp && usageCmp.render) usageCmp.render()
+  if (aboutCmp && aboutCmp.render) aboutCmp.render()
+}
+
+function setupScrollHeader()
+{
+  document.querySelectorAll('.screen').forEach(scr => {
+    scr.addEventListener('scroll', () => {
+      let topBar = document.getElementById('top-bar')
+      if (scr.scrollTop > 10)
+      {
+        topBar.classList.add('scrolled')
+      }
+      else
+      {
+        topBar.classList.remove('scrolled')
+      }
+    })
+  })
+}
+
+function setupVisualViewport()
+{
+  const updateFab = () => {
+    let fab = document.getElementById('fab-btn')
+    if (!fab) return
+    let offset = 25
+    if (window.visualViewport)
+    {
+      let hDiff = window.innerHeight - (window.visualViewport.height + window.visualViewport.offsetTop)
+      offset = hDiff > 30 ? hDiff + 25 : 25
+    }
+    fab.style.bottom = offset + 'px'
+  }
+
+  if (window.visualViewport)
+  {
+    window.visualViewport.addEventListener('resize', updateFab)
+    window.visualViewport.addEventListener('scroll', updateFab)
+  }
+  window.addEventListener('resize', updateFab)
+}
+
+function setupInputFocusScroll()
+{
+  document.addEventListener('focusin', e => {
+    if (e.target.tagName === 'INPUT' && e.target.type === 'text')
+    {
+      setTimeout(() => {
+        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 250)
+    }
+  })
+}
+
+function saveData()
+{
+  localStorage.setItem("noteCategories", JSON.stringify(noteCategories))
+  localStorage.setItem("notes", JSON.stringify(notes))
+  localStorage.setItem("recycleBin", JSON.stringify(recycleBin))
+  localStorage.setItem("theme", currentTheme)
+  localStorage.setItem("font", currentFont)
+  localStorage.setItem("uiScale", uiScale)
+  localStorage.setItem("doubleTapDelete", doubleTapDelete)
+  localStorage.setItem("celebrationMode", celebrationMode)
+  localStorage.setItem("keepKeyboard", keepKeyboard)
+  localStorage.setItem("uiSounds", uiSounds)
+  localStorage.setItem("buttonRipples", buttonRipples)
+  localStorage.setItem("showFab", showFab)
+  localStorage.setItem("sortAlphabetical", sortAlphabetical)
+  localStorage.setItem("addNoteBottom", addNoteBottom)
+  localStorage.setItem("customFontData", customFontData)
+}
+
+function showToast(msg)
+{
+  const t = document.getElementById('toast')
+  t.textContent = msg
+  t.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    t.classList.remove('show')
+  }, 2000)
+}
+
+function switchScreen(idx)
+{
+  currentScreenIdx = idx
+  document.getElementById('note-cmp').closeAllMenus()
+  document.getElementById('viewport').style.transform = `translateX(-${idx * 100}vw)`
+  document.getElementById('tab-home').classList.toggle('active', idx === 0)
+  document.getElementById('tab-settings').classList.toggle('active', idx === 1)
+  
+  let targetScr = idx === 0 ? document.getElementById('home-screen') : document.getElementById('settings-screen')
+  let topBar = document.getElementById('top-bar')
+  if (targetScr.scrollTop > 10)
+  {
+    topBar.classList.add('scrolled')
+  }
+  else
+  {
+    topBar.classList.remove('scrolled')
+  }
+
+  document.getElementById('fab-btn').style.display = (showFab && idx === 0) ? 'flex' : 'none'
+}
+
+function focusNoteInput()
+{
+  if (currentScreenIdx !== 0)
+  {
+    switchScreen(0)
+  }
+  document.getElementById('note-cmp').focusInput()
+}
+
+let startX, startY, isSwipe = false
+window.addEventListener('touchstart', e => {
+  if (e.target.closest('#modal-overlay')) return
+  startX = e.touches[0].clientX; startY = e.touches[0].clientY; isSwipe = true
+}, {passive:true})
+
+window.addEventListener('touchmove', e => {
+  if (!isSwipe) return
+  let dX = e.touches[0].clientX - startX, dY = e.touches[0].clientY - startY
+  if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 35) { switchScreen(dX > 0 ? 0 : 1); isSwipe = false; }
+}, {passive:true})
+
+function setTheme(t)
+{
+  currentTheme = t; document.body.setAttribute('data-theme', t)
+  saveData()
+  const usageCmp = document.getElementById('usage-cmp')
+  if (usageCmp && usageCmp.updateThemeBtns) usageCmp.updateThemeBtns()
+}
+
+function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
+
+function setUiSize(s)
+{
+  uiScale = s
+  applyUiScale(s)
+  saveData()
+}
+
+function applyUiScale(s)
+{
+  document.documentElement.style.setProperty('--ui-scale', s)
+  const usageCmp = document.getElementById('usage-cmp')
+  if (usageCmp && usageCmp.updateUiScaleBtns) usageCmp.updateUiScaleBtns()
+}
+
+function injectCustomFont(data)
+{
+  let s = document.getElementById('c-font')
+  if(!s) { s = document.createElement('style'); s.id = 'c-font'; document.head.appendChild(s); }
+  s.textContent = `@font-face { font-family: 'CustomFont'; src: url('${data}'); }`
+}
+
+function openPrompt(title, defaultVal, cb)
+{
+  document.getElementById('modal-title').innerText = title
+  const inp = document.getElementById('modal-input'); inp.value = defaultVal
+  document.getElementById('modal-overlay').style.display = 'flex'
+  setTimeout(() => inp.focus(), 100); modalCb = cb
+}
+
+function closeModal(saveAction)
+{
+  document.getElementById('modal-overlay').style.display = 'none'
+  if (saveAction && modalCb) modalCb(document.getElementById('modal-input').value.trim())
+}
+
+function loadNotificationSettings()
+{
+  let notifEnabled = localStorage.getItem("notificationEnabled") === "true"
+  let savedTab = localStorage.getItem("inboxTabName") || "Inbox"
+  
+  ensureTabExists(savedTab)
+  if (window.Android)
+  {
+    window.Android.setInboxTabName(savedTab)
+    if (notifEnabled) window.Android.toggleNotification(true)
+  }
+}
+
+function ensureTabExists(name)
+{
+  if (!noteCategories.includes(name))
+  {
+    noteCategories.push(name)
+    saveData()
+    document.getElementById('note-cmp').render()
+  }
+}
+
+window.syncNotesArrayFromAndroid = function(jsonInput)
+{
+  try
+  {
+    let items = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput
+    if (!Array.isArray(items)) return
+    let now = Date.now()
+    items.forEach((item, idx) => {
+      if (!item.text) return
+      let tabName = item.tab || 'Inbox'
+      ensureTabExists(tabName)
+      let note = { id: now + idx, text: item.text, completed: false, category: tabName }
+      if (addNoteBottom) notes.push(note)
+      else notes.unshift(note)
+    })
+    saveData()
+    document.getElementById('note-cmp').render()
+  }
+  catch(e) {}
+}
+
+window.syncNoteFromAndroid = function(text, tabName)
+{
+  window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
+}
+
+window.setAndroidNotes = function(jsonString)
+{
+  try 
+  { 
+    let imported = JSON.parse(jsonString)
+    if (!Array.isArray(imported)) return
+    imported.forEach(n => {
+      if (n.category && !noteCategories.includes(n.category)) noteCategories.push(n.category)
+      if (!notes.some(x => x.id === n.id)) notes.push(n)
+    })
+    saveData()
+    document.getElementById('note-cmp').render()
+    document.getElementById('about-cmp').render()
+  } catch(err) {}
+}
+
+function initScreenshotSetting()
+{
+  const isDisabled = localStorage.getItem('disableScreenshots') === 'true'
+  if (window.Android && window.Android.toggleScreenshots)
+  {
+    window.Android.toggleScreenshots(isDisabled)
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  init()
+  initScreenshotSetting()
+  loadNotificationSettings()
+})
+</script>
+</body>
+</html>
