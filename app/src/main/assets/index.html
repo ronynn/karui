@@ -50,7 +50,7 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transf
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 
-input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; }
+input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family:inherit;}
 input[type="text"]:focus { border-color: var(--accent); }
 input:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
 button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
@@ -186,7 +186,7 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('serif')">SERIF</button>
         <button class="theme-btn" style="width:auto; flex:1; border-style: dashed;" onclick="document.getElementById('font-file').click()">+ CUSTOM</button>
-        <input type="file" id="font-file" accept=".ttf,.otf" style="display:none" onchange="loadCustomFont(event)">
+        <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" style="display:none" onchange="loadCustomFont(event)">
       </div>
 
       <h4 style="padding-top:10px;">UI Size</h4>
@@ -617,28 +617,56 @@ function toggleSortAlpha(v)
 function toggleAddBtm(v) { addNoteBottom = v; saveData(); }
 
 
-function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
+// Section: Font Management
 
+function setFont(f) 
+{ 
+  currentFont = f
+  document.body.style.fontFamily = f === 'CustomFont' ? "'CustomFont', system-ui, sans-serif" : f
+  saveData() 
+}
 
 function loadCustomFont(e)
 {
-  const f = e.target.files[0]; if(!f) return
+  const f = e.target.files[0]
+  if (!f) return
+
   const r = new FileReader()
-  r.onload = ev => {
+  r.onload = (ev) => 
+  {
     customFontData = ev.target.result
     injectCustomFont(customFontData)
-    setFont('CustomFont')
-    saveData()
+      .then(() => 
+      {
+        setFont('CustomFont')
+      })
+      .catch(err => console.error("Error loading custom font:", err))
   }
   r.readAsDataURL(f)
 }
 
-function injectCustomFont(data)
+async function injectCustomFont(data)
 {
-  let s = document.getElementById('c-font')
-  if(!s) { s = document.createElement('style'); s.id = 'c-font'; document.head.appendChild(s); }
-  s.textContent = `@font-face { font-family: 'CustomFont'; src: url('${data}'); }`
+  if (!data) return
+
+  try 
+  {
+    const font = new FontFace('CustomFont', `url(${data})`)
+    const loadedFont = await font.load()
+    document.fonts.add(loadedFont)
+  } 
+  catch (e) 
+  {
+    console.error("FontFace loading failed:", e)
+  }
 }
+
+
+
+
+
+
+  
 
 function renderTabs()
 {
