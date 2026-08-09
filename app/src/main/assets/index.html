@@ -7,6 +7,7 @@
 <script src="confetti.browser.min.js"></script>
 <script src="flap.js"></script>
 <script src="snake.js"></script>
+<script src="android.js"></script>
 
 <style>
 a { color: gray; }
@@ -32,7 +33,7 @@ a { color: gray; }
 [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
 [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
 
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 4px;}
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 7px;}
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
@@ -46,7 +47,7 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transf
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
 .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(120px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
 
-.box { border: 2px solid var(--border); padding: calc(25px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
+.box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 
 input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; }
@@ -66,7 +67,7 @@ button:active { filter: brightness(0.8); }
 .switch input:checked + .slider:before { transform: translateX(18px); background-color: var(--accent-txt); }
 .switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
 
-.tabs-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; scrollbar-width: none; }
+.tabs-container { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 0px; margin-bottom: 5px; scrollbar-width: none; }
 .tab { padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
 
@@ -92,7 +93,7 @@ button:active { filter: brightness(0.8); }
 #context-menu { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; max-width: 320px; }
 .menu-title { font-size: calc(14px * var(--ui-scale)); font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
 
-.ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+.ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0px; }
 .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
 .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
 
@@ -111,7 +112,7 @@ button:active { filter: brightness(0.8); }
 
 #fab-btn {
   position: fixed;
-  bottom: 25px;
+  bottom: 55px;
   right: 25px;
   width: calc(52px * var(--ui-scale));
   height: calc(52px * var(--ui-scale));
@@ -163,7 +164,7 @@ button:active { filter: brightness(0.8); }
   <div class="screen" id="settings-screen">
     <div class="box">
       <span class="box-title">Box 3: Visuals & Usage</span>
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin-bottom: 8px;">Themes</h3>
+      <h4>Themes</h4>
       <div class="grid-btns" id="theme-btns">
         <button class="theme-btn" onclick="setTheme('gruvbox')">GRUVBOX</button>
         <button class="theme-btn" onclick="setTheme('dracula')">DRACULA</button>
@@ -179,7 +180,7 @@ button:active { filter: brightness(0.8); }
         <button class="theme-btn" onclick="setTheme('tokyo-night')">TOKYO</button>
       </div>
 
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin: 15px 0 8px;">Fonts</h3>
+      <h4 style="padding-top:10px">Fonts</h4>
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('system-ui')">SYSTEM</button>
         <button class="theme-btn" style="width:auto; flex:1;" onclick="setFont('monospace')">MONO</button>
@@ -188,7 +189,7 @@ button:active { filter: brightness(0.8); }
         <input type="file" id="font-file" accept=".ttf,.otf" style="display:none" onchange="loadCustomFont(event)">
       </div>
 
-      <h3 style="font-size: calc(14px * var(--ui-scale)); text-transform: uppercase; margin: 15px 0 8px;">UI Size</h3>
+      <h4 style="padding-top:10px;">UI Size</h4>
       <div class="ui-size-ctrl" id="ui-size-btns">
         <button onclick="setUiSize(0.85, this)">S</button>
         <button onclick="setUiSize(1, this)">M</button>
@@ -196,7 +197,7 @@ button:active { filter: brightness(0.8); }
         <button onclick="setUiSize(1.3, this)">XL</button>
       </div>
 
-      <div style="margin-top: 20px; border-top: 1px dashed var(--border); padding-top: 10px;">
+      <div style="margin-top: 20px; border-top: 1px dashed var(--border); padding-top: 0px;">
         <div class="toggle-container">
           <span>Button ripples</span>
           <label class="switch">
@@ -261,15 +262,15 @@ button:active { filter: brightness(0.8); }
           </label>
         </div>
         <div class="toggle-container">
-          <span>Enable Quick Note</span>
+          <span>Enable Quick Note from statusbar</span>
           <label class="switch">
             <input type="checkbox" id="notification-toggle" onchange="toggleNotification(this.checked)">
             <span class="slider"></span>
           </label>
         </div>
-        <div style="margin-top: 15px;">
-          <label for="inbox-tab-name" style="font-size: calc(14px * var(--ui-scale)); font-weight: bold; display: block; margin-bottom: 6px;">Target Tab Name:</label>
-          <input type="text" id="inbox-tab-name" value="Inbox" onchange="updateInboxTab(this.value)">
+        <div style="margin-top: 3px;">
+          <label for="inbox-tab-name" style="font-size: calc(14px * var(--ui-scale)); font-weight: bold; display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
+          <input type="text" id="inbox-tab-name" style="margin-top: 2px;" value="Inbox" onchange="updateInboxTab(this.value)">
         </div>
       </div>
     </div>
@@ -355,100 +356,6 @@ let currentScreenIdx = 0
 
 let touchTimer, dragTarget, contextTab, dragImg, dragType, modalCb, lastTrashTap = 0, hoveredTab = null, activeNoteMenuId = null, toastTimer = null
 
-// Audio and UI handlers
-function playSound(type = 'click')
-{
-  if (!uiSounds) return
-  try
-  {
-    if (!audioCtx)
-    {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-    }
-    if (audioCtx.state === 'suspended')
-    {
-      audioCtx.resume()
-    }
-
-    if (type === 'add' || type === 'scratch')
-    {
-      let osc = audioCtx.createOscillator()
-      let gain = audioCtx.createGain()
-      osc.type = 'triangle'
-      osc.frequency.setValueAtTime(320, audioCtx.currentTime)
-      osc.frequency.exponentialRampToValueAtTime(850, audioCtx.currentTime + 0.12)
-      gain.gain.setValueAtTime(0.4, audioCtx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12)
-      osc.connect(gain)
-      gain.connect(audioCtx.destination)
-      osc.start()
-      osc.stop(audioCtx.currentTime + 0.12)
-    }
-    else if (type === 'tab')
-    {
-      let osc = audioCtx.createOscillator()
-      let gain = audioCtx.createGain()
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(600, audioCtx.currentTime)
-      osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.04)
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08)
-      osc.connect(gain)
-      gain.connect(audioCtx.destination)
-      osc.start()
-      osc.stop(audioCtx.currentTime + 0.08)
-    }
-    else
-    {
-      let osc = audioCtx.createOscillator()
-      let gain = audioCtx.createGain()
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(800, audioCtx.currentTime)
-      osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.03)
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03)
-      osc.connect(gain)
-      gain.connect(audioCtx.destination)
-      osc.start()
-      osc.stop(audioCtx.currentTime + 0.03)
-    }
-  }
-  catch(e) {}
-}
-
-window.addEventListener('click', e => {
-  playSound('click')
-  if (buttonRipples)
-  {
-    let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
-    if (targetBtn)
-    {
-      createRipple(e, targetBtn)
-    }
-  }
-}, true)
-
-function createRipple(e, btn)
-{
-  if (!buttonRipples) return
-  btn.classList.add('has-ripple')
-  let rect = btn.getBoundingClientRect()
-  let circle = document.createElement('span')
-  let diameter = Math.max(rect.width, rect.height)
-  let radius = diameter / 2
-  circle.style.width = circle.style.height = `${diameter}px`
-  circle.style.left = `${e.clientX - rect.left - radius}px`
-  circle.style.top = `${e.clientY - rect.top - radius}px`
-  circle.classList.add('ripple-span')
-  
-  let existing = btn.getElementsByClassName('ripple-span')[0]
-  if (existing) existing.remove()
-  
-  btn.appendChild(circle)
-  setTimeout(() => {
-    if (circle.parentNode) circle.remove()
-  }, 1000)
-}
 
 function closeAllMenus()
 {
@@ -660,8 +567,6 @@ function setTheme(t)
   saveData()
 }
 
-function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
-
 function setUiSize(s, btn)
 {
   uiScale = s
@@ -710,6 +615,10 @@ function toggleSortAlpha(v)
   renderNotes()
 }
 function toggleAddBtm(v) { addNoteBottom = v; saveData(); }
+
+
+function setFont(f) { currentFont = f; document.body.style.fontFamily = f; saveData(); }
+
 
 function loadCustomFont(e)
 {
@@ -1130,93 +1039,6 @@ function setupDragAndDrop()
   }, {passive:false})
 }
 
-function mergeNotes(imported)
-{
-  if (!Array.isArray(imported)) return
-  imported.forEach(n => {
-    if (n.category && !noteCategories.includes(n.category)) noteCategories.push(n.category)
-    if (!notes.some(x => x.id === n.id)) notes.push(n)
-  })
-  saveData(); renderTabs(); renderNotes()
-}
-
-function exportData()
-{
-  let fileData = JSON.stringify(notes)
-  if (window.Android && window.Android.saveFile)
-  {
-    window.Android.saveFile("notes.json", fileData, "application/json")
-  }
-  else
-  {
-    const blob = new Blob([fileData], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = "notes.json"; a.click()
-    URL.revokeObjectURL(url)
-  }
-}
-
-function triggerImport()
-{
-  if (window.Android && window.Android.importJsonFile)
-  {
-    window.Android.importJsonFile()
-  }
-  else
-  {
-    document.getElementById('import-file').click()
-  }
-}
-
-function importData(e)
-{
-  const f = e.target.files[0]; if(!f) return
-  const r = new FileReader()
-  r.onload = ev => { try { mergeNotes(JSON.parse(ev.target.result)); } catch(err) { alert("Import failed."); } }
-  r.readAsText(f)
-  e.target.value = ''
-}
-
-window.setAndroidNotes = function(jsonString)
-{
-  try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
-}
-
-function loadNotificationSettings()
-{
-  let notifEnabled = localStorage.getItem("notificationEnabled") === "true"
-  document.getElementById('notification-toggle').checked = notifEnabled
-
-  let savedTab = localStorage.getItem("inboxTabName") || "Inbox"
-  document.getElementById('inbox-tab-name').value = savedTab
-  ensureTabExists(savedTab)
-  if (window.Android)
-  {
-    window.Android.setInboxTabName(savedTab)
-    if (notifEnabled) window.Android.toggleNotification(true)
-  }
-}
-
-function toggleNotification(enable)
-{
-  localStorage.setItem("notificationEnabled", enable)
-  if (window.Android)
-  {
-    window.Android.toggleNotification(enable)
-  }
-}
-
-function updateInboxTab(name)
-{
-  name = name.trim() || "Inbox"
-  localStorage.setItem("inboxTabName", name)
-  ensureTabExists(name)
-  if (window.Android)
-  {
-    window.Android.setInboxTabName(name)
-  }
-}
 
 function ensureTabExists(name)
 {
@@ -1228,60 +1050,7 @@ function ensureTabExists(name)
   }
 }
 
-window.syncNotesArrayFromAndroid = function(jsonInput)
-{
-  try
-  {
-    let items = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput
-    if (!Array.isArray(items)) return
-    let now = Date.now()
-    items.forEach((item, idx) => {
-      if (!item.text) return
-      let tabName = item.tab || 'Inbox'
-      ensureTabExists(tabName)
-      let note = { id: now + idx, text: item.text, completed: false, category: tabName }
-      if (addNoteBottom) notes.push(note)
-      else notes.unshift(note)
-    })
-    saveData()
-    if (noteCategories.includes(activeCategory))
-    {
-      renderTabs()
-      renderNotes()
-    }
-  }
-  catch(e) {}
-}
 
-window.syncNoteFromAndroid = function(text, tabName)
-{
-  window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
-}
-
-function toggleScreenshots(disabled)
-{
-  if (window.Android && window.Android.toggleScreenshots)
-  {
-    window.Android.toggleScreenshots(disabled)
-  }
-  localStorage.setItem('disableScreenshots', disabled)
-}
-
-function initScreenshotSetting()
-{
-  const isDisabled = localStorage.getItem('disableScreenshots') === 'true'
-  const toggleEl = document.getElementById('disable-screenshots-toggle')
-  if (toggleEl)
-  {
-    toggleEl.checked = isDisabled
-  }
-  if (window.Android && window.Android.toggleScreenshots)
-  {
-    window.Android.toggleScreenshots(isDisabled)
-  }
-}
-
-document.addEventListener('DOMContentLoaded', initScreenshotSetting)
 
 init()
 loadNotificationSettings()
