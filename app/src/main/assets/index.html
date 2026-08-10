@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
 <title>Karui</title>
 <script src="android.js"></script>
+<script src="quotes.js"></script>
 <style>
 a { color: gray; }
 :root { 
@@ -46,8 +47,9 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transf
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 
-input, select, button { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; }
-input[type="text"]:focus { border-color: var(--accent); }
+input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; }
+textarea { resize: none; overflow-y: auto; height: auto; min-height: calc(44px * var(--ui-scale)); max-height: calc(120px * var(--ui-scale)); padding-top: calc(10px * var(--ui-scale)); }
+input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
 input:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
 button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
 button:active { filter: brightness(0.8); }
@@ -68,8 +70,9 @@ button:active { filter: brightness(0.8); }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
 
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.theme-btn { padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: calc(11px * var(--ui-scale)); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+.theme-btn { padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: calc(11px * var(--ui-scale)); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; position: relative; display: flex; align-items: center; justify-content: center; }
 .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
+.theme-btn .delete-font-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-weight: bold; font-size: 14px; padding: 0 4px; cursor: pointer; color: inherit; }
 
 .heading-large { font-size: calc(22px * var(--ui-scale)); margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
 
@@ -77,6 +80,7 @@ button:active { filter: brightness(0.8); }
 .note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; display: inline-block; }
 .note-item.done span:first-of-type { opacity: 0.55; transition: opacity 0.3s; }
 .note-item.done span:first-of-type::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; background: var(--accent); transform-origin: left center; animation: scratch-anim 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.pin-icon { margin-right: 6px; font-size: calc(14px * var(--ui-scale)); }
 @keyframes scratch-anim { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
 
 .ghost { opacity: 0.25; border: 2px dashed var(--accent) !important; background: var(--surface) !important; }
@@ -147,7 +151,7 @@ button:active { filter: brightness(0.8); }
   <div class="screen" id="home-screen">
     <div class="box">
       <span class="box-title">Box 1: Notes Input</span>
-      <input type="text" id="note-in" placeholder="Type note or command">
+      <textarea id="note-in" rows="1" placeholder="Type note or command" oninput="autoExpandTextarea(this)"></textarea>
       <div style="margin-top:10px; font-size:calc(14px * var(--ui-scale)); color: var(--gray);" id="stats">Remaining: 0 &nbsp;&nbsp; Completed: 0</div>
     </div>
     <div class="box">
@@ -177,7 +181,7 @@ button:active { filter: brightness(0.8); }
       </div>
 
       <h4 style="padding-top:10px">Fonts</h4>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;" id="font-buttons-container"></div>
+      <div class="grid-btns" id="font-buttons-container"></div>
       <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2" style="display:none" onchange="loadCustomFont(event)">
 
       <h4 style="padding-top:10px;">UI Size</h4>
@@ -282,17 +286,28 @@ button:active { filter: brightness(0.8); }
 
     <div class="box">
       <span class="box-title">Box 5: Data & Recycle Bin</span>
-      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <button onclick="exportData()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(14px * var(--ui-scale));">Export JSON</button>
-        <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(14px * var(--ui-scale));">Import JSON</button>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 15px;">
+        <button onclick="exportData()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(12px * var(--ui-scale));">Export JSON</button>
+        <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(12px * var(--ui-scale));">Import JSON</button>
+        <button onclick="exportMarkdown()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(12px * var(--ui-scale));">Export MD</button>
+        <button onclick="triggerImportMD()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(12px * var(--ui-scale));">Import MD (BETA)</button>
         <input type="file" id="import-file" style="display:none" onchange="importData(event)">
+        <input type="file" id="import-md-file" accept=".md,.txt" style="display:none" onchange="importMarkdown(event)">
       </div>
       <h1 style="font-size: calc(20px * var(--ui-scale));">Recycle Bin</h1>
       <div id="trash-list"></div>
       <button onclick="clearTrash()" style="margin-top:15px; background:var(--bg); color:var(--text); border:2px solid var(--border);">Clear Recycle Bin</button>
     </div>
+
+    <div id="box-6" class="box">
+      <span class="box-title">Box 6: Quotes</span>
+        <p id="quote-text"></p>
+          <small id="quote-author"></small>
+    </div>
   </div>
 </div>
+
+     
 
 <div id="fab-btn" onclick="focusNoteInput()">&gt;_</div>
 
@@ -306,6 +321,7 @@ button:active { filter: brightness(0.8); }
 </div>
 
 <div id="note-dropdown" class="menu">
+  <button id="btn-pin-note" onclick="actionTogglePinNote()">Pin Note</button>
   <button onclick="actionCopyNote()">Copy</button>
   <button onclick="actionEditNote()">Edit</button>
   <button onclick="actionDeleteNote()">Delete</button>
@@ -314,7 +330,7 @@ button:active { filter: brightness(0.8); }
 <div id="modal-overlay">
   <div class="modal-box">
     <div id="modal-title" style="font-weight:bold;"></div>
-    <input type="text" id="modal-input">
+    <textarea id="modal-input" rows="1" oninput="autoExpandTextarea(this)"></textarea>
     <div style="display:flex; gap:10px;">
       <button style="background:var(--surface); color:var(--text);" onclick="closeModal(false)">Cancel</button>
       <button onclick="closeModal(true)">Save</button>
@@ -352,6 +368,14 @@ function closeAllMenus()
 {
   document.getElementById('context-menu').style.display = 'none'
   document.getElementById('note-dropdown').style.display = 'none'
+}
+
+function autoExpandTextarea(el)
+{
+  el.style.height = 'auto'
+  let calculatedHeight = el.scrollHeight
+  let maxHeight = innerHeight * 0.2
+  el.style.height = Math.min(calculatedHeight, 120) + 'px'
 }
 
 async function init()
@@ -459,7 +483,7 @@ function setupVisualViewport()
 function setupInputFocusScroll()
 {
   document.addEventListener('focusin', e => {
-    if (e.target.tagName === 'INPUT' && e.target.type === 'text')
+    if ((e.target.tagName === 'INPUT' && e.target.type === 'text') || e.target.tagName === 'TEXTAREA')
     {
       setTimeout(() => {
         e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -538,7 +562,7 @@ function focusNoteInput()
 
 let startX, startY, isSwipe = false
 window.addEventListener('touchstart', e => {
-  if (e.target.closest('#notes-list') || e.target.closest('.grid-btns') || e.target.closest('#tabs-bar') || e.target.closest('input') || e.target.closest('#modal-overlay') || e.target.closest('button')) return
+  if (e.target.closest('#notes-list') || e.target.closest('.grid-btns') || e.target.closest('#tabs-bar') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('#modal-overlay') || e.target.closest('button')) return
   startX = e.touches[0].clientX; startY = e.touches[0].clientY; isSwipe = true
 }, {passive:true})
 
@@ -662,7 +686,25 @@ function renderFontButtons()
   customFonts.forEach(f => {
     const btn = document.createElement('button')
     btn.className = `theme-btn ${currentFont === f.name ? 'active' : ''}`
-    btn.textContent = f.label.toUpperCase()
+    
+    const textSpan = document.createElement('span')
+    textSpan.textContent = f.label.toUpperCase()
+    textSpan.style.overflow = 'hidden'
+    textSpan.style.textOverflow = 'ellipsis'
+    btn.appendChild(textSpan)
+
+    if (currentFont !== f.name)
+    {
+      const delBtn = document.createElement('span')
+      delBtn.className = 'delete-font-btn'
+      delBtn.innerHTML = '&times;'
+      delBtn.onclick = (e) => {
+        e.stopPropagation()
+        deleteCustomFont(f.name)
+      }
+      btn.appendChild(delBtn)
+    }
+
     btn.onclick = () => setFont(f.name)
     container.appendChild(btn)
   })
@@ -681,6 +723,20 @@ function setFont(f)
   document.body.style.fontFamily = f.startsWith('CustomFont_') ? `'${f}', system-ui, sans-serif` : f
   renderFontButtons()
   saveData() 
+}
+
+function deleteCustomFont(fontName)
+{
+  customFonts = customFonts.filter(f => f.name !== fontName)
+  localStorage.setItem("customFonts", JSON.stringify(customFonts))
+  if (currentFont === fontName)
+  {
+    setFont('system-ui')
+  }
+  else
+  {
+    renderFontButtons()
+  }
 }
 
 function loadCustomFont(e)
@@ -772,15 +828,25 @@ function renderNotes()
   list.innerHTML = ''; trash.innerHTML = ''
   
   let currentCatNotes = notes.filter(n => n.category === activeCategory)
+  
+  let pinned = currentCatNotes.filter(n => n.pinned)
+  let unpinned = currentCatNotes.filter(n => !n.pinned)
+
   if (sortAlphabetical)
   {
-    currentCatNotes.sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }))
+    pinned.sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }))
+    unpinned.sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }))
   }
+
+  currentCatNotes = [...pinned, ...unpinned]
 
   currentCatNotes.forEach(n => {
     const d = document.createElement('div')
     d.className = `note-item ${n.completed ? 'done' : ''}`; d.dataset.id = n.id
-    d.innerHTML = `<span>${n.text}</span>
+    
+    let pinPrefix = n.pinned ? `<span class="pin-icon">~</span>` : ''
+    
+    d.innerHTML = `<span>${pinPrefix}${n.text}</span>
                    <span onclick="openNoteMenu(event, ${n.id})" style="color:var(--gray); padding: 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0;">:</span>`
     d.onclick = (e) => {
       if (e.target.tagName === 'SPAN' && e.target.innerText === ':') return
@@ -823,10 +889,29 @@ function openNoteMenu(e, id)
   e.stopPropagation()
   closeAllMenus()
   activeNoteMenuId = id
+  let n = notes.find(x => x.id === id)
+  let pinBtn = document.getElementById('btn-pin-note')
+  if (pinBtn)
+  {
+    pinBtn.textContent = (n && n.pinned) ? 'Unpin Note' : 'Pin Note'
+  }
   const menu = document.getElementById('note-dropdown')
   menu.style.display = 'block'
   menu.style.left = Math.min(e.clientX, window.innerWidth - 120) + 'px'
   menu.style.top = e.clientY + 'px'
+}
+
+function actionTogglePinNote()
+{
+  if (!activeNoteMenuId) return
+  let n = notes.find(x => x.id === activeNoteMenuId)
+  if (n)
+  {
+    n.pinned = !n.pinned
+    renderNotes()
+    saveData()
+  }
+  closeAllMenus()
 }
 
 function actionCopyNote()
@@ -896,33 +981,38 @@ const easterEggs = {
 
 document.getElementById('note-in').onkeydown = e => 
 {
-  if (e.key === 'Enter' && e.target.value.trim()) 
+  if (e.key === 'Enter' && !e.shiftKey)
   {
+    e.preventDefault()
     let v = e.target.value.trim()
-    
-    if (easterEggs[v]) 
+    if (v) 
     {
-      easterEggs[v]()
-      e.target.value = ''
-      return
-    }
+      if (easterEggs[v]) 
+      {
+        easterEggs[v]()
+        e.target.value = ''
+        autoExpandTextarea(e.target)
+        return
+      }
 
-    if (v.startsWith('/'))
-    {
-      let t = v.slice(1).trim()
-      if (t) addTab(t)
+      if (v.startsWith('/'))
+      {
+        let t = v.slice(1).trim()
+        if (t) addTab(t)
+      }
+      else
+      {
+        playSound('add')
+        let n = { id: Date.now(), text: v, completed: false, category: activeCategory, pinned: false }
+        if (addNoteBottom) notes.push(n)
+        else notes.unshift(n)
+      }
+      e.target.value = ''
+      autoExpandTextarea(e.target)
+      renderTabs()
+      renderNotes()
+      saveData()
     }
-    else
-    {
-      playSound('add')
-      let n = { id: Date.now(), text: v, completed: false, category: activeCategory }
-      if (addNoteBottom) notes.push(n)
-      else notes.unshift(n)
-    }
-    e.target.value = ''
-    renderTabs()
-    renderNotes()
-    saveData()
   }
 }
 
@@ -955,6 +1045,7 @@ function openPrompt(title, defaultVal, cb)
 {
   document.getElementById('modal-title').innerText = title
   const inp = document.getElementById('modal-input'); inp.value = defaultVal
+  autoExpandTextarea(inp)
   document.getElementById('modal-overlay').style.display = 'flex'
   setTimeout(() => inp.focus(), 100); modalCb = cb
 }
@@ -1174,10 +1265,100 @@ function importData(e)
   e.target.value = ''
 }
 
+function exportMarkdown()
+{
+  let mdStr = ''
+  noteCategories.forEach((cat, idx) => {
+    mdStr += `## ${cat}\n`
+    let catNotes = notes.filter(n => n.category === cat)
+    catNotes.forEach(n => {
+      let mark = n.completed ? 'x' : ' '
+      mdStr += `- [${mark}] ${n.text}\n`
+    })
+    if (idx < noteCategories.length - 1) mdStr += '\n'
+  })
+
+  if (window.Android && window.Android.saveFile)
+  {
+    window.Android.saveFile("notes.md", mdStr, "text/markdown")
+  }
+  else
+  {
+    const blob = new Blob([mdStr], { type: "text/markdown" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = "notes.md"; a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+function triggerImportMD()
+{
+  document.getElementById('import-md-file').click()
+}
+
+function importMarkdown(e)
+{
+  const f = e.target.files[0]; if(!f) return
+  const r = new FileReader()
+  r.onload = ev => {
+    try {
+      let text = ev.target.result
+      let lines = text.split(/\r?\n/)
+      let currentCat = "Main"
+      let importedNotes = []
+      let newCategories = []
+
+      lines.forEach(line => {
+        let trimmed = line.trim()
+        if (trimmed.startsWith('## '))
+        {
+          currentCat = trimmed.replace(/^##\s+/, '').trim()
+          if (currentCat && !newCategories.includes(currentCat))
+          {
+            newCategories.push(currentCat)
+          }
+        }
+        else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]'))
+        {
+          let completed = trimmed.startsWith('- [x]')
+          let noteText = trimmed.replace(/^- \[(x| )\]\s*/, '').trim()
+          if (noteText)
+          {
+            importedNotes.push({
+              id: Date.now() + Math.floor(Math.random() * 100000),
+              text: noteText,
+              completed: completed,
+              category: currentCat,
+              pinned: false
+            })
+          }
+        }
+      })
+
+      newCategories.forEach(c => {
+        if (!noteCategories.includes(c)) noteCategories.push(c)
+      })
+
+      mergeNotes(importedNotes)
+      showToast('Markdown imported successfully')
+    } catch(err) {
+      alert("Markdown import failed.")
+    }
+  }
+  r.readAsText(f)
+  e.target.value = ''
+}
+
 window.setAndroidNotes = function(jsonString)
 {
   try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
 }
+
+      // Quote Render
+      const quote = getRandomQuote()
+      document.getElementById('quote-text').textContent = quote.text
+      document.getElementById('quote-author').textContent = quote.author
 
 
 
@@ -1189,5 +1370,6 @@ loadNotificationSettings()
 <script src="confetti.browser.min.js"></script>
 <script src="flap.js"></script>
 <script src="snake.js"></script>
+
 </body>
 </html>
