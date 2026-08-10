@@ -1,25 +1,27 @@
 const CACHE_NAME = 'app-cache-v1'
+
+// Section: Cache Assets (Relative Paths)
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/android.js',
-  '/quotes.js',
-  '/flap.js',
-  '/snake.js',
-  '/confetti.browser.min.js'
+  './',
+  './index.html',
+  './android.js',
+  './quotes.js',
+  './flap.js',
+  './snake.js',
+  './confetti.browser.min.js'
 ]
 
-// Install & Pre-cache
+// Section: Install & Pre-cache
 self.addEventListener('install', (event) =>
 {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => cache.addAll(ASSETS_TO_CACHE))
       .then(() => self.skipWaiting())
   )
 })
 
-// Activate & Clean Old Caches
+// Section: Activate & Clean Old Caches
 self.addEventListener('activate', (event) =>
 {
   event.waitUntil(
@@ -32,7 +34,7 @@ self.addEventListener('activate', (event) =>
   )
 })
 
-// Cache-first, Network-fallback Fetch Strategy
+// Section: Fetch Handler
 self.addEventListener('fetch', (event) =>
 {
   event.respondWith(
