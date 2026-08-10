@@ -6,8 +6,8 @@
   import LaterData from './components/LaterData.svelte';
 
   
-  import './assets/normalize.css';
-  import './assets/milligram.css';
+//  import './assets/normalize.css';
+//  import './assets/milligram.css';
   
   // Global state
   let activeTab = "Main";

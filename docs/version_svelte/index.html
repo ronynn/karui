@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Svelte 5 App</title>
+
+  <!-- Load CSS files directly here instead of using JS imports -->
+  <link rel="stylesheet" href="./assets/normalize.css">
+  <link rel="stylesheet" href="./assets/milligram.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "svelte": "https://esm.sh/svelte@5",
+        "svelte/internal/disclose-version": "https://esm.sh/svelte@5/internal/disclose-version",
+        "svelte/internal/client": "https://esm.sh/svelte@5/internal/client",
+        "svelte/internal/flags/legacy": "https://esm.sh/svelte@5/internal/flags/legacy",
+        "svelte/events": "https://esm.sh/svelte@5/events",
+        "zimmerframe": "https://esm.sh/zimmerframe"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as compiler from 'https://esm.sh/svelte@5/compiler?bundle'
+    import { mount } from 'svelte'
+
+    // Section: Dynamic Svelte Component Loader
+    const componentCache = new Map()
+
+    async function compileAndLoad(url)
+    {
+      const absoluteUrl = new URL(url, window.location.href).href
+      
+      if (componentCache.has(absoluteUrl)) {
+        return componentCache.get(absoluteUrl)
+      }
+
+      const response = await fetch(absoluteUrl)
+      let source = await response.text()
+
+      // Strip JS CSS imports from .svelte script blocks to prevent native import errors
+//      source = source.replace(/import\s+['"].*\.css['"];?/g, '')
+
+      const compiled = compiler.compile(source, {
+        filename: absoluteUrl,
+        generate: 'client'
+      })
+
+      let code = compiled.js.code
+
+      // Rewrite relative .svelte imports to route through Blob URLs dynamically
+      const importRegex = /from\s+['"](\.\/|\.\.\/)(.*?\.svelte)['"]/g
+      const matches = [...code.matchAll(importRegex)]
+
+      for (const match of matches) {
+        const relativePath = match[1] + match[2]
+        const resolvedUrl = new URL(relativePath, absoluteUrl).href
+        const blobUrl = await compileAndLoad(resolvedUrl)
+        code = code.replace(match[0], `from '${blobUrl}'`)
+      }
+
+      const blob = new Blob([code], { type: 'text/javascript' })
+      const blobUrl = URL.createObjectURL(blob)
+      
+      componentCache.set(absoluteUrl, blobUrl)
+      return blobUrl
+    }
+
+    // Section: App Execution
+    async function startApp()
+    {
+      try {
+        const appBlobUrl = await compileAndLoad('./App.svelte')
+        const AppModule = await import(appBlobUrl)
+
+        mount(AppModule.default, {
+          target: document.getElementById('app')
+        })
+      } catch (err) {
+        console.error('Failed to boot Svelte 5 application:', err)
+      }
+    }
+
+    startApp()
+  </script>
+</body>
+</html>
