@@ -1,0 +1,6 @@
+- Input box expands
+- Imported fonts can now be removed
+- Markdown import (Beta) and export function has been brought back
+- App title respects status bar space now
+- Important notes can be pinned
+- Introduced a thoughtful quotes box

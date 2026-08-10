@@ -7,6 +7,17 @@
 <script src="android.js"></script>
 <script src="quotes.js"></script>
 <style>
+  /* CSS Scrollbar Removal */
+html, body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+  
 a { color: gray; }
 :root { 
   --bg: #282828; 
@@ -34,7 +45,7 @@ a { color: gray; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
-#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 0px; margin-top:4px; line-height: 1; overflow: hidden; transform: translateY(0); }
+#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 0px; margin-top:6px; line-height: 1; overflow: hidden; transform: translateY(0); }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transform: translateY(-30px); pointer-events: none; }
 
 .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
@@ -301,7 +312,7 @@ button:active { filter: brightness(0.8); }
 
     <div id="box-6" class="box">
       <span class="box-title">Box 6: Quotes</span>
-        <p id="quote-text"></p>
+        <p id="quote-text"></p> <br/> -
           <small id="quote-author"></small>
     </div>
   </div>
@@ -1364,6 +1375,15 @@ window.setAndroidNotes = function(jsonString)
 
 init()
 loadNotificationSettings()
+
+// Register Service Worker
+if ('serviceWorker' in navigator)
+{
+  window.addEventListener('load', () =>
+  {
+    navigator.serviceWorker.register('/sw.js')
+  })
+}
 </script>
 
 

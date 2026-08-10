@@ -39,7 +39,7 @@ jobs:
       
       # Cache Gradle dependencies
       - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -154,7 +154,7 @@ jobs:
       # Upload the built APK as an artifact (Release)
       - name: Upload APK Artifact (Release)
         if: contains(github.event.head_commit.message, 'release')
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
