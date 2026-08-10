@@ -73,7 +73,7 @@ button:active { filter: brightness(0.8); }
 
 .heading-large { font-size: calc(22px * var(--ui-scale)); margin: 15px 0 10px; font-weight: normal; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
 
-.note-item { display: flex; justify-between: space-between; align-items: center; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
+.note-item { display: flex; justify-content: space-between; align-items: center; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
 .note-item span:first-of-type { flex: 1; position: relative; min-width: 0; white-space: normal; word-break: break-word; overflow: visible; padding-right: 10px; display: inline-block; }
 .note-item.done span:first-of-type { opacity: 0.55; transition: opacity 0.3s; }
 .note-item.done span:first-of-type::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; background: var(--accent); transform-origin: left center; animation: scratch-anim 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
@@ -287,7 +287,7 @@ button:active { filter: brightness(0.8); }
         <button onclick="triggerImport()" style="background:var(--surface); color:var(--text); border:2px solid var(--border); font-size:calc(14px * var(--ui-scale));">Import JSON</button>
         <input type="file" id="import-file" style="display:none" onchange="importData(event)">
       </div>
-      <h3 class="heading-large" style="font-size: calc(16px * var(--ui-scale));">Recycle Bin</h3>
+      <h1 style="font-size: calc(20px * var(--ui-scale));">Recycle Bin</h1>
       <div id="trash-list"></div>
       <button onclick="clearTrash()" style="margin-top:15px; background:var(--bg); color:var(--text); border:2px solid var(--border);">Clear Recycle Bin</button>
     </div>
@@ -1125,6 +1125,60 @@ function ensureTabExists(name)
     renderTabs()
   }
 }
+
+function mergeNotes(imported)
+{
+  if (!Array.isArray(imported)) return
+  imported.forEach(n => {
+    if (n.category && !noteCategories.includes(n.category)) noteCategories.push(n.category)
+    if (!notes.some(x => x.id === n.id)) notes.push(n)
+  })
+  saveData(); renderTabs(); renderNotes()
+}
+
+function exportData()
+{
+  let fileData = JSON.stringify(notes)
+  if (window.Android && window.Android.saveFile)
+  {
+    window.Android.saveFile("notes.json", fileData, "application/json")
+  }
+  else
+  {
+    const blob = new Blob([fileData], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = "notes.json"; a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+function triggerImport()
+{
+  if (window.Android && window.Android.importJsonFile)
+  {
+    window.Android.importJsonFile()
+  }
+  else
+  {
+    document.getElementById('import-file').click()
+  }
+}
+
+function importData(e)
+{
+  const f = e.target.files[0]; if(!f) return
+  const r = new FileReader()
+  r.onload = ev => { try { mergeNotes(JSON.parse(ev.target.result)); } catch(err) { alert("Import failed."); } }
+  r.readAsText(f)
+  e.target.value = ''
+}
+
+window.setAndroidNotes = function(jsonString)
+{
+  try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
+}
+
 
 
 init()

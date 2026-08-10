@@ -293,7 +293,7 @@ public class MainActivity extends Activity
         builder.setSmallIcon(R.drawable.ic_note);
       }
 
-      builder.setContentTitle("Quick Note")
+      builder.setContentTitle("StatusBar NoteInput")
         .setContentText("Swipe down to add a note")
         .setContentIntent(openPendingIntent)
         .addAction(replyAction)
