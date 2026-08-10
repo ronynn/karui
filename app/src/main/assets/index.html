@@ -4,11 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
 <title>Karui</title>
-<script src="confetti.browser.min.js"></script>
-<script src="flap.js"></script>
-<script src="snake.js"></script>
 <script src="android.js"></script>
-
 <style>
 a { color: gray; }
 :root { 
@@ -37,7 +33,7 @@ a { color: gray; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
-#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 2px; line-height: 1; overflow: hidden; transform: translateY(0); }
+#app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(55px * var(--ui-scale)); margin-bottom: 0px; margin-top:4px; line-height: 1; overflow: hidden; transform: translateY(0); }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transform: translateY(-30px); pointer-events: none; }
 
 .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
@@ -275,7 +271,7 @@ button:active { filter: brightness(0.8); }
       <div class="about-text">
         <h2>Karui</h2>
         - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
-        - Use <code>///tabName</code> to add a new tab, <code>\\\tabName</code> to remove a tab or just <code>///</code> to delete current tab. <br/>
+        - Use <code>/tabName</code> to add a new tab.<br/>
         - You can just long press any tab to rename or delete it or add a new tab. Tap <code>:</code> to copy, edit or delete notes.<br/>
         - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will semingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
         - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
@@ -911,14 +907,10 @@ document.getElementById('note-in').onkeydown = e =>
       return
     }
 
-    if (v.startsWith('///'))
+    if (v.startsWith('/'))
     {
-      let t = v.slice(3).trim()
+      let t = v.slice(1).trim()
       if (t) addTab(t)
-    }
-    else if (v.startsWith('\\\\\\'))
-    {
-      deleteTabClick()
     }
     else
     {
@@ -1138,5 +1130,10 @@ function ensureTabExists(name)
 init()
 loadNotificationSettings()
 </script>
+
+
+<script src="confetti.browser.min.js"></script>
+<script src="flap.js"></script>
+<script src="snake.js"></script>
 </body>
 </html>
