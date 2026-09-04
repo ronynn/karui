@@ -5,7 +5,6 @@
 </div>
 
 
-![alpinejs](https://img.shields.io/badge/Alpine%20JS-8BC0D0?style=for-the-badge&logo=alpinedotjs&logoColor=black)
 ![svelte](https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
 )
 ![vite](https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)
@@ -14,20 +13,7 @@
 ![notepad++](https://img.shields.io/badge/Notepad++-90E59A.svg?style=for-the-badge&logo=notepad%2B%2B&logoColor=black)
 ![alpine](https://img.shields.io/badge/Alpine_Linux-0D597F?style=for-the-badge&logo=alpine-linux&logoColor=white)
 ![android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
-![tauri](https://img.shields.io/badge/Tauri-FFC131?style=for-the-badge&logo=Tauri&logoColor=white)
-![androidstudio](https://img.shields.io/badge/Android_Studio-3DDC84?style=for-the-badge&logo=android-studio&logoColor=white)
-![gpl3](https://img.shields.io/badge/GPL--3.0-red?style=for-the-badge)
 [![RB Status](https://shields.rbtlog.dev/simple/io.github.ronynn.karui?style=for-the-badge)](https://shields.rbtlog.dev/io.github.ronynn.karui)
-
-<!--
-![academia](https://img.shields.io/badge/Academia-41454A?style=for-the-badge&logo=academia&logoColor=white)
-
-![mint](https://img.shields.io/badge/Linux_Mint-87CF3E?style=for-the-badge&logo=linux-mint&logoColor=white)
-
-![arch](https://img.shields.io/badge/Arch_Linux-1793D1?style=for-the-badge&logo=arch-linux&logoColor=white)
-
-
--->
 
 - An open source Google Tasks alternative to quickly jot down things to do, inspired by the system-24 theme and the Windows Mobile design system.
 - This app's design is set to evolve into something even more eye-catching.
@@ -53,9 +39,6 @@
 - **Lightweight:** Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - **Highly customizable:** Offers many themes with plans to add more customizations such as fonts, font sizes, and border colors.
 
-
-## Recently Added New Features
-
 So many new features might as well call it Karui++ now. Almost all new features are toggleable and don't add any bloat per say
 
 - Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
@@ -69,8 +52,6 @@ So many new features might as well call it Karui++ now. Almost all new features 
 - Optional celebration mode with confetti
 - Easter egg games (what? my todolist has games?), following the trend from back in the days
 - Optional button ripple effects
-
-~~Features That Won't Be Added:  **Editing a note:** Experience shows that editing a todo list can lead to chaining multiple tasks. The purpose here is to quickly jot down ideas and tasks, not for deep thinking. For that, a dedicated text editor is more appropriate. (Open to discussion!)~~
 - Now you can edit notes, √c and √d options replaced by a : dropdown
 
 Bug Fixes/Additional options
@@ -115,36 +96,22 @@ Bug Fixes/Additional options
 ## Licenses
 Karui is being developed under the GPLv3 License.
 
-## Contributions
-Contributions are welcome, setting up takes nothing more than forking the project and utilising the github actions build setup
-~~Currently I am porting the project from alpinejs to svelte, so I expect new contributions in svelte, but it's not a steadfast rule, I am still learning svelte and porting alpinejs based code so far hasn't feel like any hassle so far.~~ The frontend is completely terse vanillajs at the moment.
-
-- ![dev.to](https://img.shields.io/badge/dev.to-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white
-) : Dev.to post on [Automating Android APK Builds with GitHub Actions (The Sane Way)](https://dev.to/ronynn/automating-android-apk-builds-with-github-actions-the-sane-way-1h95)
-
 ## Roadmap
 
-- [x] Get user feedback and suggestions to improve and expand the project scope
-- [x] Fix import `.json` bugs
 - [x] Enhance accessibility with larger touch areas
 - [x] Pivot control styled tab switcher
 - [x] Gesture flick to change tabs
-- [x] Karui opening theme should be gruvbox?
-- [ ] Resolve dynamic color issues (😔 still figuring this one out—maybe a short break is needed)(i need a pc that can run android studio well, github workflows setup feels difficult to get this done)
 - [x] Font size settings
-- [x] Introduce more themes and font options.
 - [x] Make the UI more responsive for tablets and larger screens
 - [x] Letting user to select their own fonts from file picker
-- [x] Pressing active tab tries to do some animation (#bug)
-- [x] Toggle option to use double tap √d to delete instead of a single tap
 - [x] Tab adding bar position fix
 
 Cancelled items from roadmap
-- [ ] Add translations (didn't face the need)
+- [ ] Resolve dynamic color issues (Need PC Android Studio Setup)
+- [ ] Add translations (didn't face the need/demand)
 - [ ] Develop widgets (e.g., Java fetching notes from localStorage, a static scrollable list of existing notes)(very difficult)
 - [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)(syncing will be too messy, just export json when changing phones)
 - [ ] Integrate app data piping to Obsidian or a new notes app (I dont use obsidian on android any more, too slow)
-- [ ] Add share intent functionality (to support QR apps that generate QR codes from text or `.json`) (qr is limited to 3kb at best, compressing todos to fit that feels odd and limited feature)
 - [ ] Incorporate a QR library to generate QR codes from notes and read them using the system camera, facilitating easy note sharing between devices. (qr too limited)
 
 
@@ -156,21 +123,14 @@ This app has been primarily made on my phone with Acode editor with alpine linux
 - [![telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white
 )](https://t.me/karuifoss) : Join us on telegram: <https://t.me/karuifoss>  Here you can find my thought process and approach with other's opinions.
 - [![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white
-)](https://discord.gg/sYFsGN69rZ) : We now have recently created a discord server, here's the invite link:  <https://discord.gg/sYFsGN69rZ>, you can join and chat (on foss development) [![](https://dcbadge.limes.pink/api/server/sYFsGN69rZ)](https://discord.gg/sYFsGN69rZ)
-  
+)](https://discord.gg/sYFsGN69rZ) : We now have recently created a discord server, here's the invite link:  <https://discord.gg/sYFsGN69rZ>, you can join and chat (on foss development) [![](https://dcbadge.limes.pink/api/server/sYFsGN69rZ)](https://discord.gg/sYFsGN69rZ) 
 - [![reddit](https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://reddit.com/r/karuifoss) : And also a subreddit: <https://reddit.com/r/karuifoss>, would love it if you showcase your projects here and get cool discussions rolling
 
 ---
-
-- [![Bluesky](https://img.shields.io/badge/Bluesky-0285FF?logo=bluesky&logoColor=fff&style=for-the-badge)](https://bsky.app/profile/amayorilabs.bsky.social) : Occasional thoughts on <https://bsky.app/profile/amayorilabs.bsky.social>, on rare occasions experts find my posts and share their insights.
-
 - [![Youtube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://m.youtube.com/@ronynn89) : ronynn's findings <https://m.youtube.com/@ronynn89> on all things tech, art, and filmmaking
 
-- [![dev.to](https://img.shields.io/badge/dev.to-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white
-)](https://dev.to/ronynn) : My blog <https://dev.to/ronynn> for tech opinions and findings
-
-- [![Homepage](https://img.shields.io/badge/GitHub%20Pages-222222?style=for-the-badge&logo=github%20Pages&logoColor=white)](https://ronynn.github.io) : My [homepage](https://ronynn.github.io) has a threejs interactive wireframe of a globe, uses github api to fetch and link some of my repos.
-- [![github](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ronynn/karui/issues) : Github Issues are still the fastest way to get in touch.
+- My blog <https://dev.to/ronynn> for tech opinions and findings
+- Github Issues are still the fastest way to get in touch.
 
 
 

@@ -7,17 +7,6 @@
 <script src="android.js"></script>
 <script src="quotes.js"></script>
 <style>
-  /* CSS Scrollbar Removal */
-html, body {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-}
-  
 a { color: gray; }
 :root { 
   --bg: #282828; 
@@ -41,7 +30,7 @@ a { color: gray; }
 [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
 [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
 
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 7px;}
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 9px;}
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
@@ -55,7 +44,7 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transf
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
 .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(120px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
 
-.box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); }
+.box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top:9px; }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 
 input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; }
@@ -580,7 +569,7 @@ window.addEventListener('touchstart', e => {
 window.addEventListener('touchmove', e => {
   if (!isSwipe) return
   let dX = e.touches[0].clientX - startX, dY = e.touches[0].clientY - startY
-  if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 35) { switchScreen(dX > 0 ? 0 : 1); isSwipe = false; }
+  if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 85) { switchScreen(dX > 0 ? 0 : 1); isSwipe = false; }
 }, {passive:true})
 
 function setTheme(t)
@@ -1366,10 +1355,10 @@ window.setAndroidNotes = function(jsonString)
   try { mergeNotes(JSON.parse(jsonString)); } catch(err) {}
 }
 
-      // Quote Render
-      const quote = getRandomQuote()
-      document.getElementById('quote-text').textContent = quote.text
-      document.getElementById('quote-author').textContent = quote.author
+      
+const quote = getRandomQuote()
+document.getElementById('quote-text').textContent = quote.text
+document.getElementById('quote-author').textContent = quote.author
 
 
 
@@ -1377,11 +1366,13 @@ init()
 loadNotificationSettings()
 
 // Register Service Worker
+/*
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(() => console.log('Service Worker Registered'))
       .catch((err) => console.error('Service Worker Registration Failed:', err))
   }
+*/
 </script>
 
 
