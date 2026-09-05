@@ -630,6 +630,27 @@ public class MainActivity extends Activity
     }
 
     @JavascriptInterface
+public void importMarkdownFile()
+{
+  Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  intent.addCategory(Intent.CATEGORY_OPENABLE);
+  
+  // Broaden MIME types so Android's SAF doesn't grey out .md or .txt files
+  String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
+  intent.setType("*/*");
+  intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+
+  try
+  {
+    startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+  }
+  catch (ActivityNotFoundException e)
+  {
+    Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show();
+  }
+}
+
+    @JavascriptInterface
     public void saveFile(String fileName, String fileData, String fileType)
     {
       pendingFileName = fileName;

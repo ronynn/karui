@@ -931,9 +931,16 @@ function exportMarkdown()
 
 function triggerImportMD()
 {
-  document.getElementById('import-md-file').click()
+  if (window.Android && window.Android.importMarkdownFile)
+  {
+    window.Android.importMarkdownFile();
+  }
+  else
+  {
+    document.getElementById('import-md-file').click();
+  }
 }
-
+  
 function importMarkdown(e)
 {
   const f = e.target.files[0]; if(!f) return
@@ -1030,48 +1037,76 @@ window.onSyncFileSelected = function(fileUri)
 
 window.importMarkdownFromAndroid = function(mdText)
 {
-  if (!mdText) return
+  if (!mdText || !mdText.trim()) return;
+
   try
   {
-    let lines = mdText.split(/\r?\n/)
-    let currentCat = "Main"
-    let importedNotes = []
-    let newCategories = []
+    let lines = mdText.split(/\r?\n/);
+    let currentCat = "Main";
+    let parsedNotes = [];
+    let parsedCategories = [];
 
     lines.forEach(line => {
-      let trimmed = line.trim()
+      let trimmed = line.trim();
       if (trimmed.startsWith('## '))
       {
-        currentCat = trimmed.replace(/^##\s+/, '').trim()
-        if (currentCat && !newCategories.includes(currentCat))
+        currentCat = trimmed.replace(/^##\s+/, '').trim();
+        if (currentCat && !parsedCategories.includes(currentCat))
         {
-          newCategories.push(currentCat)
+          parsedCategories.push(currentCat);
         }
       }
       else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]'))
       {
-        let completed = trimmed.startsWith('- [x]')
-        let noteText = trimmed.replace(/^- \[(x| )\]\s*/, '').trim()
+        let completed = trimmed.startsWith('- [x]');
+        let noteText = trimmed.replace(/^- \[(x| )\]\s*/, '').trim();
         if (noteText)
         {
-          importedNotes.push({
-            id: Date.now() + Math.floor(Math.random() * 100000),
+          parsedNotes.push({
             text: noteText,
             completed: completed,
-            category: currentCat,
-            pinned: false
-          })
+            category: currentCat
+          });
         }
       }
-    })
+    });
 
-    newCategories.forEach(c => {
-      if (!noteCategories.includes(c)) noteCategories.push(c)
-    })
+    if (parsedNotes.length === 0) return;
 
-    mergeNotes(importedNotes)
+    // Synchronize categories safely
+    parsedCategories.forEach(c => {
+      if (!noteCategories.includes(c)) noteCategories.push(c);
+    });
+
+    // Replace duplicate items instead of appending everything blindly
+    parsedNotes.forEach(pNote => {
+      let existingIndex = notes.findIndex(n => n.text === pNote.text && n.category === pNote.category);
+      if (existingIndex > -1)
+      {
+        // Update completion status of existing note
+        notes[existingIndex].completed = pNote.completed;
+      }
+      else
+      {
+        // Only append if note is genuinely new
+        notes.push({
+          id: Date.now() + Math.floor(Math.random() * 100000),
+          text: pNote.text,
+          completed: pNote.completed,
+          category: pNote.category,
+          pinned: false
+        });
+      }
+    });
+
+    saveData();
+    renderTabs();
+    renderNotes();
   }
-  catch(e) {}
+  catch(e)
+  {
+    console.error("Sync parsing error:", e);
+  }
 }
 
 function manualSync()
