@@ -6,6 +6,7 @@
 <title>Karui</title>
 <script src="android.js"></script>
 <script src="quotes.js"></script>
+
 <style>
 a { color: gray; }
 :root { 
@@ -152,6 +153,8 @@ button:active { filter: brightness(0.8); }
 
   
 </style>
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+
 </head>
 <body>
 
@@ -1145,6 +1148,13 @@ document.getElementById('quote-author').textContent = quote.author
 
 init()
 loadNotificationSettings()
+
+if ('serviceWorker' in navigator) 
+{
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker Registered'))
+      .catch((err) => console.error('Service Worker Registration Failed:', err))
+}
 
 </script>
 <script src="confetti.browser.min.js"></script>
