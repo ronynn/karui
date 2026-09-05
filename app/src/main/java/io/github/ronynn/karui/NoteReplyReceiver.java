@@ -69,7 +69,7 @@ public class NoteReplyReceiver extends BroadcastReceiver
     }
     else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
     {
-      replyFlags |= PendingIntent.FLAG_IMMUTABLE;
+      replyFlags |= 0;
     }
     PendingIntent replyPendingIntent = PendingIntent.getBroadcast(context, 1, replyIntent, replyFlags);
 

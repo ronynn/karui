@@ -250,7 +250,7 @@ public class MainActivity extends Activity
       }
       else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
       {
-        replyFlags |= PendingIntent.FLAG_IMMUTABLE;
+        replyFlags |= 0;
       }
       PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
 

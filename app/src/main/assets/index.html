@@ -273,14 +273,13 @@ button:active { filter: brightness(0.8); }
     <div class="box">
       <span class="box-title">Box 4: About Karui</span>
       <div class="about-text">
-        <h2>Karui</h2>
-        - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
         - Use <code>/tabName</code> to add a new tab.<br/>
         - You can just long press any tab to rename or delete it or add a new tab. Tap <code>:</code> to copy, edit or delete notes.<br/>
         - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will semingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
         - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
+        - A privacy friendly, lightweight, bloat-free open source todo list app with retro aesthetics made by ronynn.<br/>
         - The Apollo mission operated on a computer with around 4KB of RAM! Karui's philosophy is to reach for the moon outgrowing limitations.<br/>
-        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and file issues for bugs if any are found. Also a small treasure hunt for you - the game has two easter eggs, the codes for which you can find in the source on github. Share your highscores on our reddit or discord, links available on Github readme.
+        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs.Easter eggs: FLAPTHEBIRD, SLITHER. Share your highscores on our reddit or telegram.
       </div>
     </div>
 
@@ -844,7 +843,7 @@ function renderNotes()
     const d = document.createElement('div')
     d.className = `note-item ${n.completed ? 'done' : ''}`; d.dataset.id = n.id
     
-    let pinPrefix = n.pinned ? `<span class="pin-icon">~</span>` : ''
+    let pinPrefix = n.pinned ? `<span class="pin-icon">⊢</span>` : ''
     
     d.innerHTML = `<span>${pinPrefix}${n.text}</span>
                    <span onclick="openNoteMenu(event, ${n.id})" style="color:var(--gray); padding: 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0;">:</span>`
@@ -1366,13 +1365,13 @@ init()
 loadNotificationSettings()
 
 // Register Service Worker
-/*
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('Service Worker Registered'))
-      .catch((err) => console.error('Service Worker Registration Failed:', err))
-  }
-*/
+
+  // if ('serviceWorker' in navigator) {
+  //   navigator.serviceWorker.register('./sw.js')
+  //     .then(() => console.log('Service Worker Registered'))
+  //     .catch((err) => console.error('Service Worker Registration Failed:', err))
+  // }
+  
 </script>
 
 
