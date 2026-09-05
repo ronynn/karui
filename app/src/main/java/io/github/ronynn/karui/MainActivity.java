@@ -500,44 +500,65 @@ public class MainActivity extends Activity
       }
     }
     else if (requestCode == SYNC_FILE_REQUEST_CODE && resultCode == RESULT_OK)
+{
+  if (data != null && data.getData() != null)
+  {
+    Uri uri = data.getData();
+    try
     {
-      if (data != null && data.getData() != null)
+      int takeFlags = data.getFlags() 
+        & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+      getContentResolver().takePersistableUriPermission(uri, takeFlags);
+
+      SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+      prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
+
+      // Read existing content from the chosen file first
+      InputStream inputStream = getContentResolver().openInputStream(uri);
+      StringBuilder sb = new StringBuilder();
+      if (inputStream != null)
       {
-        Uri uri = data.getData();
-        try
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        String line;
+        while ((line = reader.readLine()) != null)
         {
-          int takeFlags = data.getFlags() 
-            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-          getContentResolver().takePersistableUriPermission(uri, takeFlags);
-
-          SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-          prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
-
-          if (pendingFileData != null && !pendingFileData.isEmpty())
-          {
-            OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-            if (outputStream == null)
-            {
-              outputStream = getContentResolver().openOutputStream(uri);
-            }
-            if (outputStream != null)
-            {
-              outputStream.write(pendingFileData.getBytes());
-              outputStream.close();
-            }
-          }
-
-          String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
-          mWebView.evaluateJavascript(jsCode, null);
-          Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
+          sb.append(line).append("\n");
         }
-        catch (Exception e)
-        {
-          Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
-          e.printStackTrace();
-        }
+        reader.close();
       }
+
+      String existingContent = sb.toString().trim();
+
+      if (!existingContent.isEmpty())
+      {
+        // File already has notes: import them into the app instead of overwriting
+        String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
+        mWebView.evaluateJavascript(jsCode, null);
+        Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
+      }
+      else if (pendingFileData != null && !pendingFileData.isEmpty())
+      {
+        // File is empty: write the initial app content into it
+        OutputStream outputStream = getContentResolver().openInputStream(uri) != null ? 
+          getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
+        if (outputStream != null)
+        {
+          outputStream.write(pendingFileData.getBytes());
+          outputStream.close();
+        }
+        Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
+      }
+
+      String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
+      mWebView.evaluateJavascript(jsCode, null);
     }
+    catch (Exception e)
+    {
+      Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+      e.printStackTrace();
+    }
+  }
+}
     else if (requestCode == FILECHOOSER_RESULTCODE)
     {
       if (mFilePathCallback == null)

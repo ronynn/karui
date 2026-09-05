@@ -125,22 +125,46 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
 
       BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
       String line;
-      String currentCategory = "Main";
+      
+      boolean hasCategoryHeaders = false;
+      String currentCategory = "";
+
+      List<String> uncategorizedNotes = new ArrayList<>();
+      List<String> matchedNotes = new ArrayList<>();
 
       while ((line = reader.readLine()) != null)
       {
         String trimmed = line.trim();
         if (trimmed.startsWith("## "))
         {
+          hasCategoryHeaders = true;
           currentCategory = trimmed.replace("## ", "").trim();
         }
-        else if (currentCategory.equalsIgnoreCase(targetTab) &&
-                 (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")))
+        else if (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]"))
         {
-          mRawNotes.add(trimmed);
+          if (hasCategoryHeaders)
+          {
+            if (currentCategory.equalsIgnoreCase(targetTab))
+            {
+              matchedNotes.add(trimmed);
+            }
+          }
+          else
+          {
+            uncategorizedNotes.add(trimmed);
+          }
         }
       }
       reader.close();
+
+      if (hasCategoryHeaders)
+      {
+        mRawNotes.addAll(matchedNotes);
+      }
+      else
+      {
+        mRawNotes.addAll(uncategorizedNotes);
+      }
     }
     catch (Exception e)
     {
