@@ -489,6 +489,31 @@ public class MainActivity extends Activity
     }
 
     @JavascriptInterface
+    public void saveFileSync(String filePath, String content)
+    {
+      if (filePath == null || filePath.trim().isEmpty()) return;
+
+      try
+        {
+          Uri uri = Uri.parse(filePath);
+          OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+          if (outputStream == null)
+          {
+            outputStream = getContentResolver().openOutputStream(uri);
+          }
+          if (outputStream != null)
+          {
+            outputStream.write(content.getBytes());
+            outputStream.close();
+          }
+        }
+      catch (Exception e)
+        {
+          e.printStackTrace();
+        }
+    }
+
+    @JavascriptInterface
     public void importJsonFile()
     {
       Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
