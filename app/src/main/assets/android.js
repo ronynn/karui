@@ -156,10 +156,10 @@ function createRipple(e, btn)
   circle.style.left = `${e.clientX - rect.left - radius}px`
   circle.style.top = `${e.clientY - rect.top - radius}px`
   circle.classList.add('ripple-span')
-  
+
   let existing = btn.getElementsByClassName('ripple-span')[0]
   if (existing) existing.remove()
-  
+
   btn.appendChild(circle)
   setTimeout(() => {
     if (circle.parentNode) circle.remove()
@@ -243,7 +243,7 @@ function setupVisualViewport()
 
   window.addEventListener('resize', updateFab)
   window.addEventListener('scroll', updateFab)
-  
+
   updateFab()
 }
 
@@ -418,19 +418,29 @@ function updateStats()
 
 function openNoteMenu(e, id)
 {
-  e.stopPropagation()
-  closeAllMenus()
-  activeNoteMenuId = id
-  let n = notes.find(x => x.id === id)
-  let pinBtn = document.getElementById('btn-pin-note')
+  e.stopPropagation();
+
+  // Toggle off if clicking the menu target of an already active note
+  const menu = document.getElementById('note-dropdown');
+  if (activeNoteMenuId === id && menu.style.display === 'block')
+  {
+    closeAllMenus();
+    return;
+  }
+
+  closeAllMenus();
+  activeNoteMenuId = id;
+
+  let n = notes.find(x => x.id === id);
+  let pinBtn = document.getElementById('btn-pin-note');
   if (pinBtn)
   {
-    pinBtn.textContent = (n && n.pinned) ? 'Unpin Note' : 'Pin Note'
+    pinBtn.textContent = (n && n.pinned) ? 'Unpin Note' : 'Pin Note';
   }
-  const menu = document.getElementById('note-dropdown')
-  menu.style.display = 'block'
-  menu.style.left = Math.min(e.clientX, window.innerWidth - 120) + 'px'
-  menu.style.top = e.clientY + 'px'
+
+  menu.style.display = 'block';
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 120) + 'px';
+  menu.style.top = e.clientY + 'px';
 }
 
 function renderTabs()
@@ -440,7 +450,7 @@ function renderTabs()
   noteCategories.forEach(t => {
     const d = document.createElement('div')
     d.className = `tab ${activeCategory === t ? 'active' : ''}`
-    
+
     let tabLabel = t
     if (t.includes('%'))
     {
@@ -450,7 +460,7 @@ function renderTabs()
       let pct = tot > 0 ? Math.round((comp / tot) * 100) : 0
       tabLabel = t.replace('%', `${pct}%`)
     }
-    
+
     d.textContent = tabLabel; d.dataset.tab = t
     d.onclick = () => {
       closeAllMenus()
@@ -468,9 +478,9 @@ function renderNotes()
   closeAllMenus()
   const list = document.getElementById('notes-list'), trash = document.getElementById('trash-list')
   list.innerHTML = ''; trash.innerHTML = ''
-  
+
   let currentCatNotes = notes.filter(n => n.category === activeCategory)
-  
+
   let pinned = currentCatNotes.filter(n => n.pinned)
   let unpinned = currentCatNotes.filter(n => !n.pinned)
 
@@ -492,35 +502,42 @@ function renderNotes()
   currentCatNotes.forEach(n => {
     const d = document.createElement('div')
     d.className = `note-item ${n.completed ? 'done' : ''}`; d.dataset.id = n.id
-    
+
     let pinPrefix = n.pinned ? `<span class="pin-icon">⊢</span>` : ''
-    
+
     d.innerHTML = `<span>${pinPrefix}${formatNoteText(n.text)}</span>
                    <span onclick="openNoteMenu(event, ${n.id})" style="color:var(--gray); padding: 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0;">:</span>`
     d.onclick = (e) => {
-      if (e.target.tagName === 'SPAN' && e.target.innerText === ':') return
-      n.completed = !n.completed
+      if (e.target.tagName === 'SPAN' && e.target.innerText === ':') return;
+
+      n.completed = !n.completed;
       if (n.completed)
       {
-        playSound('scratch')
+        playSound('scratch');
         if (celebrationMode && typeof confetti === 'function')
         {
-          confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } })
+          confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
         }
       }
-      if (navigator.vibrate) navigator.vibrate(30)
-      
-      let txt = n.text.trim()
+      if (navigator.vibrate) navigator.vibrate(30);
+
+      let txt = n.text.trim();
       if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
       {
-        window.location.href = txt.startsWith('http') ? txt : 'https://' + txt
+        window.location.href = txt.startsWith('http') ? txt : 'https://' + txt;
       }
-      
-      d.classList.toggle('done', n.completed)
-      updateStats()
-      renderTabs()
-      renderNotes()
-      saveData()
+
+      // Directly mutate DOM class to avoid restarting CSS keyframe animations across the list
+      d.classList.toggle('done', n.completed);
+
+      updateStats();
+      saveData();
+
+      // Only re-render full list if sorting rules force order repositioning
+      if (moveCompletedBottom)
+      {
+        renderNotes();
+      }
     }
     bindLongPress(d, 'note'); list.appendChild(d)
   })
@@ -530,7 +547,7 @@ function renderNotes()
     d.innerHTML = `<span>${formatNoteText(n.text)}</span><span onclick="restoreNote(${idx})" style="color:var(--gray); padding: 0 5px; flex-shrink: 0;">√r</span>`
     trash.appendChild(d)
   })
-  
+
   updateStats()
 }
 
@@ -641,7 +658,7 @@ function cleanDrag()
 {
   clearTimeout(touchTimer)
   document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1')
-  
+
   if (dragTarget && dragType === 'note')
   {
     if (hoveredTab)
@@ -675,11 +692,11 @@ function setupDragAndDrop()
     if (!dragTarget || !dragImg || dragType !== 'note') return
     e.preventDefault()
     const touch = e.touches[0]
-    
+
     let elPoint = document.elementFromPoint(touch.clientX, touch.clientY)
     hoveredTab = elPoint ? elPoint.closest('.tab') : null
     document.querySelectorAll('.tab').forEach(t => t.style.opacity = '1')
-    
+
     if (hoveredTab)
     {
       hoveredTab.style.opacity = '0.5'
