@@ -47,9 +47,13 @@ public class MainActivity extends Activity
   private static final int CREATE_FILE_REQUEST_CODE = 1;
   private static final int IMPORT_FILE_REQUEST_CODE = 2;
   private static final int FILECHOOSER_RESULTCODE = 3;
+  private static final int SYNC_FILE_REQUEST_CODE = 4;
   private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
+
   private static final String CHANNEL_ID = "note_reply_channel";
   private static final int NOTIFICATION_ID = 1;
+  private static final String PREFS_SYNC = "sync_prefs";
+  private static final String KEY_SYNC_URI = "sync_file_uri";
 
   private WebView mWebView;
   private View splashScreen;
@@ -132,6 +136,7 @@ public class MainActivity extends Activity
 
         isPageLoaded = true;
         injectPendingNotes();
+        readSyncFileAndInject();
       }
     });
 
@@ -325,7 +330,7 @@ public class MainActivity extends Activity
     isNotificationActive = false;
   }
 
-  // ---------- DATA INJECTION ----------
+  // ---------- DATA INJECTION & SYNC ----------
 
   private void injectPendingNotes()
   {
@@ -348,6 +353,52 @@ public class MainActivity extends Activity
     mWebView.evaluateJavascript(js, null);
   }
 
+  private void readSyncFileAndInject()
+  {
+    if (!isPageLoaded) return;
+
+    SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+    String uriStr = prefs.getString(KEY_SYNC_URI, null);
+
+    if (uriStr == null || uriStr.isEmpty()) return;
+
+    try
+    {
+      Uri uri = Uri.parse(uriStr);
+      InputStream inputStream = getContentResolver().openInputStream(uri);
+      if (inputStream == null) return;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      StringBuilder sb = new StringBuilder();
+      String line;
+      while ((line = reader.readLine()) != null)
+      {
+        sb.append(line).append("\n");
+      }
+      reader.close();
+
+      String mdContent = sb.toString();
+      String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
+      mWebView.evaluateJavascript(js, null);
+    }
+    catch (SecurityException se)
+    {
+      Toast.makeText(this, "Sync file permission lost. Please re-select file.", Toast.LENGTH_LONG).show();
+    }
+    catch (IOException e)
+    {
+      e.printStackTrace();
+    }
+  }
+
+  private void triggerAppCloseSync()
+  {
+    if (mWebView != null && isPageLoaded)
+    {
+      mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
+    }
+  }
+
   @Override
   protected void onResume()
   {
@@ -355,7 +406,15 @@ public class MainActivity extends Activity
     if (isPageLoaded)
     {
       injectPendingNotes();
+      readSyncFileAndInject();
     }
+  }
+
+  @Override
+  protected void onStop()
+  {
+    super.onStop();
+    triggerAppCloseSync();
   }
 
   // ---------- ACTIVITY RESULTS & LIFECYCLE ----------
@@ -410,6 +469,45 @@ public class MainActivity extends Activity
         }
       }
     }
+    else if (requestCode == SYNC_FILE_REQUEST_CODE && resultCode == RESULT_OK)
+    {
+      if (data != null && data.getData() != null)
+      {
+        Uri uri = data.getData();
+        try
+        {
+          int takeFlags = data.getFlags() 
+            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+          getContentResolver().takePersistableUriPermission(uri, takeFlags);
+
+          SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+          prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
+
+          if (pendingFileData != null && !pendingFileData.isEmpty())
+          {
+            OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+            if (outputStream == null)
+            {
+              outputStream = getContentResolver().openOutputStream(uri);
+            }
+            if (outputStream != null)
+            {
+              outputStream.write(pendingFileData.getBytes());
+              outputStream.close();
+            }
+          }
+
+          String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
+          mWebView.evaluateJavascript(jsCode, null);
+          Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
+        }
+        catch (Exception e)
+        {
+          Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+          e.printStackTrace();
+        }
+      }
+    }
     else if (requestCode == FILECHOOSER_RESULTCODE)
     {
       if (mFilePathCallback == null)
@@ -455,6 +553,7 @@ public class MainActivity extends Activity
   @Override
   protected void onDestroy()
   {
+    triggerAppCloseSync();
     super.onDestroy();
     try
     {
@@ -475,6 +574,62 @@ public class MainActivity extends Activity
   public class WebAppInterface
   {
     @JavascriptInterface
+    public void setupSyncFile(String defaultFileName, String currentContent)
+    {
+      pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty()) ? defaultFileName : "file.md";
+      pendingFileData = currentContent != null ? currentContent : "";
+
+      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType("text/markdown");
+      intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
+
+      try
+      {
+        startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
+      }
+      catch (ActivityNotFoundException e)
+      {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
+      }
+    }
+
+    @JavascriptInterface
+    public void saveFileSync(String filePath, String content)
+    {
+      if (filePath == null || filePath.trim().isEmpty()) return;
+
+      try
+      {
+        Uri uri = Uri.parse(filePath);
+        OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+        if (outputStream == null)
+        {
+          outputStream = getContentResolver().openOutputStream(uri);
+        }
+        if (outputStream != null)
+        {
+          outputStream.write(content.getBytes());
+          outputStream.close();
+        }
+      }
+      catch (SecurityException se)
+      {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Permission denied for sync file. Please re-select.", Toast.LENGTH_SHORT).show());
+      }
+      catch (Exception e)
+      {
+        e.printStackTrace();
+      }
+    }
+
+    @JavascriptInterface
+    public void triggerManualReadSync()
+    {
+      runOnUiThread(() -> readSyncFileAndInject());
+    }
+
+    @JavascriptInterface
     public void saveFile(String fileName, String fileData, String fileType)
     {
       pendingFileName = fileName;
@@ -486,31 +641,6 @@ public class MainActivity extends Activity
       intent.setType(fileType);
       intent.putExtra(Intent.EXTRA_TITLE, fileName);
       startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
-    }
-
-    @JavascriptInterface
-    public void saveFileSync(String filePath, String content)
-    {
-      if (filePath == null || filePath.trim().isEmpty()) return;
-
-      try
-        {
-          Uri uri = Uri.parse(filePath);
-          OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-          if (outputStream == null)
-          {
-            outputStream = getContentResolver().openOutputStream(uri);
-          }
-          if (outputStream != null)
-          {
-            outputStream.write(content.getBytes());
-            outputStream.close();
-          }
-        }
-      catch (Exception e)
-        {
-          e.printStackTrace();
-        }
     }
 
     @JavascriptInterface
