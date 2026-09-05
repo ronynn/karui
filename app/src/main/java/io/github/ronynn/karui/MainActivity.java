@@ -111,62 +111,62 @@ public class MainActivity extends Activity
     mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
     mWebView.setWebViewClient(new WebViewClient()
-    {
-      @Override
-      public boolean shouldOverrideUrlLoading(WebView view, String url)
-      {
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-        try
-        {
-          view.getContext().startActivity(intent);
-        }
-        catch (ActivityNotFoundException e)
-        {
-          Toast.makeText(view.getContext(), R.string.no_app_to_open_link, Toast.LENGTH_SHORT).show();
-        }
-        return true;
-      }
+                              {
+                                @Override
+                                public boolean shouldOverrideUrlLoading(WebView view, String url)
+                                {
+                                  Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                                  try
+                                    {
+                                      view.getContext().startActivity(intent);
+                                    }
+                                  catch (ActivityNotFoundException e)
+                                    {
+                                      Toast.makeText(view.getContext(), R.string.no_app_to_open_link, Toast.LENGTH_SHORT).show();
+                                    }
+                                  return true;
+                                }
 
-      @Override
-      public void onPageFinished(WebView view, String url)
-      {
-        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
-        fadeOut.setInterpolator(new DecelerateInterpolator());
-        fadeOut.setDuration(500);
-        fadeOut.start();
+                                @Override
+                                public void onPageFinished(WebView view, String url)
+                                {
+                                  ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
+                                  fadeOut.setInterpolator(new DecelerateInterpolator());
+                                  fadeOut.setDuration(500);
+                                  fadeOut.start();
 
-        splashScreen.setVisibility(View.GONE);
-        mWebView.setVisibility(View.VISIBLE);
+                                  splashScreen.setVisibility(View.GONE);
+                                  mWebView.setVisibility(View.VISIBLE);
 
-        isPageLoaded = true;
-        injectPendingNotes();
-        readSyncFileAndInject();
-      }
-    });
+                                  isPageLoaded = true;
+                                  injectPendingNotes();
+                                  readSyncFileAndInject();
+                                }
+                              });
 
     mWebView.setWebChromeClient(new WebChromeClient()
-    {
-      @Override
-      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams)
-      {
-        if (mFilePathCallback != null)
-        {
-          mFilePathCallback.onReceiveValue(null);
-        }
-        mFilePathCallback = filePathCallback;
-        Intent intent = fileChooserParams.createIntent();
-        try
-        {
-          startActivityForResult(intent, FILECHOOSER_RESULTCODE);
-        }
-        catch (Exception e)
-        {
-          mFilePathCallback = null;
-          return false;
-        }
-        return true;
-      }
-    });
+                                {
+                                  @Override
+                                  public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams)
+                                  {
+                                    if (mFilePathCallback != null)
+                                    {
+                                      mFilePathCallback.onReceiveValue(null);
+                                    }
+                                    mFilePathCallback = filePathCallback;
+                                    Intent intent = fileChooserParams.createIntent();
+                                    try
+                                      {
+                                        startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+                                      }
+                                    catch (Exception e)
+                                      {
+                                        mFilePathCallback = null;
+                                        return false;
+                                      }
+                                    return true;
+                                  }
+                                });
 
     mWebView.loadUrl("file:///android_asset/index.html");
 
@@ -217,111 +217,111 @@ public class MainActivity extends Activity
     {
       Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
       try
-      {
-        Intent intent = new Intent();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         {
-          intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-          intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+          Intent intent = new Intent();
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+          {
+            intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+          }
+          else
+          {
+            intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+          }
+          startActivity(intent);
         }
-        else
-        {
-          intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-          intent.setData(Uri.parse("package:" + getPackageName()));
-        }
-        startActivity(intent);
-      }
       catch (Exception ignored)
-      {
-      }
+        {
+        }
       return;
     }
 
     try
-    {
-      Intent openAppIntent = new Intent(this, MainActivity.class);
-      int openFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
       {
-        openFlags |= PendingIntent.FLAG_IMMUTABLE;
-      }
-      PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, openFlags);
+        Intent openAppIntent = new Intent(this, MainActivity.class);
+        int openFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+          openFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, openFlags);
 
-      RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
-        .setLabel("Add Note")
-        .build();
-
-      Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
-      int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-      {
-        replyFlags |= PendingIntent.FLAG_MUTABLE;
-      }
-      else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        replyFlags |= 0;
-      }
-      PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
-
-      Notification.Action replyAction;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        replyAction = new Notification.Action.Builder(
-          Icon.createWithResource(this, R.drawable.ic_note),
-          "Add Note",
-          replyPendingIntent)
-          .addRemoteInput(remoteInput)
+        RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
+          .setLabel("Add Note")
           .build();
-      }
-      else
-      {
-        replyAction = new Notification.Action.Builder(
-          R.drawable.ic_note,
-          "Add Note",
-          replyPendingIntent)
-          .addRemoteInput(remoteInput)
-          .build();
-      }
 
-      Notification.Builder builder;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-      {
-        builder = new Notification.Builder(this, CHANNEL_ID);
-      }
-      else
-      {
-        builder = new Notification.Builder(this);
-      }
+        Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
+        int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        {
+          replyFlags |= PendingIntent.FLAG_MUTABLE;
+        }
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+          replyFlags |= 0;
+        }
+        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
 
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
-      }
-      else
-      {
-        builder.setSmallIcon(R.drawable.ic_note);
-      }
+        Notification.Action replyAction;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+          replyAction = new Notification.Action.Builder(
+            Icon.createWithResource(this, R.drawable.ic_note),
+            "Add Note",
+            replyPendingIntent)
+            .addRemoteInput(remoteInput)
+            .build();
+        }
+        else
+        {
+          replyAction = new Notification.Action.Builder(
+            R.drawable.ic_note,
+            "Add Note",
+            replyPendingIntent)
+            .addRemoteInput(remoteInput)
+            .build();
+        }
 
-      builder.setContentTitle("Karui Quick Note")
-        .setContentText("Swipe down to add a note")
-        .setContentIntent(openPendingIntent)
-        .addAction(replyAction)
-        .setOngoing(true);
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+          builder = new Notification.Builder(this, CHANNEL_ID);
+        }
+        else
+        {
+          builder = new Notification.Builder(this);
+        }
 
-      Notification notification = builder.build();
-      manager.notify(NOTIFICATION_ID, notification);
-      isNotificationActive = true;
-    }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+          builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
+        }
+        else
+        {
+          builder.setSmallIcon(R.drawable.ic_note);
+        }
+
+        builder.setContentTitle("Karui Quick Note")
+          .setContentText("Swipe down to add a note")
+          .setContentIntent(openPendingIntent)
+          .addAction(replyAction)
+          .setOngoing(true);
+
+        Notification notification = builder.build();
+        manager.notify(NOTIFICATION_ID, notification);
+        isNotificationActive = true;
+      }
     catch (Exception e)
-    {
-      String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-      if (e.getCause() != null)
       {
-        msg += "\nCause: " + e.getCause().toString();
+        String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (e.getCause() != null)
+        {
+          msg += "\nCause: " + e.getCause().toString();
+        }
+        Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
+        e.printStackTrace();
       }
-      Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
-      e.printStackTrace();
-    }
   }
 
   private void cancelNotification()
@@ -367,32 +367,32 @@ public class MainActivity extends Activity
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
-    {
-      Uri uri = Uri.parse(uriStr);
-      InputStream inputStream = getContentResolver().openInputStream(uri);
-      if (inputStream == null) return;
-
-      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null)
       {
-        sb.append(line).append("\n");
-      }
-      reader.close();
+        Uri uri = Uri.parse(uriStr);
+        InputStream inputStream = getContentResolver().openInputStream(uri);
+        if (inputStream == null) return;
 
-      String mdContent = sb.toString();
-      String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
-      mWebView.evaluateJavascript(js, null);
-    }
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null)
+          {
+            sb.append(line).append("\n");
+          }
+        reader.close();
+
+        String mdContent = sb.toString();
+        String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
+        mWebView.evaluateJavascript(js, null);
+      }
     catch (SecurityException se)
-    {
-      Toast.makeText(this, "Sync file permission lost. Please re-select file.", Toast.LENGTH_LONG).show();
-    }
+      {
+        Toast.makeText(this, "Sync file permission lost. Please re-select file.", Toast.LENGTH_LONG).show();
+      }
     catch (IOException e)
-    {
-      e.printStackTrace();
-    }
+      {
+        e.printStackTrace();
+      }
   }
 
   private void triggerAppCloseSync()
@@ -433,18 +433,18 @@ public class MainActivity extends Activity
       if (data != null && data.getData() != null && pendingFileData != null)
       {
         try
-        {
-          OutputStream outputStream = getContentResolver().openOutputStream(data.getData());
-          if (outputStream != null)
           {
-            outputStream.write(pendingFileData.getBytes());
-            outputStream.close();
+            OutputStream outputStream = getContentResolver().openOutputStream(data.getData());
+            if (outputStream != null)
+            {
+              outputStream.write(pendingFileData.getBytes());
+              outputStream.close();
+            }
           }
-        }
         catch (IOException e)
-        {
-          e.printStackTrace();
-        }
+          {
+            e.printStackTrace();
+          }
       }
     }
     else if (requestCode == IMPORT_FILE_REQUEST_CODE && resultCode == RESULT_OK)
@@ -452,25 +452,25 @@ public class MainActivity extends Activity
       if (data != null && data.getData() != null)
       {
         try
-        {
-          InputStream inputStream = getContentResolver().openInputStream(data.getData());
-          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-          StringBuilder sb = new StringBuilder();
-          String line;
-          while ((line = reader.readLine()) != null)
           {
-            sb.append(line);
-          }
-          reader.close();
-          String jsonContent = sb.toString();
+            InputStream inputStream = getContentResolver().openInputStream(data.getData());
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null)
+              {
+                sb.append(line);
+              }
+            reader.close();
+            String jsonContent = sb.toString();
 
-          String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
-          mWebView.evaluateJavascript(jsCode, null);
-        }
+            String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
+            mWebView.evaluateJavascript(jsCode, null);
+          }
         catch (IOException e)
-        {
-          e.printStackTrace();
-        }
+          {
+            e.printStackTrace();
+          }
       }
     }
     else if (requestCode == IMPORT_MD_FILE_REQUEST_CODE && resultCode == RESULT_OK)
@@ -478,87 +478,87 @@ public class MainActivity extends Activity
       if (data != null && data.getData() != null)
       {
         try
-        {
-          InputStream inputStream = getContentResolver().openInputStream(data.getData());
-          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-          StringBuilder sb = new StringBuilder();
-          String line;
-          while ((line = reader.readLine()) != null)
           {
-            sb.append(line).append("\n");
-          }
-          reader.close();
-          String mdContent = sb.toString();
+            InputStream inputStream = getContentResolver().openInputStream(data.getData());
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null)
+              {
+                sb.append(line).append("\n");
+              }
+            reader.close();
+            String mdContent = sb.toString();
 
-          String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
-          mWebView.evaluateJavascript(jsCode, null);
-        }
+            String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
+            mWebView.evaluateJavascript(jsCode, null);
+          }
         catch (IOException e)
-        {
-          e.printStackTrace();
-        }
+          {
+            e.printStackTrace();
+          }
       }
     }
     else if (requestCode == SYNC_FILE_REQUEST_CODE && resultCode == RESULT_OK)
-{
-  if (data != null && data.getData() != null)
-  {
-    Uri uri = data.getData();
-    try
     {
-      int takeFlags = data.getFlags() 
-        & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-      getContentResolver().takePersistableUriPermission(uri, takeFlags);
-
-      SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-      prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
-
-      // Read existing content from the chosen file first
-      InputStream inputStream = getContentResolver().openInputStream(uri);
-      StringBuilder sb = new StringBuilder();
-      if (inputStream != null)
+      if (data != null && data.getData() != null)
       {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        String line;
-        while ((line = reader.readLine()) != null)
-        {
-          sb.append(line).append("\n");
-        }
-        reader.close();
-      }
+        Uri uri = data.getData();
+        try
+          {
+            int takeFlags = data.getFlags() 
+              & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            getContentResolver().takePersistableUriPermission(uri, takeFlags);
 
-      String existingContent = sb.toString().trim();
+            SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+            prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
 
-      if (!existingContent.isEmpty())
-      {
-        // File already has notes: import them into the app instead of overwriting
-        String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
-        mWebView.evaluateJavascript(jsCode, null);
-        Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
-      }
-      else if (pendingFileData != null && !pendingFileData.isEmpty())
-      {
-        // File is empty: write the initial app content into it
-        OutputStream outputStream = getContentResolver().openInputStream(uri) != null ? 
-          getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
-        if (outputStream != null)
-        {
-          outputStream.write(pendingFileData.getBytes());
-          outputStream.close();
-        }
-        Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
-      }
+            // Read existing content from the chosen file first
+            InputStream inputStream = getContentResolver().openInputStream(uri);
+            StringBuilder sb = new StringBuilder();
+            if (inputStream != null)
+            {
+              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+              String line;
+              while ((line = reader.readLine()) != null)
+                {
+                  sb.append(line).append("\n");
+                }
+              reader.close();
+            }
 
-      String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
-      mWebView.evaluateJavascript(jsCode, null);
+            String existingContent = sb.toString().trim();
+
+            if (!existingContent.isEmpty())
+            {
+              // File already has notes: import them into the app instead of overwriting
+              String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
+              mWebView.evaluateJavascript(jsCode, null);
+              Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
+            }
+            else if (pendingFileData != null && !pendingFileData.isEmpty())
+            {
+              // File is empty: write the initial app content into it
+              OutputStream outputStream = getContentResolver().openInputStream(uri) != null ? 
+                getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
+              if (outputStream != null)
+              {
+                outputStream.write(pendingFileData.getBytes());
+                outputStream.close();
+              }
+              Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
+            }
+
+            String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
+            mWebView.evaluateJavascript(jsCode, null);
+          }
+        catch (Exception e)
+          {
+            Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+          }
+      }
     }
-    catch (Exception e)
-    {
-      Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
-      e.printStackTrace();
-    }
-  }
-}
     else if (requestCode == FILECHOOSER_RESULTCODE)
     {
       if (mFilePathCallback == null)
@@ -578,9 +578,9 @@ public class MainActivity extends Activity
           int count = data.getClipData().getItemCount();
           results = new Uri[count];
           for (int i = 0; i < count; i++)
-          {
-            results[i] = data.getClipData().getItemAt(i).getUri();
-          }
+            {
+              results[i] = data.getClipData().getItemAt(i).getUri();
+            }
         }
       }
       mFilePathCallback.onReceiveValue(results);
@@ -607,12 +607,12 @@ public class MainActivity extends Activity
     triggerAppCloseSync();
     super.onDestroy();
     try
-    {
-      unregisterReceiver(noteReceiver);
-    }
+      {
+        unregisterReceiver(noteReceiver);
+      }
     catch (Exception ignored)
-    {
-    }
+      {
+      }
 
     if (mWebView != null)
     {
@@ -623,159 +623,160 @@ public class MainActivity extends Activity
   // Section: JavaScript Interface
 
   public class WebAppInterface
-  {
-    @JavascriptInterface
-    public void setupSyncFile(String defaultFileName, String currentContent)
     {
-      pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty()) ? defaultFileName : "file.md";
-      pendingFileData = currentContent != null ? currentContent : "";
-
-      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType("text/markdown");
-      intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
-
-      try
+      @JavascriptInterface
+      public void setupSyncFile(String defaultFileName, String currentContent)
       {
-        startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
-      }
-      catch (ActivityNotFoundException e)
-      {
-        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
-      }
-    }
+        pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty()) ? defaultFileName : "file.md";
+        pendingFileData = currentContent != null ? currentContent : "";
 
-    @JavascriptInterface
-    public void saveFileSync(String filePath, String content)
-    {
-      if (filePath == null || filePath.trim().isEmpty()) return;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/markdown");
+        intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
 
-      try
-      {
-        Uri uri = Uri.parse(filePath);
-        OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-        if (outputStream == null)
-        {
-          outputStream = getContentResolver().openOutputStream(uri);
-        }
-        if (outputStream != null)
-        {
-          outputStream.write(content.getBytes());
-          outputStream.close();
-        }
-      }
-      catch (SecurityException se)
-      {
-        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Permission denied for sync file. Please re-select.", Toast.LENGTH_SHORT).show());
-      }
-      catch (Exception e)
-      {
-        e.printStackTrace();
-      }
-    }
-
-    @JavascriptInterface
-    public void triggerManualReadSync()
-    {
-      runOnUiThread(() -> readSyncFileAndInject());
-    }
-
-    @JavascriptInterface
-    public void importMarkdownFile()
-    {
-      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      
-      String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
-      intent.setType("*/*");
-      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-
-      try
-      {
-        startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
-      }
-      catch (ActivityNotFoundException e)
-      {
-        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
-      }
-    }
-
-    @JavascriptInterface
-    public void saveFile(String fileName, String fileData, String fileType)
-    {
-      pendingFileName = fileName;
-      pendingFileData = fileData;
-      pendingFileType = fileType;
-
-      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType(fileType);
-      intent.putExtra(Intent.EXTRA_TITLE, fileName);
-      startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
-    }
-
-    @JavascriptInterface
-    public void importJsonFile()
-    {
-      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType("application/json");
-      startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
-    }
-
-    @JavascriptInterface
-    public void toggleNotification(boolean enable)
-    {
-      runOnUiThread(() -> {
-        if (enable)
-        {
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        try
           {
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED)
+            startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
+          }
+        catch (ActivityNotFoundException e)
+          {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
+          }
+      }
+
+      @JavascriptInterface
+      public void saveFileSync(String filePath, String content)
+      {
+        if (filePath == null || filePath.trim().isEmpty()) return;
+
+        try
+          {
+            Uri uri = Uri.parse(filePath);
+            OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+            if (outputStream == null)
             {
-              requestPermissions(
-                new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                NOTIFICATION_PERMISSION_REQUEST);
-              return;
+              outputStream = getContentResolver().openOutputStream(uri);
+            }
+            if (outputStream != null)
+            {
+              outputStream.write(content.getBytes());
+              outputStream.close();
+
+              // Broadcast update to force Widget refresh instantly
+              Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+              updateIntent.setPackage(getPackageName());
+              sendBroadcast(updateIntent);
             }
           }
-          showNotification();
-        }
-        else
-        {
-          cancelNotification();
-        }
-      });
-    }
-
-    @JavascriptInterface
-    public void setInboxTabName(String tabName)
-    {
-      if (tabName == null || tabName.trim().isEmpty())
-      {
-        tabName = "Inbox";
+        catch (Exception e)
+          {
+            e.printStackTrace();
+          }
       }
-      inboxTabName = tabName.trim();
-      getSharedPreferences("note_queue", MODE_PRIVATE)
-        .edit().putString("inbox_tab_name", inboxTabName).apply();
-    }
 
-    @JavascriptInterface
-    public void toggleScreenshots(boolean disable)
-    {
-      runOnUiThread(() -> {
-        if (disable)
+      @JavascriptInterface
+      public void triggerManualReadSync()
+      {
+        runOnUiThread(() -> readSyncFileAndInject());
+      }
+
+      @JavascriptInterface
+      public void importMarkdownFile()
+      {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+
+        try
+          {
+            startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
+          }
+        catch (ActivityNotFoundException e)
+          {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
+          }
+      }
+
+      @JavascriptInterface
+      public void saveFile(String fileName, String fileData, String fileType)
+      {
+        pendingFileName = fileName;
+        pendingFileData = fileData;
+        pendingFileType = fileType;
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(fileType);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
+      }
+
+      @JavascriptInterface
+      public void importJsonFile()
+      {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+      }
+
+      @JavascriptInterface
+      public void toggleNotification(boolean enable)
+      {
+        runOnUiThread(() -> {
+          if (enable)
+          {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            {
+              if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                  != PackageManager.PERMISSION_GRANTED)
+              {
+                requestPermissions(
+                  new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                  NOTIFICATION_PERMISSION_REQUEST);
+                return;
+              }
+            }
+            showNotification();
+          }
+          else
+          {
+            cancelNotification();
+          }
+        });
+      }
+
+      @JavascriptInterface
+      public void setInboxTabName(String tabName)
+      {
+        if (tabName == null || tabName.trim().isEmpty())
         {
-          getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          tabName = "Inbox";
         }
-        else
-        {
-          getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        }
-      });
+        inboxTabName = tabName.trim();
+        getSharedPreferences("note_queue", MODE_PRIVATE)
+          .edit().putString("inbox_tab_name", inboxTabName).apply();
+      }
+
+      @JavascriptInterface
+      public void toggleScreenshots(boolean disable)
+      {
+        runOnUiThread(() -> {
+          if (disable)
+          {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          }
+          else
+          {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          }
+        });
+      }
     }
-  }
 
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)

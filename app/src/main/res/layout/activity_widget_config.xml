@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
-  android:layout_height="match_parent"
-  android:padding="16dp"
-  android:background="#121212">
+  android:layout_height="wrap_content"
+  android:background="#1A1A1A"
+  android:padding="16dp">
 
   <LinearLayout
     android:layout_width="match_parent"
@@ -13,31 +13,39 @@
     <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:text="Widget Settings"
-      android:textColor="#FFFFFF"
-      android:textSize="18sp"
+      android:text="WIDGET SETTINGS"
+      android:textColor="#33B5E5"
+      android:textSize="14sp"
       android:textStyle="bold"
-      android:paddingBottom="16dp" />
+      android:paddingBottom="4dp" />
+
+    <View
+      android:layout_width="match_parent"
+      android:layout_height="1dp"
+      android:background="#33B5E5"
+      android:layout_marginBottom="16dp" />
 
     <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:text="Select Tab to Display:"
+      android:text="Target Tab:"
       android:textColor="#CCCCCC"
+      android:textSize="13sp"
       android:paddingBottom="4dp" />
 
     <Spinner
       android:id="@+id/spinner_tabs"
       android:layout_width="match_parent"
       android:layout_height="48dp"
-      android:paddingBottom="12dp" />
+      android:background="@android:drawable/btn_dropdown" />
 
     <TextView
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:text="Background Transparency:"
+      android:text="Transparency Level:"
       android:textColor="#CCCCCC"
-      android:paddingTop="12dp"
+      android:textSize="13sp"
+      android:paddingTop="16dp"
       android:paddingBottom="4dp" />
 
     <SeekBar
@@ -52,6 +60,7 @@
       android:layout_height="wrap_content"
       android:text="Font Style:"
       android:textColor="#CCCCCC"
+      android:textSize="13sp"
       android:paddingTop="16dp"
       android:paddingBottom="4dp" />
 
@@ -83,7 +92,9 @@
       android:id="@+id/btn_save_widget_config"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:text="Save Widget" />
+      android:text="Save"
+      android:textColor="#FFFFFF"
+      android:background="@android:drawable/btn_default" />
 
   </LinearLayout>
 </ScrollView>

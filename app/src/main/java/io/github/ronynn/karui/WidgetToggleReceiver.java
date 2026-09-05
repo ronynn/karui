@@ -2,7 +2,6 @@ package io.github.ronynn.karui;
 
 import android.appwidget.AppWidgetManager;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -21,6 +20,8 @@ public class WidgetToggleReceiver extends BroadcastReceiver
   public void onReceive(Context context, Intent intent)
   {
     String rawNote = intent.getStringExtra("raw_note");
+    int widgetId = intent.getIntExtra("widget_id", AppWidgetManager.INVALID_APPWIDGET_ID);
+
     if (rawNote == null || rawNote.isEmpty()) return;
 
     SharedPreferences syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
@@ -78,13 +79,20 @@ public class WidgetToggleReceiver extends BroadcastReceiver
       }
 
       AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
-      ComponentName thisWidget = new ComponentName(context, NotesWidgetProvider.class);
-      int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
-      appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list_view);
+      if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID)
+      {
+        appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list_view);
+      }
+      else
+      {
+        int[] ids = appWidgetManager.getAppWidgetIds(new android.content.ComponentName(context, NotesWidgetProvider.class));
+        appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list_view);
+      }
 
       Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
       updateIntent.setPackage(context.getPackageName());
       context.sendBroadcast(updateIntent);
+
     }
     catch (Exception e)
     {

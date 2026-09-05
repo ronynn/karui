@@ -13,6 +13,8 @@ import android.widget.RemoteViews;
 
 public class NotesWidgetProvider extends AppWidgetProvider
 {
+  public static final String ACTION_WIDGET_REFRESH = "io.github.ronynn.karui.ACTION_WIDGET_REFRESH";
+
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
   {
@@ -27,18 +29,16 @@ public class NotesWidgetProvider extends AppWidgetProvider
   {
     super.onReceive(context, intent);
 
-    if (MainActivity.ACTION_NOTE_ADDED.equals(intent.getAction()) ||
-        AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(intent.getAction()))
+    String action = intent.getAction();
+    if (MainActivity.ACTION_NOTE_ADDED.equals(action) ||
+        AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action) ||
+        ACTION_WIDGET_REFRESH.equals(action))
     {
       AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
       ComponentName thisWidget = new ComponentName(context, NotesWidgetProvider.class);
       int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
-      appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list_view);
 
-      for (int id : appWidgetIds)
-      {
-        updateAppWidget(context, appWidgetManager, id);
-      }
+      appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list_view);
     }
   }
 
@@ -67,6 +67,13 @@ public class NotesWidgetProvider extends AppWidgetProvider
       context, appWidgetId, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
     );
     views.setPendingIntentTemplate(R.id.widget_list_view, togglePendingIntent);
+
+    Intent refreshIntent = new Intent(context, NotesWidgetProvider.class);
+    refreshIntent.setAction(ACTION_WIDGET_REFRESH);
+    PendingIntent refreshPendingIntent = PendingIntent.getBroadcast(
+      context, appWidgetId, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+    );
+    views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPendingIntent);
 
     Intent configIntent = new Intent(context, WidgetConfigActivity.class);
     configIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);

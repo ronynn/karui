@@ -22,13 +22,21 @@
       android:layout_weight="1"
       android:text="Karui Notes"
       android:textColor="#FFFFFF"
-      android:textSize="15sp"
+      android:textSize="14sp"
       android:textStyle="bold" />
 
     <ImageView
+      android:id="@+id/widget_refresh_btn"
+      android:layout_width="22dp"
+      android:layout_height="22dp"
+      android:layout_marginEnd="8dp"
+      android:src="@android:drawable/ic_popup_sync"
+      android:contentDescription="Refresh" />
+
+    <ImageView
       android:id="@+id/widget_settings_btn"
-      android:layout_width="24dp"
-      android:layout_height="24dp"
+      android:layout_width="22dp"
+      android:layout_height="22dp"
       android:src="@android:drawable/ic_menu_preferences"
       android:contentDescription="Settings" />
   </LinearLayout>
