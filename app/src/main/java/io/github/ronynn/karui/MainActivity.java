@@ -44,17 +44,21 @@ public class MainActivity extends Activity
 {
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
 
+  // Section: Request Codes
   private static final int CREATE_FILE_REQUEST_CODE = 1;
   private static final int IMPORT_FILE_REQUEST_CODE = 2;
   private static final int FILECHOOSER_RESULTCODE = 3;
   private static final int SYNC_FILE_REQUEST_CODE = 4;
+  private static final int IMPORT_MD_FILE_REQUEST_CODE = 5;
   private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
 
+  // Section: Constants
   private static final String CHANNEL_ID = "note_reply_channel";
   private static final int NOTIFICATION_ID = 1;
   private static final String PREFS_SYNC = "sync_prefs";
   private static final String KEY_SYNC_URI = "sync_file_uri";
 
+  // Section: Class Members
   private WebView mWebView;
   private View splashScreen;
 
@@ -181,7 +185,7 @@ public class MainActivity extends Activity
     }
   }
 
-  // ---------- NOTIFICATION HANDLING ----------
+  // Section: Notification Handling
 
   private void createNotificationChannel()
   {
@@ -330,7 +334,7 @@ public class MainActivity extends Activity
     isNotificationActive = false;
   }
 
-  // ---------- DATA INJECTION & SYNC ----------
+  // Section: Data Injection & Sync
 
   private void injectPendingNotes()
   {
@@ -417,7 +421,7 @@ public class MainActivity extends Activity
     triggerAppCloseSync();
   }
 
-  // ---------- ACTIVITY RESULTS & LIFECYCLE ----------
+  // Section: Activity Results & Lifecycle
 
   @Override
   protected void onActivityResult(int requestCode, int resultCode, Intent data)
@@ -461,6 +465,32 @@ public class MainActivity extends Activity
           String jsonContent = sb.toString();
 
           String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
+          mWebView.evaluateJavascript(jsCode, null);
+        }
+        catch (IOException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
+    else if (requestCode == IMPORT_MD_FILE_REQUEST_CODE && resultCode == RESULT_OK)
+    {
+      if (data != null && data.getData() != null)
+      {
+        try
+        {
+          InputStream inputStream = getContentResolver().openInputStream(data.getData());
+          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+          StringBuilder sb = new StringBuilder();
+          String line;
+          while ((line = reader.readLine()) != null)
+          {
+            sb.append(line).append("\n");
+          }
+          reader.close();
+          String mdContent = sb.toString();
+
+          String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
           mWebView.evaluateJavascript(jsCode, null);
         }
         catch (IOException e)
@@ -569,7 +599,7 @@ public class MainActivity extends Activity
     }
   }
 
-  // ---------- JAVASCRIPT INTERFACE ----------
+  // Section: JavaScript Interface
 
   public class WebAppInterface
   {
@@ -630,25 +660,24 @@ public class MainActivity extends Activity
     }
 
     @JavascriptInterface
-public void importMarkdownFile()
-{
-  Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-  intent.addCategory(Intent.CATEGORY_OPENABLE);
-  
-  // Broaden MIME types so Android's SAF doesn't grey out .md or .txt files
-  String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
-  intent.setType("*/*");
-  intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+    public void importMarkdownFile()
+    {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      
+      String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
+      intent.setType("*/*");
+      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
 
-  try
-  {
-    startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
-  }
-  catch (ActivityNotFoundException e)
-  {
-    Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show();
-  }
-}
+      try
+      {
+        startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
+      }
+      catch (ActivityNotFoundException e)
+      {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
+      }
+    }
 
     @JavascriptInterface
     public void saveFile(String fileName, String fileData, String fileType)
