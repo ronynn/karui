@@ -53,10 +53,7 @@ So many new features might as well call it Karui++ now. Almost all new features 
 - Easter egg games (what? my todolist has games?), following the trend from back in the days
 - Optional button ripple effects
 - Now you can edit notes, √c and √d options replaced by a : dropdown
-
-Bug Fixes/Additional options
-- Keep keyboard on when switching tabs
-- Longpressing tab now always puts the dropdown in the center
+- Upcoming feature with already working versions: Widgets
 
 
 ## Working Demos before downloading
@@ -105,13 +102,11 @@ Karui is being developed under the GPLv3 License.
 - [x] Make the UI more responsive for tablets and larger screens
 - [x] Letting user to select their own fonts from file picker
 - [x] Tab adding bar position fix
-
-Cancelled items from roadmap
 - [ ] Resolve dynamic color issues (Need PC Android Studio Setup)
 - [ ] Add translations (didn't face the need/demand)
-- [ ] Develop widgets (e.g., Java fetching notes from localStorage, a static scrollable list of existing notes)(very difficult)
-- [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)(syncing will be too messy, just export json when changing phones)
-- [ ] Integrate app data piping to Obsidian or a new notes app (I dont use obsidian on android any more, too slow)
+- [x] Develop widgets (e.g., Java fetching notes from the .md file that gets synced)
+- [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
+- [x] Integrate app data piping to Obsidian or a new notes app
 - [ ] Incorporate a QR library to generate QR codes from notes and read them using the system camera, facilitating easy note sharing between devices. (qr too limited)
 
 
