@@ -1,0 +1,1 @@
+- Widgets are now available in BETA, only works if you have setup sync, the widgets reads from that .md file.

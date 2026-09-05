@@ -48,5 +48,34 @@
       android:name=".NoteReplyReceiver"
       android:exported="false" />
 
+    <activity
+      android:name=".WidgetConfigActivity"
+      android:exported="true"
+      android:theme="@android:style/Theme.DeviceDefault.Dialog">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+
+    <receiver
+      android:name=".WidgetToggleReceiver"
+      android:exported="false" />
+
+    <receiver
+      android:name=".NotesWidgetProvider"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        <action android:name="io.github.ronynn.karui.ACTION_NOTE_ADDED" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/notes_widget_info" />
+    </receiver>
+
+    <service
+      android:name=".NotesWidgetService"
+      android:permission="android.permission.BIND_REMOTEVIEWS" />
+
   </application>
 </manifest>

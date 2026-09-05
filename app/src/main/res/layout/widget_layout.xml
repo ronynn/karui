@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/widget_root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:background="#D9222222"
+  android:padding="8dp">
+
+  <LinearLayout
+    android:id="@+id/widget_header"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingBottom="6dp">
+
+    <TextView
+      android:id="@+id/widget_title"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:text="Karui Notes"
+      android:textColor="#FFFFFF"
+      android:textSize="15sp"
+      android:textStyle="bold" />
+
+    <ImageView
+      android:id="@+id/widget_settings_btn"
+      android:layout_width="24dp"
+      android:layout_height="24dp"
+      android:src="@android:drawable/ic_menu_preferences"
+      android:contentDescription="Settings" />
+  </LinearLayout>
+
+  <ListView
+    android:id="@+id/widget_list_view"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:divider="@android:color/transparent"
+    android:dividerHeight="2dp" />
+
+  <TextView
+    android:id="@+id/widget_empty_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:text="No notes found.\nSet up a sync file or select a tab."
+    android:textColor="#AAAAAA"
+    android:textSize="13sp"
+    android:visibility="gone" />
+
+</LinearLayout>
