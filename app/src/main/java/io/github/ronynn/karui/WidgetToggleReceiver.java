@@ -6,10 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Paint;
 import android.net.Uri;
-import android.text.SpannableString;
-import android.text.style.StrikethroughSpan;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -24,8 +21,6 @@ public class WidgetToggleReceiver extends BroadcastReceiver
   public void onReceive(Context context, Intent intent)
   {
     String rawNote = intent.getStringExtra("raw_note");
-    int widgetId = intent.getIntExtra("widget_id", AppWidgetManager.INVALID_APPWIDGET_ID);
-
     if (rawNote == null || rawNote.isEmpty()) return;
 
     SharedPreferences syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
@@ -90,7 +85,6 @@ public class WidgetToggleReceiver extends BroadcastReceiver
       Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
       updateIntent.setPackage(context.getPackageName());
       context.sendBroadcast(updateIntent);
-
     }
     catch (Exception e)
     {

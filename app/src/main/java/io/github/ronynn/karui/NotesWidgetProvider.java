@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
-import android.view.View;
 import android.widget.RemoteViews;
 
 public class NotesWidgetProvider extends AppWidgetProvider
@@ -71,6 +70,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
 
     Intent configIntent = new Intent(context, WidgetConfigActivity.class);
     configIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+    configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     PendingIntent configPendingIntent = PendingIntent.getActivity(
       context, appWidgetId, configIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
     );

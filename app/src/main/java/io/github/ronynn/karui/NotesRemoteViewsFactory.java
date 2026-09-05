@@ -4,7 +4,6 @@ import android.appwidget.AppWidgetManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.net.Uri;
 import android.text.SpannableString;
 import android.text.style.StrikethroughSpan;
@@ -62,9 +61,6 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
     String rawLine = mRawNotes.get(position);
 
-    SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
-    String fontStyle = widgetPrefs.getString("widget_font_" + mAppWidgetId, "DEFAULT");
-
     CharSequence displayText = rawLine;
     if (rawLine.startsWith("- [x]"))
     {
@@ -86,7 +82,9 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   @Override
   public RemoteViews getLoadingView()
   {
-    return null;
+    RemoteViews loadingView = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
+    loadingView.setTextViewText(R.id.widget_item_text, "");
+    return loadingView;
   }
 
   @Override
