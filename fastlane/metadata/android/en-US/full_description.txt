@@ -26,7 +26,7 @@ So many new features might as well call it Karui++ now. Almost all new features 
 - Optionally disable screenshots for privacy when screensharing or in general
 - Optional UI Sounds
 - Optional celebration mode with confetti
-- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird and Snake. 
+- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird and Snake. Use the codes FLAPTHEBIRD AND SLITHER to test them out, share your highscores on our telegram and reddit.
 - Optional button ripple effects
 - Previously I said editing notes features won't be added but now you can edit notes, √c and √d options replaced by a : dropdown
 

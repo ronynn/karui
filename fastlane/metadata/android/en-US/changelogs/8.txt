@@ -1,6 +1,9 @@
-- Input box expands
 - Imported fonts can now be removed
-- Markdown import (Beta) and export function has been brought back
+- Markdown import (Beta) and export
+- Autosync (Beta) to use with syncthing
+- Note tabs all stay on screen
+- Toggle to disable swipe
+- Input box expands
 - App title respects status bar space now
 - Important notes can be pinned
 - Introduced a thoughtful quotes box
