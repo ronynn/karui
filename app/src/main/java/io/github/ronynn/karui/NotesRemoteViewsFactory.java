@@ -61,12 +61,19 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
     String rawLine = mRawNotes.get(position);
 
-    CharSequence displayText = rawLine;
-    if (rawLine.startsWith("- [x]"))
+    String cleanText = rawLine.replaceAll("<!--.*?-->", "").trim();
+    CharSequence displayText = cleanText;
+
+    if (cleanText.startsWith("- [x]"))
     {
-      SpannableString spannable = new SpannableString(rawLine);
-      spannable.setSpan(new StrikethroughSpan(), 0, rawLine.length(), 0);
+      String textOnly = cleanText.substring(5).trim();
+      SpannableString spannable = new SpannableString(textOnly);
+      spannable.setSpan(new StrikethroughSpan(), 0, textOnly.length(), 0);
       displayText = spannable;
+    }
+    else if (cleanText.startsWith("- [ ]"))
+    {
+      displayText = cleanText.substring(5).trim();
     }
 
     views.setTextViewText(R.id.widget_item_text, displayText);
@@ -78,7 +85,6 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
 
     return views;
   }
-
   @Override
   public RemoteViews getLoadingView()
   {
@@ -118,57 +124,57 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
-    {
-      Uri uri = Uri.parse(uriStr);
-      InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
-      if (inputStream == null) return;
-
-      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-      String line;
-      
-      boolean hasCategoryHeaders = false;
-      String currentCategory = "";
-
-      List<String> uncategorizedNotes = new ArrayList<>();
-      List<String> matchedNotes = new ArrayList<>();
-
-      while ((line = reader.readLine()) != null)
       {
-        String trimmed = line.trim();
-        if (trimmed.startsWith("## "))
-        {
-          hasCategoryHeaders = true;
-          currentCategory = trimmed.replace("## ", "").trim();
-        }
-        else if (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]"))
-        {
-          if (hasCategoryHeaders)
+        Uri uri = Uri.parse(uriStr);
+        InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
+        if (inputStream == null) return;
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        String line;
+
+        boolean hasCategoryHeaders = false;
+        String currentCategory = "";
+
+        List<String> uncategorizedNotes = new ArrayList<>();
+        List<String> matchedNotes = new ArrayList<>();
+
+        while ((line = reader.readLine()) != null)
           {
-            if (currentCategory.equalsIgnoreCase(targetTab))
+            String trimmed = line.trim();
+            if (trimmed.startsWith("## "))
             {
-              matchedNotes.add(trimmed);
+              hasCategoryHeaders = true;
+              currentCategory = trimmed.replace("## ", "").trim();
+            }
+            else if (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]"))
+            {
+              if (hasCategoryHeaders)
+              {
+                if (currentCategory.equalsIgnoreCase(targetTab))
+                {
+                  matchedNotes.add(trimmed);
+                }
+              }
+              else
+              {
+                uncategorizedNotes.add(trimmed);
+              }
             }
           }
-          else
-          {
-            uncategorizedNotes.add(trimmed);
-          }
+        reader.close();
+
+        if (hasCategoryHeaders)
+        {
+          mRawNotes.addAll(matchedNotes);
+        }
+        else
+        {
+          mRawNotes.addAll(uncategorizedNotes);
         }
       }
-      reader.close();
-
-      if (hasCategoryHeaders)
-      {
-        mRawNotes.addAll(matchedNotes);
-      }
-      else
-      {
-        mRawNotes.addAll(uncategorizedNotes);
-      }
-    }
     catch (Exception e)
-    {
-      e.printStackTrace();
-    }
+      {
+        e.printStackTrace();
+      }
   }
 }

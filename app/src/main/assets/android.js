@@ -435,7 +435,7 @@ function openNoteMenu(e, id)
   let pinBtn = document.getElementById('btn-pin-note');
   if (pinBtn)
   {
-    pinBtn.textContent = (n && n.pinned) ? 'Unpin Note' : 'Pin Note';
+    pinBtn.textContent = (n && n.pinned) ? 'Unpin' : 'Pin';
   }
 
   menu.style.display = 'block';
@@ -527,7 +527,6 @@ function renderNotes()
         window.location.href = txt.startsWith('http') ? txt : 'https://' + txt;
       }
 
-      // Directly mutate DOM class to avoid restarting CSS keyframe animations across the list
       d.classList.toggle('done', n.completed);
 
       updateStats();

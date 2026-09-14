@@ -19,9 +19,9 @@ public class NotesWidgetProvider extends AppWidgetProvider
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
   {
     for (int appWidgetId : appWidgetIds)
-    {
-      updateAppWidget(context, appWidgetManager, appWidgetId);
-    }
+      {
+        updateAppWidget(context, appWidgetManager, appWidgetId);
+      }
   }
 
   @Override
@@ -49,16 +49,11 @@ public class NotesWidgetProvider extends AppWidgetProvider
     int transparencyPct = widgetPrefs.getInt("widget_transparency_" + appWidgetId, 15);
 
     int alpha = (int) ((1.0f - (transparencyPct / 100.0f)) * 255);
-    int backgroundColor = Color.argb(alpha, 34, 34, 34);
-
-    Intent serviceIntent = new Intent(context, NotesWidgetService.class);
-    serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-    serviceIntent.setData(Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME)));
+    int backgroundColor = Color.argb(alpha, 255, 255, 255);
 
     RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
     views.setTextViewText(R.id.widget_title, tabTitle);
-    views.setInt(R.id.widget_root, "setBackgroundColor", backgroundColor);
-
+    views.setInt(R.id.widget_root, "setColorFilter", backgroundColor);
     views.setRemoteAdapter(R.id.widget_list_view, serviceIntent);
     views.setEmptyView(R.id.widget_list_view, R.id.widget_empty_view);
 
