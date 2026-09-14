@@ -195,19 +195,52 @@ export function importJsonFile(file, appStore)
   {
     try
     {
-      let data = JSON.parse(ev.target.result)
-      if (!Array.isArray(data))
+      let parsed = JSON.parse(ev.target.result)
+      let items = []
+      if (Array.isArray(parsed))
+      {
+        items = parsed
+      }
+      else if (parsed && Array.isArray(parsed.notes))
+      {
+        items = parsed.notes
+        if (Array.isArray(parsed.noteCategories))
+        {
+          parsed.noteCategories.forEach(c =>
+          {
+            if (typeof c === 'string' && !appStore.noteCategories.includes(c))
+            {
+              appStore.noteCategories.push(c)
+            }
+          })
+        }
+      }
+      else
       {
         appStore.showToast('Format Error!')
         return
       }
-      let isValid = data.every(n => n && typeof n.text === 'string')
-      if (!isValid)
+
+      let validNotes = items.map(item =>
+      {
+        if (typeof item === 'string')
+        {
+          return { text: item }
+        }
+        if (item && typeof item.text === 'string')
+        {
+          return item
+        }
+        return null
+      }).filter(Boolean)
+
+      if (validNotes.length === 0 && items.length > 0)
       {
         appStore.showToast('Format Error!')
         return
       }
-      appStore.mergeNotes(data)
+
+      appStore.mergeNotes(validNotes)
       appStore.showToast('Synced!')
     }
     catch (err)

@@ -24,18 +24,17 @@
     [data-theme="everforest"] { --bg: #2d353b; --surface: #3d484d; --border: #a7c080; --text: #d3c6aa; --accent: #a7c080; --accent-txt: #232a2e; --gray: #859289; }
     [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
     [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; padding-top: 5px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
-    header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(15px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(10px * var(--ui-scale)); transition: all 0.25s ease-out; }
-    #app-title { font-size: calc(46px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: transform 0.3s ease-out, opacity 0.3s ease-out, max-height 0.3s ease-out, margin 0.3s ease-out; opacity: 1; max-height: calc(60px * var(--ui-scale)); margin-bottom: -14px; margin-top: 12px; line-height: 1; overflow: hidden; transform: translateY(0); }
-    header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; transform: translateY(-30px); pointer-events: none; }
+    header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: all 0.25s ease-out; }
+    #app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.25s ease-out; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -6px; margin-top: 4px; line-height: 1; overflow: hidden; transform: translateY(0); }
+    header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 0; transform: translateY(-20px); pointer-events: none; }
     .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
     .pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
     .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
     #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
-    .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(120px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
-    .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 9px; }
+    .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(95px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
+    .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 22px; }
     .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
     input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; position: relative; overflow: hidden; }
     textarea { resize: none; overflow-y: auto; height: auto; min-height: calc(80px * var(--ui-scale)); max-height: calc(280px * var(--ui-scale)); padding-top: calc(10px * var(--ui-scale)); }
@@ -45,7 +44,7 @@
     button:active { filter: brightness(0.8); }
     .input-actions-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 8px; flex-wrap: wrap; }
     .box1-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-    .icon-btn-small { width: 32px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; }
+    .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; }
     .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
     .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
     .toggle-container:last-of-type { border-bottom: none; }
@@ -142,14 +141,14 @@
   <div class="screen" id="settings-screen" @scroll="handleScroll">
     <div class="box">
       <span class="box-title">Box 3: Visuals & Usage</span>
-      <h4>Themes</h4>
+      <p style="padding-bottom: 5px;">Themes</p>
       <div class="grid-btns" id="theme-btns">
         <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
           {{ t.label }}
         </button>
       </div>
 
-      <h4 style="padding-top: 10px;">Fonts</h4>
+      <p style="padding-top: 10px;padding-bottom:5px;">Fonts</p>
       <div class="grid-btns">
         <button v-for="f in defaultFonts" :key="f.val" class="theme-btn" :class="{ active: currentFont === f.val }" @click="setFont(f.val)">
           {{ f.name }}
@@ -160,9 +159,8 @@
         </button>
         <button class="theme-btn" style="border-style: dashed;" @click="triggerFontUpload">+ CUSTOM</button>
       </div>
-      <input type="file" ref="fontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none" @change="loadCustomFont">
-
-      <h4 style="padding-top: 10px;">UI Size</h4>
+      <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" style="display:none" @change="loadCustomFont">
+      <br/>
       <div class="ui-size-ctrl">
         <button v-for="size in uiSizes" :key="size.scale" :class="{ active: Math.abs(uiScale - size.scale) < 0.05 }" @click="setUiSize(size.scale)">
           {{ size.label }}
@@ -213,7 +211,6 @@
             <span class="slider"></span>
           </label>
         </div>
-
 
         <div class="toggle-container">
           <span>UI Sounds</span>
@@ -278,8 +275,8 @@
         <button class="btn-subtle" @click="triggerImport">Import JSON</button>
         <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
         <button class="btn-subtle" @click="triggerImportMD">Import MD (BETA)</button>
-        <input type="file" ref="importJsonInput" style="display:none" @change="importData">
-        <input type="file" ref="importMdInput" accept=".md,.txt" style="display:none" @change="importMarkdown">
+        <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
+        <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
       </div>
 
       <div class="section-divider">
@@ -341,26 +338,7 @@
 
 <div id="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
 
-
-
-
-
-
-
-  
 <script type="module" src="index.js"></script>
-
-<script>
-  
-  /*
-  if ('serviceWorker' in navigator)
-  {
-    navigator.serviceWorker.register('./sw.js')
-  }
-  */
-  
-</script>    
-    
 
 </body>
 </html>

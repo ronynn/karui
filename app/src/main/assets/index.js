@@ -4,6 +4,33 @@ import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
 import { playSound, createRipple, tryRunGame } from './extras.js'
 
+// --- SECTION: VANILLA JS DOM UTILITIES ---
+export function autoExpandTextarea(el)
+{
+  if (!el) return
+  el.style.height = 'auto'
+  let calculatedHeight = el.scrollHeight
+  let maxHeight = window.innerHeight * 0.45
+  let minHeight = 80
+  let targetHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight))
+  el.style.height = targetHeight + 'px'
+}
+
+export function applyTheme(theme)
+{
+  document.body.setAttribute('data-theme', theme)
+}
+
+export function applyFont(font)
+{
+  document.body.style.fontFamily = font.startsWith('CustomFont_') ? `'${font}', system-ui, sans-serif` : font
+}
+
+export function applyUiScale(scale)
+{
+  document.documentElement.style.setProperty('--ui-scale', scale)
+}
+
 const appStore = reactive(
 {
   noteCategories: ['Main'],
@@ -201,11 +228,26 @@ const appStore = reactive(
     this.inboxTabName = localStorage.getItem("inboxTabName") || "Inbox"
     this.syncFilePath = localStorage.getItem("syncFilePath") || ""
 
+    let now = Date.now()
+    this.noteCategories.forEach((cat, idx) =>
+    {
+      if (!this.categoryMeta[cat])
+      {
+        this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+      }
+    })
+
+    this.notes.forEach((n, idx) =>
+    {
+      if (!n.id) n.id = now + idx
+      if (!n.updatedAt) n.updatedAt = now
+    })
+
     this.customFonts = await initFontSystem()
 
-    this.setTheme(this.currentTheme)
-    this.setFont(this.currentFont)
-    this.applyUiScale(this.uiScale)
+    applyTheme(this.currentTheme)
+    applyFont(this.currentFont)
+    applyUiScale(this.uiScale)
 
     if (!this.noteCategories.includes(this.activeCategory))
     {
@@ -248,6 +290,16 @@ const appStore = reactive(
     localStorage.setItem("notificationEnabled", this.notificationEnabled)
     localStorage.setItem("inboxTabName", this.inboxTabName)
     localStorage.setItem("syncFilePath", this.syncFilePath)
+
+    if (this.syncFilePath)
+    {
+      this.exportMarkdownSilent()
+    }
+  },
+
+  autoExpandTextarea(el)
+  {
+    autoExpandTextarea(el)
   },
 
   // --- SECTION: GESTURES & INTERACTIONS ---
@@ -324,6 +376,11 @@ const appStore = reactive(
   {
     this.currentScreenIdx = idx
     this.closeAllMenus()
+    const screens = document.querySelectorAll('.screen')
+    if (screens[idx])
+    {
+      this.isScrolled = screens[idx].scrollTop > 10
+    }
   },
 
   handleScroll(e)
@@ -371,27 +428,22 @@ const appStore = reactive(
   setTheme(t)
   {
     this.currentTheme = t
-    document.body.setAttribute('data-theme', t)
+    applyTheme(t)
     this.saveData()
   },
 
   setFont(f)
   {
     this.currentFont = f
-    document.body.style.fontFamily = f.startsWith('CustomFont_') ? `'${f}', system-ui, sans-serif` : f
+    applyFont(f)
     this.saveData()
   },
 
   setUiSize(s)
   {
     this.uiScale = s
-    this.applyUiScale(s)
+    applyUiScale(s)
     this.saveData()
-  },
-
-  applyUiScale(s)
-  {
-    document.documentElement.style.setProperty('--ui-scale', s)
   },
 
   toggleSortAlphabetical()
@@ -739,21 +791,11 @@ const appStore = reactive(
     }
   },
 
-  autoExpandTextarea(el)
-  {
-    if (!el) return
-    el.style.height = 'auto'
-    let calculatedHeight = el.scrollHeight
-    let maxHeight = window.innerHeight * 0.45
-    let minHeight = 80 * this.uiScale
-    let targetHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight))
-    el.style.height = targetHeight + 'px'
-  },
-
   // --- SECTION: CUSTOM FONTS ---
   triggerFontUpload()
   {
-    this.$refs.fontFileInput.click()
+    let el = document.getElementById('font-file-input')
+    if (el) el.click()
   },
 
   async loadCustomFont(e)
@@ -770,6 +812,10 @@ const appStore = reactive(
     catch (err)
     {
       alert("Failed to load font file.")
+    }
+    finally
+    {
+      e.target.value = ''
     }
   },
 
@@ -791,8 +837,15 @@ const appStore = reactive(
 
   triggerImport()
   {
-    if (window.Android && window.Android.importJsonFile) window.Android.importJsonFile()
-    else this.$refs.importJsonInput.click()
+    if (window.Android && window.Android.importJsonFile)
+    {
+      window.Android.importJsonFile()
+    }
+    else
+    {
+      let el = document.getElementById('import-json-input')
+      if (el) el.click()
+    }
   },
 
   importData(e)
@@ -805,37 +858,57 @@ const appStore = reactive(
   {
     if (!Array.isArray(imported)) return
     let now = Date.now()
-    imported.forEach(n =>
+    imported.forEach((n, idx) =>
     {
       if (!n || typeof n.text !== 'string') return
       let cat = n.category || 'Main'
-      if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
-      let noteId = typeof n.id === 'number' && !isNaN(n.id) ? n.id : now + Math.floor(Math.random() * 100000)
-      let existingIdx = this.notes.findIndex(x => x.id === noteId)
-      let itemUpdatedAt = n.updatedAt || now
-      if (existingIdx > -1)
+      if (!this.noteCategories.includes(cat))
       {
-        let existing = this.notes[existingIdx]
+        this.noteCategories.push(cat)
+      }
+      if (!this.categoryMeta)
+      {
+        this.categoryMeta = {}
+      }
+      if (!this.categoryMeta[cat])
+      {
+        this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+      }
+
+      let noteId = (typeof n.id === 'number' && !isNaN(n.id)) ? n.id : null
+      let existing = null
+      if (noteId)
+      {
+        existing = this.notes.find(x => x.id === noteId)
+      }
+      if (!existing)
+      {
+        existing = this.notes.find(x => x.text === n.text && x.category === cat)
+      }
+
+      let itemUpdatedAt = (typeof n.updatedAt === 'number' && !isNaN(n.updatedAt)) ? n.updatedAt : now
+      let itemPinned = typeof n.pinned === 'boolean' ? n.pinned : false
+      let itemCompleted = Boolean(n.completed)
+
+      if (existing)
+      {
         if (itemUpdatedAt >= (existing.updatedAt || 0))
         {
-          this.notes[existingIdx] = {
-            id: noteId,
-            text: n.text,
-            completed: Boolean(n.completed),
-            category: cat,
-            pinned: Boolean(n.pinned),
-            updatedAt: itemUpdatedAt
-          }
+          existing.text = n.text
+          existing.completed = itemCompleted
+          existing.category = cat
+          existing.pinned = itemPinned
+          existing.updatedAt = itemUpdatedAt
         }
       }
       else
       {
         this.notes.push({
-          id: noteId,
+          id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
           text: n.text,
-          completed: Boolean(n.completed),
+          completed: itemCompleted,
           category: cat,
-          pinned: Boolean(n.pinned),
+          pinned: itemPinned,
           updatedAt: itemUpdatedAt
         })
       }
@@ -850,8 +923,15 @@ const appStore = reactive(
 
   triggerImportMD()
   {
-    if (window.Android && window.Android.importMarkdownFile) window.Android.importMarkdownFile()
-    else this.$refs.importMdInput.click()
+    if (window.Android && window.Android.importMarkdownFile)
+    {
+      window.Android.importMarkdownFile()
+    }
+    else
+    {
+      let el = document.getElementById('import-md-input')
+      if (el) el.click()
+    }
   },
 
   importMarkdown(e)
@@ -897,6 +977,7 @@ const appStore = reactive(
 
   exportMarkdownSilent()
   {
+    if (!this.syncFilePath) return
     let now = Date.now()
     this.notes.forEach(n =>
     {
