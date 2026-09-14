@@ -1,11 +1,14 @@
 import { createApp, reactive } from './petite-vue.es.js'
 import { setupDragAndDrop } from './dragdrop.js'
-import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
+import { initFontSystem } from './fonts.js'
 import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
-import { playSound, createRipple, tryRunGame } from './extras.js'
+import { playSound, tryRunGame } from './extras.js'
+import { uiMixin } from './ui.js'
 
 const appStore = reactive(
 {
+  ...uiMixin,
+
   noteCategories: ['Main'],
   activeCategory: 'Main',
   notes: [],
@@ -93,89 +96,6 @@ const appStore = reactive(
     { label: 'XL', scale: 1.3 }
   ],
 
-  get displayedNotes()
-  {
-    let key = `${this.activeCategory}_${this.sortAlphabetical}_${this.moveCompletedBottom}_${this.notes.length}`
-    if (this._cacheKey === key && !this._dirtyNotes)
-    {
-      return this._displayedCache
-    }
-
-    let result = []
-    let len = this.notes.length
-    for (let i = 0; i < len; i++)
-    {
-      if (this.notes[i].category === this.activeCategory)
-      {
-        result.push(this.notes[i])
-      }
-    }
-
-    result.sort((a, b) =>
-    {
-      if (a.pinned !== b.pinned)
-      {
-        return a.pinned ? -1 : 1
-      }
-      if (this.moveCompletedBottom && a.completed !== b.completed)
-      {
-        return a.completed ? 1 : -1
-      }
-      if (this.sortAlphabetical)
-      {
-        return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
-      }
-      return 0
-    })
-
-    this._cacheKey = key
-    this._dirtyNotes = false
-    this._displayedCache = result
-    return result
-  },
-
-  get statsText()
-  {
-    let rem = 0
-    let comp = 0
-    let currentCatNotes = this.notes.filter(n => n.category === this.activeCategory)
-    currentCatNotes.forEach(n => n.completed ? comp++ : rem++)
-    return `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`
-  },
-
-  get contextMenuStyle()
-  {
-    return {
-      display: this.contextMenuVisible ? 'block' : 'none'
-    }
-  },
-
-  get noteMenuStyle()
-  {
-    return {
-      display: this.noteMenuVisible ? 'block' : 'none',
-      left: `${this.noteMenuPos.x}px`,
-      top: `${this.noteMenuPos.y}px`
-    }
-  },
-
-  get activeNotePinned()
-  {
-    let n = this.notes.find(x => x.id === this.activeNoteMenuId)
-    return n ? n.pinned : false
-  },
-
-  get canMoveTabLeft()
-  {
-    return this.noteCategories.indexOf(this.contextTab) > 0
-  },
-
-  get canMoveTabRight()
-  {
-    let idx = this.noteCategories.indexOf(this.contextTab)
-    return idx >= 0 && idx < this.noteCategories.length - 1
-  },
-
   // --- SECTION: INITIALISATION & LIFECYCLE ---
   async init()
   {
@@ -250,157 +170,13 @@ const appStore = reactive(
     localStorage.setItem("syncFilePath", this.syncFilePath)
   },
 
-  // --- SECTION: GESTURES & INTERACTIONS ---
-  handleTouchStart(e)
-  {
-    if (this.disableSwipe) return
-    this.touchStartX = e.touches[0].clientX
-    this.touchStartY = e.touches[0].clientY
-  },
-
-  handleTouchMove(e)
-  {
-    if (this.disableSwipe) return
-    this.touchEndX = e.touches[0].clientX
-    this.touchEndY = e.touches[0].clientY
-  },
-
-  handleTouchEnd()
-  {
-    if (this.disableSwipe) return
-    let deltaX = this.touchEndX - this.touchStartX
-    let deltaY = this.touchEndY - this.touchStartY
-
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaY) < 50)
-    {
-      if (deltaX < 0 && this.currentScreenIdx === 0)
-      {
-        this.switchScreen(1)
-      }
-      else if (deltaX > 0 && this.currentScreenIdx === 1)
-      {
-        this.switchScreen(0)
-      }
-    }
-    this.touchStartX = 0
-    this.touchStartY = 0
-    this.touchEndX = 0
-    this.touchEndY = 0
-  },
-
-  handleTabTouchStart(e, tab)
-  {
-    clearTimeout(this.tabTouchTimer)
-    this.tabTouchTimer = setTimeout(() =>
-    {
-      this.openContextMenu(e, tab)
-    }, 500)
-  },
-
-  handleTabTouchEnd()
-  {
-    clearTimeout(this.tabTouchTimer)
-  },
-
-  handleTabTouchCancel()
-  {
-    clearTimeout(this.tabTouchTimer)
-  },
-
-  handleFabClick(e)
-  {
-    if (e) e.preventDefault()
-    let active = document.activeElement
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'))
-    {
-      active.blur()
-      return
-    }
-    this.focusNoteInput()
-  },
-
-  // --- SECTION: NAVIGATION & UI CONTROLS ---
-  switchScreen(idx)
-  {
-    this.currentScreenIdx = idx
-    this.closeAllMenus()
-  },
-
-  handleScroll(e)
-  {
-    if (!this.scrollTicking)
-    {
-      let scrollTop = e.target.scrollTop
-      window.requestAnimationFrame(() =>
-      {
-        let scrolled = scrollTop > 10
-        if (this.isScrolled !== scrolled)
-        {
-          this.isScrolled = scrolled
-        }
-        this.closeAllMenus()
-        this.scrollTicking = false
-      })
-      this.scrollTicking = true
-    }
-  },
-
-  selectTab(tab)
-  {
-    this.closeAllMenus()
-    this.activeCategory = tab
-    if (!this.keepKeyboard && document.activeElement)
-    {
-      document.activeElement.blur()
-    }
-  },
-
-  getTabLabel(t)
-  {
-    if (t.includes('%'))
-    {
-      let catNotes = this.notes.filter(n => n.category === t)
-      let tot = catNotes.length
-      let comp = catNotes.filter(n => n.completed).length
-      let pct = tot > 0 ? Math.round((comp / tot) * 100) : 0
-      return t.replace('%', `${pct}%`)
-    }
-    return t
-  },
-
-  setTheme(t)
-  {
-    this.currentTheme = t
-    document.body.setAttribute('data-theme', t)
-    this.saveData()
-  },
-
-  setFont(f)
-  {
-    this.currentFont = f
-    document.body.style.fontFamily = f.startsWith('CustomFont_') ? `'${f}', system-ui, sans-serif` : f
-    this.saveData()
-  },
-
-  setUiSize(s)
-  {
-    this.uiScale = s
-    this.applyUiScale(s)
-    this.saveData()
-  },
-
-  applyUiScale(s)
-  {
-    document.documentElement.style.setProperty('--ui-scale', s)
-  },
-
   toggleSortAlphabetical()
   {
     this.sortAlphabetical = !this.sortAlphabetical
     this.saveData()
   },
 
-  // --- SECTION: ACTIONS & HANDLERS ---
+  // --- SECTION: NOTE & TAB ACTIONS ---
   onInputKeydown(e)
   {
     if (e.key === 'Enter' && !e.shiftKey)
@@ -469,56 +245,6 @@ const appStore = reactive(
     let inp = document.getElementById('note-in')
     if (document.activeElement === inp) inp.blur()
     else inp.focus()
-  },
-
-  showToast(msg)
-  {
-    this.toastMessage = msg
-    this.toastVisible = true
-    clearTimeout(this.toastTimer)
-    this.toastTimer = setTimeout(() =>
-    {
-      this.toastVisible = false
-    }, 2000)
-  },
-
-  // --- SECTION: MENUS & MODALS ---
-  closeAllMenus()
-  {
-    this.contextMenuVisible = false
-    this.noteMenuVisible = false
-  },
-
-  openContextMenu(e, tab)
-  {
-    this.closeAllMenus()
-    this.contextTab = tab
-    this.contextMenuVisible = true
-  },
-
-  openNoteMenu(e, id)
-  {
-    if (this.activeNoteMenuId === id && this.noteMenuVisible)
-    {
-      this.closeAllMenus()
-      return
-    }
-    this.closeAllMenus()
-    this.activeNoteMenuId = id
-
-    let estimatedWidth = 140
-    let estimatedHeight = 180
-    let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2)
-    let clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : window.innerHeight / 2)
-
-    let posX = Math.min(clientX, window.innerWidth - estimatedWidth - 12)
-    let posY = Math.min(clientY, window.innerHeight - estimatedHeight - 12)
-
-    this.noteMenuPos = {
-      x: Math.max(12, posX),
-      y: Math.max(12, posY)
-    }
-    this.noteMenuVisible = true
   },
 
   actionDeleteNote()
@@ -623,23 +349,6 @@ const appStore = reactive(
     this.saveData()
   },
 
-  openPrompt(title, defaultVal, cb)
-  {
-    this.modalTitle = title
-    this.modalInput = defaultVal
-    this.modalCb = cb
-    this.modalVisible = true
-  },
-
-  closeModal(saveAction)
-  {
-    this.modalVisible = false
-    if (saveAction && this.modalCb)
-    {
-      this.modalCb(this.modalInput.trim())
-    }
-  },
-
   addTab(n)
   {
     if (n && !this.noteCategories.includes(n))
@@ -722,65 +431,6 @@ const appStore = reactive(
       this.saveData()
     }
     this.closeAllMenus()
-  },
-
-  // --- SECTION: UTILITIES & EVENT HANDLERS ---
-  handleGlobalClick(e)
-  {
-    playSound('click', this.uiSounds)
-    if (this.buttonRipples)
-    {
-      let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
-      if (targetBtn) createRipple(e, targetBtn)
-    }
-    if (!e.target.closest('.menu'))
-    {
-      this.closeAllMenus()
-    }
-  },
-
-  autoExpandTextarea(el)
-  {
-    if (!el) return
-    el.style.height = 'auto'
-    let calculatedHeight = el.scrollHeight
-    let maxHeight = window.innerHeight * 0.45
-    let minHeight = 80 * this.uiScale
-    let targetHeight = Math.max(minHeight, Math.min(calculatedHeight, maxHeight))
-    el.style.height = targetHeight + 'px'
-  },
-
-  // --- SECTION: CUSTOM FONTS ---
-  triggerFontUpload()
-  {
-    this.$refs.fontFileInput.click()
-  },
-
-  async loadCustomFont(e)
-  {
-    try
-    {
-      const fontObj = await processFontUpload(e.target.files[0])
-      if (fontObj)
-      {
-        this.customFonts.push(fontObj)
-        this.setFont(fontObj.name)
-      }
-    }
-    catch (err)
-    {
-      alert("Failed to load font file.")
-    }
-  },
-
-  async deleteCustomFont(fontName)
-  {
-    await deleteFontFromDB(fontName)
-    this.customFonts = this.customFonts.filter(f => f.name !== fontName)
-    if (this.currentFont === fontName)
-    {
-      this.setFont('system-ui')
-    }
   },
 
   // --- SECTION: DATA EXPORT & IMPORT ---
@@ -943,3 +593,4 @@ const appStore = reactive(
 })
 
 createApp(appStore).mount()
+window.appStore = appStore

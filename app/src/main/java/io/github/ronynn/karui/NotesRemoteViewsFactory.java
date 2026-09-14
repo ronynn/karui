@@ -17,6 +17,8 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.github.ronynn.karui.R;
+
 public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory
 {
   private final Context mContext;
@@ -174,7 +176,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     Intent fillInIntent = new Intent();
     fillInIntent.putExtra("raw_note", item.raw);
     fillInIntent.putExtra("widget_id", mAppWidgetId);
-    views.setOnClickFillInIntent(R.id.widget_item_root, fillInIntent);
+    views.setOnClickFillInIntent(R.id.widget_item_text, fillInIntent);
 
     return views;
   }
