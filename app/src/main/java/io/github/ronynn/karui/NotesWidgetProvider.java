@@ -19,9 +19,9 @@ public class NotesWidgetProvider extends AppWidgetProvider
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
   {
     for (int appWidgetId : appWidgetIds)
-      {
-        updateAppWidget(context, appWidgetManager, appWidgetId);
-      }
+    {
+      updateAppWidget(context, appWidgetManager, appWidgetId);
+    }
   }
 
   @Override
@@ -42,6 +42,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
     }
   }
 
+  // Section: Widget Update Logic
   public static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId)
   {
     SharedPreferences widgetPrefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
@@ -51,12 +52,17 @@ public class NotesWidgetProvider extends AppWidgetProvider
     int alpha = (int) ((1.0f - (transparencyPct / 100.0f)) * 255);
     int backgroundColor = Color.argb(alpha, 255, 255, 255);
 
+    Intent serviceIntent = new Intent(context, NotesWidgetService.class);
+    serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+    serviceIntent.setData(Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME)));
+
     RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
     views.setTextViewText(R.id.widget_title, tabTitle);
     views.setInt(R.id.widget_root, "setColorFilter", backgroundColor);
     views.setRemoteAdapter(R.id.widget_list_view, serviceIntent);
     views.setEmptyView(R.id.widget_list_view, R.id.widget_empty_view);
 
+    // Section: Pending Intents Setup
     Intent toggleIntent = new Intent(context, WidgetToggleReceiver.class);
     PendingIntent togglePendingIntent = PendingIntent.getBroadcast(
       context, appWidgetId, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
