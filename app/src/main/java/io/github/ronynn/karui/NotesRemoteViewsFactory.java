@@ -8,6 +8,9 @@ import android.net.Uri;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -34,43 +37,67 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   {
     mNotes.clear();
     SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
-    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Inbox");
+    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Inbox").trim();
 
     SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
     String uriStr = syncPrefs.getString("sync_file_uri", null);
 
-    if (uriStr == null || uriStr.isEmpty()) return;
-
-    try
+    if (uriStr != null && !uriStr.isEmpty())
     {
-      Uri uri = Uri.parse(uriStr);
       try
       {
-        mContext.getContentResolver().takePersistableUriPermission(
-          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-        );
+        Uri uri = Uri.parse(uriStr);
+        try
+        {
+          mContext.getContentResolver().takePersistableUriPermission(
+            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+          );
+        }
+        catch (SecurityException ignored) {}
+
+        InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
+        if (inputStream != null)
+        {
+          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+          String line;
+          String currentCat = "Main";
+          while ((line = reader.readLine()) != null)
+          {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("## "))
+            {
+              currentCat = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
+            }
+            else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCat.equalsIgnoreCase(targetTab))
+            {
+              mNotes.add(trimmed);
+            }
+          }
+          reader.close();
+          return;
+        }
       }
-      catch (SecurityException ignored) {}
-
-      InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
-      if (inputStream == null) return;
-
-      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-      String line;
-      String currentCat = "Main";
-      while ((line = reader.readLine()) != null)
+      catch (Exception e)
       {
-        String trimmed = line.trim();
-        if (trimmed.startsWith("## "))
+        e.printStackTrace();
+      }
+    }
+
+    SharedPreferences queuePrefs = mContext.getSharedPreferences("note_queue", Context.MODE_PRIVATE);
+    String jsonStr = queuePrefs.getString("pending_notes_json", "[]");
+    try
+    {
+      JSONArray array = new JSONArray(jsonStr);
+      for (int i = 0; i < array.length(); i++)
+      {
+        JSONObject obj = array.getJSONObject(i);
+        String tab = obj.optString("tab", "Inbox").trim();
+        String text = obj.optString("text", "").trim();
+        if (!text.isEmpty() && tab.equalsIgnoreCase(targetTab))
         {
-          currentCat = trimmed.replace("## ", "").trim();
-        }
-        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCat.equalsIgnoreCase(targetTab))
-        {
-          mNotes.add(trimmed);
+          mNotes.add("- [ ] " + text);
         }
       }
-      reader.close();
     }
     catch (Exception e)
     {

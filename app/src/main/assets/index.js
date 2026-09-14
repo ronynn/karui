@@ -642,17 +642,36 @@ const appStore = reactive(
     }
   },
 
-  renameTab(n)
+renameTab(oldName, newName)
+{
+  if (!newName || oldName === newName) return
+  let idx = this.noteCategories.indexOf(oldName)
+  if (idx !== -1)
   {
-    if (n && !this.noteCategories.includes(n))
+    this.noteCategories[idx] = newName
+    let now = Date.now()
+    
+    if (!this.categoryMeta) this.categoryMeta = {}
+    let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
+    meta.updatedAt = now
+    this.categoryMeta[newName] = meta
+    delete this.categoryMeta[oldName]
+
+    this.notes.forEach(n =>
     {
-      this.notes.forEach(x => { if (x.category === this.contextTab) x.category = n })
-      this.recycleBin.forEach(x => { if (x.category === this.contextTab) x.category = n })
-      this.noteCategories[this.noteCategories.indexOf(this.contextTab)] = n
-      this.activeCategory = n
-      this.saveData()
+      if (n.category === oldName)
+      {
+        n.category = newName
+        n.updatedAt = now
+      }
+    })
+    if (this.activeCategory === oldName)
+    {
+      this.activeCategory = newName
     }
-  },
+    this.saveData()
+  }
+},
 
   deleteTabClick()
   {

@@ -1,16 +1,20 @@
 // --- SECTION: DATA SYNCHRONISATION & FILE I/O HANDLERS ---
-export function generateMarkdownString(noteCategories, notes)
+export function generateMarkdownString(noteCategories, notes, categoryMeta = {})
 {
   let mdStr = ''
   noteCategories.forEach((cat, idx) =>
   {
-    mdStr += `## ${cat}\n`
+    let catId = categoryMeta[cat]?.id || (Date.now() + idx)
+    let catUpdated = categoryMeta[cat]?.updatedAt || Date.now()
+    mdStr += `## ${cat} <!-- cat_id:${catId} u:${catUpdated} -->\n`
+    
     let catNotes = notes.filter(n => n.category === cat)
     catNotes.forEach(n =>
     {
       let mark = n.completed ? 'x' : ' '
       let pin = n.pinned ? ' pinned:true' : ''
-      mdStr += `- [${mark}] ${n.text} <!-- id:${n.id}${pin} -->\n`
+      let updated = n.updatedAt || Date.now()
+      mdStr += `- [${mark}] ${n.text} <!-- id:${n.id} u:${updated}${pin} -->\n`
     })
     if (idx < noteCategories.length - 1)
     {
@@ -34,13 +38,26 @@ export function parseMarkdownAndMerge(text, appStore)
     let lines = cleanText.split('\n')
     let currentCat = 'Main'
     let importedNotes = []
+    let importedCategories = []
 
     lines.forEach(line =>
     {
       let trimmed = line.trim()
       if (trimmed.startsWith('## '))
       {
-        currentCat = trimmed.replace(/^##\s+/, '').trim()
+        let catMatch = trimmed.match(/^##\s+(.*?)(?:\s+<!--\s*cat_id:(\d+)\s+u:(\d+)\s*-->)?$/)
+        if (catMatch)
+        {
+          currentCat = catMatch[1].replace(/<!--.*?-->/g, '').trim()
+          let catId = catMatch[2] ? parseInt(catMatch[2], 10) : null
+          let catUpdated = catMatch[3] ? parseInt(catMatch[3], 10) : Date.now()
+          importedCategories.push({ id: catId, name: currentCat, updatedAt: catUpdated })
+        }
+        else
+        {
+          currentCat = trimmed.replace(/^##\s+/, '').replace(/<!--.*?-->/g, '').trim()
+          importedCategories.push({ id: null, name: currentCat, updatedAt: Date.now() })
+        }
       }
       else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]'))
       {
@@ -48,16 +65,21 @@ export function parseMarkdownAndMerge(text, appStore)
         let content = trimmed.replace(/^- \[(x| )\]\s*/, '').trim()
         let noteId = null
         let pinned = false
+        let updatedAt = Date.now()
 
-        let idMatch = content.match(/<!--\s*id:(\d+)(?:\s+pinned:(true|false))?\s*-->/)
-        if (idMatch)
+        let metaMatch = content.match(/<!--\s*id:(\d+)(?:\s+u:(\d+))?(?:\s+pinned:(true|false))?\s*-->/)
+        if (metaMatch)
         {
-          noteId = parseInt(idMatch[1], 10)
-          if (idMatch[2])
+          noteId = parseInt(metaMatch[1], 10)
+          if (metaMatch[2])
           {
-            pinned = idMatch[2] === 'true'
+            updatedAt = parseInt(metaMatch[2], 10)
           }
-          content = content.replace(/<!--\s*id:\d+(?:\s+pinned:(?:true|false))?\s*-->/, '').trim()
+          if (metaMatch[3])
+          {
+            pinned = metaMatch[3] === 'true'
+          }
+          content = content.replace(/<!--\s*id:\d+.*-->/, '').trim()
         }
 
         if (content)
@@ -69,6 +91,7 @@ export function parseMarkdownAndMerge(text, appStore)
             if (existing)
             {
               pinned = existing.pinned
+              updatedAt = existing.updatedAt || Date.now()
             }
           }
 
@@ -77,30 +100,64 @@ export function parseMarkdownAndMerge(text, appStore)
             text: content,
             completed: completed,
             category: currentCat,
-            pinned: pinned
+            pinned: pinned,
+            updatedAt: updatedAt
           })
         }
       }
     })
 
-    if (importedNotes.length === 0)
+    if (importedNotes.length === 0 && importedCategories.length === 0)
     {
       appStore.showToast('Format Error!')
       return
     }
 
-    let importedCategories = [...new Set(importedNotes.map(n => n.category))]
-
-    importedCategories.forEach(c =>
+    let noteMap = new Map()
+    appStore.notes.forEach(n =>
     {
-      if (!appStore.noteCategories.includes(c))
+      noteMap.set(n.id, n)
+    })
+
+    importedNotes.forEach(imp =>
+    {
+      if (noteMap.has(imp.id))
       {
-        appStore.noteCategories.push(c)
+        let existing = noteMap.get(imp.id)
+        if ((imp.updatedAt || 0) >= (existing.updatedAt || 0))
+        {
+          noteMap.set(imp.id, imp)
+        }
+      }
+      else
+      {
+        noteMap.set(imp.id, imp)
       }
     })
 
-    let remainingNotes = appStore.notes.filter(n => !importedCategories.includes(n.category))
-    appStore.notes = [...remainingNotes, ...importedNotes]
+    appStore.notes = Array.from(noteMap.values())
+
+    if (!appStore.categoryMeta)
+    {
+      appStore.categoryMeta = {}
+    }
+
+    importedCategories.forEach(catObj =>
+    {
+      if (!appStore.noteCategories.includes(catObj.name))
+      {
+        appStore.noteCategories.push(catObj.name)
+      }
+
+      let existingMeta = appStore.categoryMeta[catObj.name]
+      if (!existingMeta || (catObj.updatedAt >= (existingMeta.updatedAt || 0)))
+      {
+        appStore.categoryMeta[catObj.name] = {
+          id: catObj.id || (existingMeta ? existingMeta.id : Date.now()),
+          updatedAt: catObj.updatedAt
+        }
+      }
+    })
 
     appStore.saveData()
     appStore.showToast('Synced!')
@@ -161,9 +218,9 @@ export function importJsonFile(file, appStore)
   r.readAsText(file)
 }
 
-export function exportMarkdown(noteCategories, notes)
+export function exportMarkdown(noteCategories, notes, categoryMeta)
 {
-  let mdStr = generateMarkdownString(noteCategories, notes)
+  let mdStr = generateMarkdownString(noteCategories, notes, categoryMeta)
   if (window.Android && window.Android.saveFile)
   {
     window.Android.saveFile("notes.md", mdStr, "text/markdown")
@@ -205,7 +262,7 @@ export function setupNativeHooks(appStore)
         if (!item.text) return
         let tabName = item.tab || 'Inbox'
         if (!appStore.noteCategories.includes(tabName)) appStore.noteCategories.push(tabName)
-        let note = { id: now + idx, text: item.text, completed: false, category: tabName }
+        let note = { id: now + idx, text: item.text, completed: false, category: tabName, updatedAt: now }
         if (appStore.addNoteBottom) appStore.notes.push(note)
         else appStore.notes.unshift(note)
       })
@@ -240,7 +297,7 @@ export function setupNativeHooks(appStore)
   {
     if (appStore.syncFilePath)
     {
-      let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes)
+      let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes, appStore.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(appStore.syncFilePath, mdStr)
