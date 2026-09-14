@@ -30,8 +30,9 @@ export function parseMarkdownAndMerge(text, appStore)
       return
     }
 
-    let lines = text.split(/\r?\n/)
-    let currentCat = "Main"
+    let cleanText = text.replace(/\r/g, '')
+    let lines = cleanText.split('\n')
+    let currentCat = 'Main'
     let importedNotes = []
 
     lines.forEach(line =>

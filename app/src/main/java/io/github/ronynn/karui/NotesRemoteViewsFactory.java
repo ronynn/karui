@@ -5,8 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
-import android.text.SpannableString;
-import android.text.style.StrikethroughSpan;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
@@ -20,77 +18,110 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
 {
   private final Context mContext;
   private final int mAppWidgetId;
-  private final List<String> mRawNotes = new ArrayList<>();
+  private final List<String> mNotes = new ArrayList<>();
 
   public NotesRemoteViewsFactory(Context context, Intent intent)
   {
     mContext = context;
-    mAppWidgetId = intent.getIntExtra(
-      AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+    mAppWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
   }
 
   @Override
-  public void onCreate()
-  {
-    loadNotesFromMarkdown();
-  }
+  public void onCreate() {}
 
   @Override
   public void onDataSetChanged()
   {
-    loadNotesFromMarkdown();
+    mNotes.clear();
+    SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
+    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Inbox");
+
+    SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
+    String uriStr = syncPrefs.getString("sync_file_uri", null);
+
+    if (uriStr == null || uriStr.isEmpty()) return;
+
+    try
+    {
+      Uri uri = Uri.parse(uriStr);
+      try
+      {
+        mContext.getContentResolver().takePersistableUriPermission(
+          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        );
+      }
+      catch (SecurityException ignored) {}
+
+      InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
+      if (inputStream == null) return;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      String line;
+      String currentCat = "Main";
+      while ((line = reader.readLine()) != null)
+      {
+        String trimmed = line.trim();
+        if (trimmed.startsWith("## "))
+        {
+          currentCat = trimmed.replace("## ", "").trim();
+        }
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCat.equalsIgnoreCase(targetTab))
+        {
+          mNotes.add(trimmed);
+        }
+      }
+      reader.close();
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
   }
 
   @Override
   public void onDestroy()
   {
-    mRawNotes.clear();
+    mNotes.clear();
   }
 
   @Override
   public int getCount()
   {
-    return mRawNotes.size();
+    return mNotes.size();
   }
 
   @Override
   public RemoteViews getViewAt(int position)
   {
-    if (position < 0 || position >= mRawNotes.size()) return null;
+    if (position >= mNotes.size()) return null;
+    String rawNote = mNotes.get(position);
 
-    RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
-    String rawLine = mRawNotes.get(position);
+    RemoteViews rv = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
 
-    String cleanText = rawLine.replaceAll("<!--.*?-->", "").trim();
-    CharSequence displayText = cleanText;
-
-    if (cleanText.startsWith("- [x]"))
+    String displayText = rawNote.replaceAll("<!--.*?-->", "").trim();
+    if (displayText.startsWith("- [x]"))
     {
-      String textOnly = cleanText.substring(5).trim();
-      SpannableString spannable = new SpannableString(textOnly);
-      spannable.setSpan(new StrikethroughSpan(), 0, textOnly.length(), 0);
-      displayText = spannable;
+      displayText = "[x] " + displayText.substring(5).trim();
     }
-    else if (cleanText.startsWith("- [ ]"))
+    else if (displayText.startsWith("- [ ]"))
     {
-      displayText = cleanText.substring(5).trim();
+      displayText = "[ ] " + displayText.substring(5).trim();
     }
 
-    views.setTextViewText(R.id.widget_item_text, displayText);
+    rv.setTextViewText(R.id.widget_item_text, displayText);
 
     Intent fillInIntent = new Intent();
-    fillInIntent.putExtra("raw_note", rawLine);
+    fillInIntent.putExtra("raw_note", rawNote);
     fillInIntent.putExtra("widget_id", mAppWidgetId);
-    views.setOnClickFillInIntent(R.id.widget_item_container, fillInIntent);
+    rv.setOnClickFillInIntent(R.id.widget_item_text, fillInIntent);
 
-    return views;
+    return rv;
   }
+
   @Override
   public RemoteViews getLoadingView()
   {
-    RemoteViews loadingView = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
-    loadingView.setTextViewText(R.id.widget_item_text, "");
-    return loadingView;
+    return null;
   }
 
   @Override
@@ -109,72 +140,5 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   public boolean hasStableIds()
   {
     return true;
-  }
-
-  private void loadNotesFromMarkdown()
-  {
-    mRawNotes.clear();
-
-    SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
-    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Inbox").trim();
-
-    SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
-    String uriStr = syncPrefs.getString("sync_file_uri", null);
-
-    if (uriStr == null || uriStr.isEmpty()) return;
-
-    try
-      {
-        Uri uri = Uri.parse(uriStr);
-        InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
-        if (inputStream == null) return;
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        String line;
-
-        boolean hasCategoryHeaders = false;
-        String currentCategory = "";
-
-        List<String> uncategorizedNotes = new ArrayList<>();
-        List<String> matchedNotes = new ArrayList<>();
-
-        while ((line = reader.readLine()) != null)
-          {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("## "))
-            {
-              hasCategoryHeaders = true;
-              currentCategory = trimmed.replace("## ", "").trim();
-            }
-            else if (trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]"))
-            {
-              if (hasCategoryHeaders)
-              {
-                if (currentCategory.equalsIgnoreCase(targetTab))
-                {
-                  matchedNotes.add(trimmed);
-                }
-              }
-              else
-              {
-                uncategorizedNotes.add(trimmed);
-              }
-            }
-          }
-        reader.close();
-
-        if (hasCategoryHeaders)
-        {
-          mRawNotes.addAll(matchedNotes);
-        }
-        else
-        {
-          mRawNotes.addAll(uncategorizedNotes);
-        }
-      }
-    catch (Exception e)
-      {
-        e.printStackTrace();
-      }
   }
 }
