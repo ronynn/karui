@@ -58,7 +58,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
 
     RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
     views.setTextViewText(R.id.widget_title, tabTitle);
-    views.setInt(R.id.widget_root, "setColorFilter", backgroundColor);
+    views.setInt(R.id.widget_root, "setBackgroundColor", backgroundColor);
     views.setRemoteAdapter(R.id.widget_list_view, serviceIntent);
     views.setEmptyView(R.id.widget_list_view, R.id.widget_empty_view);
 

@@ -114,6 +114,7 @@ public class WidgetConfigActivity extends Activity
 
     AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
     NotesWidgetProvider.updateAppWidget(this, appWidgetManager, mAppWidgetId);
+    appWidgetManager.notifyAppWidgetViewDataChanged(mAppWidgetId, R.id.widget_list_view);
 
     Intent resultValue = new Intent();
     resultValue.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAppWidgetId);

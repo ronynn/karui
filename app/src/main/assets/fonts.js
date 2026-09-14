@@ -117,3 +117,50 @@ export async function processFontUpload(file)
     r.readAsDataURL(file)
   })
 }
+
+// --- SECTION: LONG PRESS FONT DELETION HANDLER ---
+let pressTimer = null
+
+export function startFontLongPress(fontName, appStore, holdTimeMs = 4000)
+{
+  clearFontLongPress()
+  pressTimer = setTimeout(async () =>
+  {
+    try
+    {
+      await deleteFontFromDB(fontName)
+      for (const font of document.fonts)
+      {
+        if (font.family === fontName)
+        {
+          document.fonts.delete(font)
+        }
+      }
+      appStore.customFonts = appStore.customFonts.filter(f => f.name !== fontName)
+      if (appStore.currentFont === fontName)
+      {
+        appStore.setFont('system-ui')
+      }
+      if (typeof appStore.showToast === 'function')
+      {
+        appStore.showToast('Font deleted!')
+      }
+    }
+    catch (err)
+    {
+      if (typeof appStore.showToast === 'function')
+      {
+        appStore.showToast('Failed to delete font')
+      }
+    }
+  }, holdTimeMs)
+}
+
+export function clearFontLongPress()
+{
+  if (pressTimer)
+  {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}

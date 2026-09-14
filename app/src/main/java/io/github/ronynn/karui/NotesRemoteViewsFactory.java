@@ -17,8 +17,6 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-import io.github.ronynn.karui.R;
-
 public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFactory
 {
   private final Context mContext;
@@ -85,6 +83,14 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     try
     {
       Uri uri = Uri.parse(uriStr);
+      try
+      {
+        mContext.getContentResolver().takePersistableUriPermission(
+          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        );
+      }
+      catch (SecurityException ignored) {}
+
       InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
       if (inputStream == null) return false;
 
@@ -99,9 +105,9 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
         {
           currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
         }
-        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCategory.equalsIgnoreCase(targetTab))
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
         {
-          boolean completed = trimmed.startsWith("- [x]");
+          boolean completed = trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]");
           String content = trimmed.substring(5).replaceAll("<!--.*?-->", "").trim();
           if (!content.isEmpty())
           {

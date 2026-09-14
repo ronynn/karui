@@ -371,6 +371,15 @@ const appStore = reactive(
     this.focusNoteInput()
   },
 
+  startFontHold(fontName)
+  {
+    startFontLongPress(fontName, this, 4000)
+  },
+  cancelFontHold()
+  {
+    clearFontLongPress()
+  },
+
   // --- SECTION: NAVIGATION & UI CONTROLS ---
   switchScreen(idx)
   {
