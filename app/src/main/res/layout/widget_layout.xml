@@ -37,7 +37,7 @@
       android:id="@+id/widget_settings_btn"
       android:layout_width="22dp"
       android:layout_height="22dp"
-      android:src="@android:drawable/ic_menu_preferences"
+      android:src="@android:drawable/ic_menu_manage"
       android:contentDescription="Settings" />
   </LinearLayout>
 

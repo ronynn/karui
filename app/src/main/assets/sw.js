@@ -4,6 +4,11 @@ const CACHE_NAME = 'app-cache-v1'
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './petite-vue.es.js',
+  './datasync.js',
+  './dragdrop.js',
+  './extras.js',
+  './fonts.js',
   './android.js',
   './quotes.js',
   './flap.js',
