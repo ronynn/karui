@@ -24,6 +24,12 @@ export function parseMarkdownAndMerge(text, appStore)
 {
   try
   {
+    if (!text || typeof text !== 'string')
+    {
+      appStore.showToast('Format Error!')
+      return
+    }
+
     let lines = text.split(/\r?\n/)
     let currentCat = "Main"
     let importedNotes = []
@@ -45,7 +51,7 @@ export function parseMarkdownAndMerge(text, appStore)
         let idMatch = content.match(/<!--\s*id:(\d+)(?:\s+pinned:(true|false))?\s*-->/)
         if (idMatch)
         {
-          noteId = parseInt(idMatch[1])
+          noteId = parseInt(idMatch[1], 10)
           if (idMatch[2])
           {
             pinned = idMatch[2] === 'true'
@@ -55,7 +61,7 @@ export function parseMarkdownAndMerge(text, appStore)
 
         if (content)
         {
-          if (!noteId)
+          if (!noteId || isNaN(noteId))
           {
             let existing = appStore.notes.find(x => x.text === content && x.category === currentCat)
             noteId = existing ? existing.id : (Date.now() + Math.floor(Math.random() * 100000))
@@ -76,6 +82,12 @@ export function parseMarkdownAndMerge(text, appStore)
       }
     })
 
+    if (importedNotes.length === 0)
+    {
+      appStore.showToast('Format Error!')
+      return
+    }
+
     let importedCategories = [...new Set(importedNotes.map(n => n.category))]
 
     importedCategories.forEach(c =>
@@ -86,18 +98,15 @@ export function parseMarkdownAndMerge(text, appStore)
       }
     })
 
-    if (importedNotes.length > 0)
-    {
-      let remainingNotes = appStore.notes.filter(n => !importedCategories.includes(n.category))
-      appStore.notes = [...remainingNotes, ...importedNotes]
-    }
+    let remainingNotes = appStore.notes.filter(n => !importedCategories.includes(n.category))
+    appStore.notes = [...remainingNotes, ...importedNotes]
 
     appStore.saveData()
-    appStore.showToast('Markdown synced successfully')
+    appStore.showToast('Synced!')
   }
   catch (err)
   {
-    alert("Markdown import failed.")
+    appStore.showToast('Format Error!')
   }
 }
 
@@ -128,11 +137,24 @@ export function importJsonFile(file, appStore)
   {
     try
     {
-      appStore.mergeNotes(JSON.parse(ev.target.result))
+      let data = JSON.parse(ev.target.result)
+      if (!Array.isArray(data))
+      {
+        appStore.showToast('Format Error!')
+        return
+      }
+      let isValid = data.every(n => n && typeof n.text === 'string')
+      if (!isValid)
+      {
+        appStore.showToast('Format Error!')
+        return
+      }
+      appStore.mergeNotes(data)
+      appStore.showToast('Synced!')
     }
     catch (err)
     {
-      alert("Import failed.")
+      appStore.showToast('Format Error!')
     }
   }
   r.readAsText(file)

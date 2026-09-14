@@ -668,6 +668,7 @@ const appStore = reactive(
       if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
       this.saveData()
     }
+    this.closeAllMenus()
   },
 
   moveTab(dir)
@@ -767,8 +768,20 @@ const appStore = reactive(
     if (!Array.isArray(imported)) return
     imported.forEach(n =>
     {
-      if (n.category && !this.noteCategories.includes(n.category)) this.noteCategories.push(n.category)
-      if (!this.notes.some(x => x.id === n.id)) this.notes.push(n)
+      if (!n || typeof n.text !== 'string') return
+      let cat = n.category || 'Main'
+      if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
+      let noteId = typeof n.id === 'number' && !isNaN(n.id) ? n.id : Date.now() + Math.floor(Math.random() * 100000)
+      if (!this.notes.some(x => x.id === noteId))
+      {
+        this.notes.push({
+          id: noteId,
+          text: n.text,
+          completed: Boolean(n.completed),
+          category: cat,
+          pinned: Boolean(n.pinned)
+        })
+      }
     })
     this.saveData()
   },

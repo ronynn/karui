@@ -62,6 +62,7 @@ public class WidgetConfigActivity extends Activity
       SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
       String defaultTab = prefs.getString("inbox_tab_name", "Inbox");
       categories.add(defaultTab);
+      categories.add("Main");
     }
 
     ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -128,6 +129,15 @@ public class WidgetConfigActivity extends Activity
     try
     {
       Uri uri = Uri.parse(uriStr);
+      
+      try
+      {
+        getContentResolver().takePersistableUriPermission(
+          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        );
+      }
+      catch (SecurityException ignored) {}
+
       InputStream inputStream = getContentResolver().openInputStream(uri);
       if (inputStream == null) return categories;
 
