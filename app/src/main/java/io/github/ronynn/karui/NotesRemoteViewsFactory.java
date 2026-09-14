@@ -21,87 +21,130 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
 {
   private final Context mContext;
   private final int mAppWidgetId;
-  private final List<String> mNotes = new ArrayList<>();
+  private final List<NoteItem> mNotes = new ArrayList<>();
+
+  public static class NoteItem
+  {
+    public String text;
+    public boolean completed;
+    public String raw;
+
+    public NoteItem(String text, boolean completed, String raw)
+    {
+      this.text = text;
+      this.completed = completed;
+      this.raw = raw;
+    }
+  }
 
   public NotesRemoteViewsFactory(Context context, Intent intent)
   {
     mContext = context;
-    mAppWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+    mAppWidgetId = intent.getIntExtra(
+      AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
   }
 
   @Override
-  public void onCreate() {}
+  public void onCreate()
+  {
+  }
 
   @Override
   public void onDataSetChanged()
   {
     mNotes.clear();
-    SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
-    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Inbox").trim();
-
-    SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
-    String uriStr = syncPrefs.getString("sync_file_uri", null);
-
-    if (uriStr != null && !uriStr.isEmpty())
+    try
     {
-      try
-      {
-        Uri uri = Uri.parse(uriStr);
-        try
-        {
-          mContext.getContentResolver().takePersistableUriPermission(
-            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-          );
-        }
-        catch (SecurityException ignored) {}
+      SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
+      String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Main");
 
-        InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
-        if (inputStream != null)
-        {
-          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-          String line;
-          String currentCat = "Main";
-          while ((line = reader.readLine()) != null)
-          {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("## "))
-            {
-              currentCat = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
-            }
-            else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCat.equalsIgnoreCase(targetTab))
-            {
-              mNotes.add(trimmed);
-            }
-          }
-          reader.close();
-          return;
-        }
-      }
-      catch (Exception e)
+      SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
+      String uriStr = syncPrefs.getString("sync_file_uri", null);
+
+      boolean loadedFromSync = false;
+      if (uriStr != null && !uriStr.isEmpty())
       {
-        e.printStackTrace();
+        loadedFromSync = loadFromMarkdownUri(uriStr, targetTab);
+      }
+
+      if (!loadedFromSync)
+      {
+        loadFromSharedPreferences(targetTab);
       }
     }
+    catch (Throwable t)
+    {
+      t.printStackTrace();
+    }
+  }
 
-    SharedPreferences queuePrefs = mContext.getSharedPreferences("note_queue", Context.MODE_PRIVATE);
-    String jsonStr = queuePrefs.getString("pending_notes_json", "[]");
+  private boolean loadFromMarkdownUri(String uriStr, String targetTab)
+  {
+    try
+    {
+      Uri uri = Uri.parse(uriStr);
+      InputStream inputStream = mContext.getContentResolver().openInputStream(uri);
+      if (inputStream == null) return false;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      String line;
+      String currentCategory = "Main";
+
+      while ((line = reader.readLine()) != null)
+      {
+        String trimmed = line.trim();
+        if (trimmed.startsWith("## "))
+        {
+          currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
+        }
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]")) && currentCategory.equalsIgnoreCase(targetTab))
+        {
+          boolean completed = trimmed.startsWith("- [x]");
+          String content = trimmed.substring(5).replaceAll("<!--.*?-->", "").trim();
+          if (!content.isEmpty())
+          {
+            mNotes.add(new NoteItem(content, completed, line));
+          }
+        }
+      }
+      reader.close();
+      return true;
+    }
+    catch (Exception e)
+    {
+      return false;
+    }
+  }
+
+  private void loadFromSharedPreferences(String targetTab)
+  {
+    SharedPreferences prefs = mContext.getSharedPreferences("note_queue", Context.MODE_PRIVATE);
+    String jsonStr = prefs.getString("notes_data", null);
+    if (jsonStr == null || jsonStr.trim().isEmpty()) return;
+
     try
     {
       JSONArray array = new JSONArray(jsonStr);
       for (int i = 0; i < array.length(); i++)
       {
-        JSONObject obj = array.getJSONObject(i);
-        String tab = obj.optString("tab", "Inbox").trim();
-        String text = obj.optString("text", "").trim();
-        if (!text.isEmpty() && tab.equalsIgnoreCase(targetTab))
+        JSONObject obj = array.optJSONObject(i);
+        if (obj == null) continue;
+
+        String category = obj.optString("category", "Main");
+        if (category.equalsIgnoreCase(targetTab))
         {
-          mNotes.add("- [ ] " + text);
+          String text = obj.optString("text", "");
+          boolean completed = obj.optBoolean("completed", false);
+          if (!text.isEmpty())
+          {
+            String rawMark = completed ? "- [x] " : "- [ ] ";
+            mNotes.add(new NoteItem(text, completed, rawMark + text));
+          }
         }
       }
     }
     catch (Exception e)
     {
-      e.printStackTrace();
     }
   }
 
@@ -120,29 +163,20 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   @Override
   public RemoteViews getViewAt(int position)
   {
-    if (position >= mNotes.size()) return null;
-    String rawNote = mNotes.get(position);
+    if (position < 0 || position >= mNotes.size()) return null;
 
-    RemoteViews rv = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
+    NoteItem item = mNotes.get(position);
+    RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
 
-    String displayText = rawNote.replaceAll("<!--.*?-->", "").trim();
-    if (displayText.startsWith("- [x]"))
-    {
-      displayText = "[x] " + displayText.substring(5).trim();
-    }
-    else if (displayText.startsWith("- [ ]"))
-    {
-      displayText = "[ ] " + displayText.substring(5).trim();
-    }
-
-    rv.setTextViewText(R.id.widget_item_text, displayText);
+    String prefix = item.completed ? "[x] " : "[ ] ";
+    views.setTextViewText(R.id.widget_item_text, prefix + item.text);
 
     Intent fillInIntent = new Intent();
-    fillInIntent.putExtra("raw_note", rawNote);
+    fillInIntent.putExtra("raw_note", item.raw);
     fillInIntent.putExtra("widget_id", mAppWidgetId);
-    rv.setOnClickFillInIntent(R.id.widget_item_text, fillInIntent);
+    views.setOnClickFillInIntent(R.id.widget_item_root, fillInIntent);
 
-    return rv;
+    return views;
   }
 
   @Override

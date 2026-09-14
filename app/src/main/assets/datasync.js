@@ -297,6 +297,11 @@ export function setupNativeHooks(appStore)
   {
     if (appStore.syncFilePath)
     {
+      let now = Date.now()
+      appStore.notes.forEach(n =>
+      {
+        if (!n.updatedAt) n.updatedAt = now
+      })
       let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes, appStore.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {

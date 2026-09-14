@@ -10,6 +10,7 @@ const appStore = reactive(
   activeCategory: 'Main',
   notes: [],
   recycleBin: [],
+  categoryMeta: {},
   currentTheme: 'gruvbox',
   currentFont: 'system-ui',
   uiScale: 1,
@@ -181,6 +182,7 @@ const appStore = reactive(
     this.noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"]
     this.notes = JSON.parse(localStorage.getItem("notes")) || []
     this.recycleBin = JSON.parse(localStorage.getItem("recycleBin")) || []
+    this.categoryMeta = JSON.parse(localStorage.getItem("categoryMeta")) || {}
     this.currentTheme = localStorage.getItem("theme") || "gruvbox"
     this.currentFont = localStorage.getItem("font") || "system-ui"
     this.uiScale = parseFloat(localStorage.getItem("uiScale")) || 1
@@ -228,6 +230,7 @@ const appStore = reactive(
     localStorage.setItem("noteCategories", JSON.stringify(this.noteCategories))
     localStorage.setItem("notes", JSON.stringify(this.notes))
     localStorage.setItem("recycleBin", JSON.stringify(this.recycleBin))
+    localStorage.setItem("categoryMeta", JSON.stringify(this.categoryMeta))
     localStorage.setItem("theme", this.currentTheme)
     localStorage.setItem("font", this.currentFont)
     localStorage.setItem("uiScale", this.uiScale)
@@ -426,7 +429,8 @@ const appStore = reactive(
     else
     {
       playSound('add', this.uiSounds)
-      let n = { id: Date.now(), text: v, completed: false, category: this.activeCategory, pinned: false }
+      let now = Date.now()
+      let n = { id: now, text: v, completed: false, category: this.activeCategory, pinned: false, updatedAt: now }
       if (this.addNoteBottom) this.notes.push(n)
       else this.notes.unshift(n)
     }
@@ -437,6 +441,7 @@ const appStore = reactive(
   toggleNote(n, e)
   {
     n.completed = !n.completed
+    n.updatedAt = Date.now()
     if (n.completed)
     {
       playSound('scratch', this.uiSounds)
@@ -551,6 +556,7 @@ const appStore = reactive(
     if (n)
     {
       n.pinned = !n.pinned
+      n.updatedAt = Date.now()
       this.saveData()
     }
     this.closeAllMenus()
@@ -580,6 +586,7 @@ const appStore = reactive(
         if (val)
         {
           n.text = val
+          n.updatedAt = Date.now()
           this.saveData()
         }
       })
@@ -593,6 +600,7 @@ const appStore = reactive(
     if (idx > -1)
     {
       let n = this.notes.splice(idx, 1)[0]
+      n.updatedAt = Date.now()
       this.recycleBin.push(n)
       this.saveData()
     }
@@ -603,6 +611,7 @@ const appStore = reactive(
     let n = this.recycleBin.splice(idx, 1)[0]
     if (n)
     {
+      n.updatedAt = Date.now()
       this.notes.push(n)
       this.saveData()
     }
@@ -638,40 +647,44 @@ const appStore = reactive(
       playSound('tab', this.uiSounds)
       this.noteCategories.push(n)
       this.activeCategory = n
+      let now = Date.now()
+      if (!this.categoryMeta) this.categoryMeta = {}
+      this.categoryMeta[n] = { id: now, updatedAt: now }
       this.saveData()
     }
   },
 
-renameTab(oldName, newName)
-{
-  if (!newName || oldName === newName) return
-  let idx = this.noteCategories.indexOf(oldName)
-  if (idx !== -1)
+  renameTab(newName)
   {
-    this.noteCategories[idx] = newName
-    let now = Date.now()
-    
-    if (!this.categoryMeta) this.categoryMeta = {}
-    let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
-    meta.updatedAt = now
-    this.categoryMeta[newName] = meta
-    delete this.categoryMeta[oldName]
+    let oldName = this.contextTab || this.activeCategory
+    if (!newName || oldName === newName) return
+    let idx = this.noteCategories.indexOf(oldName)
+    if (idx !== -1)
+    {
+      this.noteCategories[idx] = newName
+      let now = Date.now()
 
-    this.notes.forEach(n =>
-    {
-      if (n.category === oldName)
+      if (!this.categoryMeta) this.categoryMeta = {}
+      let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
+      meta.updatedAt = now
+      this.categoryMeta[newName] = meta
+      delete this.categoryMeta[oldName]
+
+      this.notes.forEach(n =>
       {
-        n.category = newName
-        n.updatedAt = now
+        if (n.category === oldName)
+        {
+          n.category = newName
+          n.updatedAt = now
+        }
+      })
+      if (this.activeCategory === oldName)
+      {
+        this.activeCategory = newName
       }
-    })
-    if (this.activeCategory === oldName)
-    {
-      this.activeCategory = newName
+      this.saveData()
     }
-    this.saveData()
-  }
-},
+  },
 
   deleteTabClick()
   {
@@ -679,9 +692,15 @@ renameTab(oldName, newName)
     if (this.noteCategories.length > 1)
     {
       this.noteCategories = this.noteCategories.filter(x => x !== t)
+      let now = Date.now()
       this.notes = this.notes.filter(note =>
       {
-        if (note.category === t) { this.recycleBin.push(note); return false }
+        if (note.category === t)
+        {
+          note.updatedAt = now
+          this.recycleBin.push(note)
+          return false
+        }
         return true
       })
       if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
@@ -785,20 +804,39 @@ renameTab(oldName, newName)
   mergeNotes(imported)
   {
     if (!Array.isArray(imported)) return
+    let now = Date.now()
     imported.forEach(n =>
     {
       if (!n || typeof n.text !== 'string') return
       let cat = n.category || 'Main'
       if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
-      let noteId = typeof n.id === 'number' && !isNaN(n.id) ? n.id : Date.now() + Math.floor(Math.random() * 100000)
-      if (!this.notes.some(x => x.id === noteId))
+      let noteId = typeof n.id === 'number' && !isNaN(n.id) ? n.id : now + Math.floor(Math.random() * 100000)
+      let existingIdx = this.notes.findIndex(x => x.id === noteId)
+      let itemUpdatedAt = n.updatedAt || now
+      if (existingIdx > -1)
+      {
+        let existing = this.notes[existingIdx]
+        if (itemUpdatedAt >= (existing.updatedAt || 0))
+        {
+          this.notes[existingIdx] = {
+            id: noteId,
+            text: n.text,
+            completed: Boolean(n.completed),
+            category: cat,
+            pinned: Boolean(n.pinned),
+            updatedAt: itemUpdatedAt
+          }
+        }
+      }
+      else
       {
         this.notes.push({
           id: noteId,
           text: n.text,
           completed: Boolean(n.completed),
           category: cat,
-          pinned: Boolean(n.pinned)
+          pinned: Boolean(n.pinned),
+          updatedAt: itemUpdatedAt
         })
       }
     })
@@ -807,7 +845,7 @@ renameTab(oldName, newName)
 
   exportMarkdownCall()
   {
-    exportMarkdown(this.noteCategories, this.notes)
+    exportMarkdown(this.noteCategories, this.notes, this.categoryMeta)
   },
 
   triggerImportMD()
@@ -826,7 +864,7 @@ renameTab(oldName, newName)
   {
     if (window.Android && window.Android.setupSyncFile)
     {
-      window.Android.setupSyncFile("file.md", generateMarkdownString(this.noteCategories, this.notes))
+      window.Android.setupSyncFile("file.md", generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta))
     }
     else
     {
@@ -859,7 +897,12 @@ renameTab(oldName, newName)
 
   exportMarkdownSilent()
   {
-    let mdStr = generateMarkdownString(this.noteCategories, this.notes)
+    let now = Date.now()
+    this.notes.forEach(n =>
+    {
+      if (!n.updatedAt) n.updatedAt = now
+    })
+    let mdStr = generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta)
     if (window.Android && window.Android.saveFileSync)
     {
       window.Android.saveFileSync(this.syncFilePath, mdStr)
