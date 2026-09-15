@@ -2,16 +2,16 @@
 
 let snakeConfettiLoaded = false
 
-function ensureSnakeConfettiLoaded(callback) 
+function ensureSnakeConfettiLoaded(callback)
 {
-  if (typeof confetti === 'function') 
+  if (typeof confetti === 'function')
   {
     if (callback) callback()
     return
   }
 
   let existingScript = document.querySelector('script[src="confetti.browser.min.js"]')
-  if (!existingScript) 
+  if (!existingScript)
   {
     let scriptTag = document.createElement('script')
     scriptTag.src = 'confetti.browser.min.js'
@@ -23,8 +23,8 @@ function ensureSnakeConfettiLoaded(callback)
       console.error('Failed to load confetti.browser.min.js from repository root.')
     }
     document.head.appendChild(scriptTag)
-  } 
-  else 
+  }
+  else
   {
     existingScript.addEventListener('load', () => {
       snakeConfettiLoaded = true
@@ -33,10 +33,10 @@ function ensureSnakeConfettiLoaded(callback)
   }
 }
 
-function triggerSnakeConfetti() 
+function triggerSnakeConfetti()
 {
   ensureSnakeConfettiLoaded(() => {
-    if (typeof confetti === 'function') 
+    if (typeof confetti === 'function')
     {
       confetti({
         particleCount: 80,
@@ -52,67 +52,76 @@ function triggerSnakeConfetti()
 
 let snakeAudioCtx = null
 
-function getSnakeAudioContext() 
+function getSnakeAudioContext()
 {
-  if (!snakeAudioCtx) 
+  if (!snakeAudioCtx)
   {
     let AudioCtxClass = window.AudioContext || window.webkitAudioContext
-    if (AudioCtxClass) 
+    if (AudioCtxClass)
     {
       snakeAudioCtx = new AudioCtxClass()
     }
   }
-  if (snakeAudioCtx && snakeAudioCtx.state === 'suspended') 
+  if (snakeAudioCtx && snakeAudioCtx.state === 'suspended')
   {
     snakeAudioCtx.resume()
   }
   return snakeAudioCtx
 }
 
-function playSnakeSound(type) 
+function playSnakeSound(type)
 {
   let ctx = getSnakeAudioContext()
   if (!ctx) return
 
-  let oscNode = ctx.createOscillator()
-  let gainNode = ctx.createGain()
-  oscNode.connect(gainNode)
-  gainNode.connect(ctx.destination)
-
   let nowTime = ctx.currentTime
 
-  if (type === 'eat') 
+  if (type === 'eat')
   {
+    let oscNode = ctx.createOscillator()
+    let gainNode = ctx.createGain()
+    oscNode.connect(gainNode)
+    gainNode.connect(ctx.destination)
+
     oscNode.type = 'sine'
-    oscNode.frequency.setValueAtTime(400, nowTime)
-    oscNode.frequency.exponentialRampToValueAtTime(800, nowTime + 0.1)
-    gainNode.gain.setValueAtTime(0.25, nowTime)
-    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.1)
+    oscNode.frequency.setValueAtTime(523.25, nowTime)
+    oscNode.frequency.setValueAtTime(659.25, nowTime + 0.05)
+    
+    gainNode.gain.setValueAtTime(0.2, nowTime)
+    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.12)
+    
     oscNode.start(nowTime)
-    oscNode.stop(nowTime + 0.1)
-  } 
-  else if (type === 'gameover') 
+    oscNode.stop(nowTime + 0.12)
+  }
+  else if (type === 'gameover')
   {
+    let oscNode = ctx.createOscillator()
+    let gainNode = ctx.createGain()
+    oscNode.connect(gainNode)
+    gainNode.connect(ctx.destination)
+
     oscNode.type = 'sawtooth'
-    oscNode.frequency.setValueAtTime(180, nowTime)
-    oscNode.frequency.exponentialRampToValueAtTime(50, nowTime + 0.3)
-    gainNode.gain.setValueAtTime(0.4, nowTime)
-    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.3)
+    oscNode.frequency.setValueAtTime(220, nowTime)
+    oscNode.frequency.exponentialRampToValueAtTime(40, nowTime + 0.4)
+    
+    gainNode.gain.setValueAtTime(0.35, nowTime)
+    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.4)
+    
     oscNode.start(nowTime)
-    oscNode.stop(nowTime + 0.3)
+    oscNode.stop(nowTime + 0.4)
   }
 }
 
 // Dynamic Theme Helper
 
-function getSnakeThemeColor(varName, fallback) 
+function getSnakeThemeColor(varName, fallback)
 {
   let target = document.body || document.documentElement
   let val = getComputedStyle(target).getPropertyValue(varName).trim()
   return val ? val : fallback
 }
 
-function getSnakeGameTheme() 
+function getSnakeGameTheme()
 {
   return {
     bg: getSnakeThemeColor('--bg', '#1d2021'),
@@ -144,15 +153,11 @@ let snakeGameOver = false
 let snakeHighScoreBeaten = false
 let snakeScoreScale = 1
 
-let snakeTouchStartX = 0
-let snakeTouchStartY = 0
-
-function startSnakeGame() 
+function startSnakeGame()
 {
   if (snakeOverlay) return
   
-  // Close active inputs to dismiss onscreen keyboard
-  if (document.activeElement && typeof document.activeElement.blur === 'function') 
+  if (document.activeElement && typeof document.activeElement.blur === 'function')
   {
     document.activeElement.blur()
   }
@@ -166,7 +171,7 @@ function startSnakeGame()
   snakeIntervalId = setInterval(updateSnakeGame, 110)
 }
 
-function stopSnakeGame() 
+function stopSnakeGame()
 {
   if (!snakeOverlay) return
   
@@ -178,7 +183,17 @@ function stopSnakeGame()
   snakeCtx = null
 }
 
-function createSnakeUI() 
+function resetSnakeHighScore()
+{
+  snakeHighScore = 0
+  localStorage.setItem('snake_highscore', '0')
+  snakeHighScoreBeaten = false
+  let sBox = document.getElementById('snake-score-box')
+  if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
+  resetSnakeGame()
+}
+
+function createSnakeUI()
 {
   let theme = getSnakeGameTheme()
 
@@ -193,88 +208,128 @@ function createSnakeUI()
   snakeOverlay.style.display = 'flex'
   snakeOverlay.style.flexDirection = 'column'
   snakeOverlay.style.alignItems = 'center'
-  snakeOverlay.style.justifyContent = 'center'
-  snakeOverlay.style.padding = '16px'
+  snakeOverlay.style.justifyContent = 'flex-start'
+  snakeOverlay.style.padding = '8px 4px'
   snakeOverlay.style.boxSizing = 'border-box'
+  snakeOverlay.style.fontWeight = 'bold'
 
+  // Top Bar Row with Back and Reset buttons
+  let topBar = document.createElement('div')
+  topBar.style.display = 'flex'
+  topBar.style.alignItems = 'center'
+  topBar.style.justifyContent = 'space-between'
+  topBar.style.width = '100%'
+  topBar.style.maxWidth = '380px'
+  topBar.style.marginTop = '4px'
+
+  let backBtn = document.createElement('button')
+  backBtn.innerText = '√back'
+  backBtn.style.padding = '4px 8px'
+  backBtn.style.fontSize = '12px'
+  backBtn.style.fontWeight = 'bold'
+  backBtn.style.width = 'auto'
+  backBtn.style.cursor = 'pointer'
+  backBtn.onclick = stopSnakeGame
+
+  let resetBtn = document.createElement('button')
+  resetBtn.innerText = '√reset'
+  resetBtn.style.padding = '4px 8px'
+  resetBtn.style.fontSize = '12px'
+  resetBtn.style.fontWeight = 'bold'
+  resetBtn.style.width = 'auto'
+  resetBtn.style.cursor = 'pointer'
+  resetBtn.onclick = resetSnakeHighScore
+
+  topBar.appendChild(backBtn)
+  topBar.appendChild(resetBtn)
+
+  // Full width Best score box under the buttons
   let scoreBox = document.createElement('div')
   scoreBox.id = 'snake-score-box'
-  scoreBox.innerText = `High Score: ${snakeHighScore}`
-  scoreBox.style.padding = '12px 28px'
-  scoreBox.style.fontSize = '22px'
+  scoreBox.innerText = `Best: ${snakeHighScore}`
+  scoreBox.style.padding = '6px 12px'
+  scoreBox.style.fontSize = '16px'
   scoreBox.style.fontWeight = 'bold'
   scoreBox.style.color = theme.text
   scoreBox.style.border = `2px solid ${theme.border}`
   scoreBox.style.backgroundColor = theme.surface
-  scoreBox.style.marginBottom = '16px'
   scoreBox.style.textAlign = 'center'
+  scoreBox.style.width = '100%'
+  scoreBox.style.maxWidth = '380px'
+  scoreBox.style.boxSizing = 'border-box'
+  scoreBox.style.marginTop = '8px'
+  scoreBox.style.marginBottom = '8px'
 
+  // Enlarged Canvas
   snakeCanvas = document.createElement('canvas')
   snakeCanvas.width = snakeGridSize * snakeTileCount
   snakeCanvas.height = snakeGridSize * snakeTileCount
-  snakeCanvas.style.maxWidth = '100%'
-  snakeCanvas.style.maxHeight = '65vh'
+  snakeCanvas.style.width = '100%'
+  snakeCanvas.style.maxWidth = '380px'
+  snakeCanvas.style.maxHeight = '58vh'
   snakeCanvas.style.border = `2px solid ${theme.border}`
   snakeCanvas.style.backgroundColor = theme.surface
 
   snakeCtx = snakeCanvas.getContext('2d')
 
-  let backBtn = document.createElement('button')
-  backBtn.innerText = 'Back'
-  backBtn.style.padding = '8px 24px'
-  backBtn.style.fontSize = '14px'
-  backBtn.style.width = 'auto'
-  backBtn.style.minWidth = '100px'
-  backBtn.style.cursor = 'pointer'
-  backBtn.style.marginTop = '28px'
-  backBtn.onclick = stopSnakeGame
+  // Onscreen Arrow Controls
+  let controlsContainer = document.createElement('div')
+  controlsContainer.style.display = 'grid'
+  controlsContainer.style.gridTemplateColumns = 'repeat(3, 1fr)'
+  controlsContainer.style.gridTemplateRows = 'repeat(2, 1fr)'
+  controlsContainer.style.gap = '8px'
+  controlsContainer.style.width = '100%'
+  controlsContainer.style.maxWidth = '220px'
+  controlsContainer.style.marginTop = '12px'
 
+  function makeArrowButton(label, gridArea, onClick)
+  {
+    let btn = document.createElement('button')
+    btn.innerText = label
+    btn.style.gridArea = gridArea
+    btn.style.padding = '12px'
+    btn.style.fontSize = '18px'
+    btn.style.fontWeight = 'bold'
+    btn.style.cursor = 'pointer'
+    btn.style.userSelect = 'none'
+    btn.onclick = (e) => {
+      e.preventDefault()
+      onClick()
+    }
+    return btn
+  }
+
+  let upBtn = makeArrowButton('▲', '1 / 2 / 2 / 3', () => {
+    if (snakeDir.y === 0) snakeNextDir = { x: 0, y: -1 }
+  })
+  let leftBtn = makeArrowButton('◄', '2 / 1 / 3 / 2', () => {
+    if (snakeDir.x === 0) snakeNextDir = { x: -1, y: 0 }
+  })
+  let downBtn = makeArrowButton('▼', '2 / 2 / 3 / 3', () => {
+    if (snakeDir.y === 0) snakeNextDir = { x: 0, y: 1 }
+  })
+  let rightBtn = makeArrowButton('►', '2 / 3 / 3 / 4', () => {
+    if (snakeDir.x === 0) snakeNextDir = { x: 1, y: 0 }
+  })
+
+  controlsContainer.appendChild(upBtn)
+  controlsContainer.appendChild(leftBtn)
+  controlsContainer.appendChild(downBtn)
+  controlsContainer.appendChild(rightBtn)
+
+  snakeOverlay.appendChild(topBar)
   snakeOverlay.appendChild(scoreBox)
   snakeOverlay.appendChild(snakeCanvas)
-  snakeOverlay.appendChild(backBtn)
+  snakeOverlay.appendChild(controlsContainer)
 
   document.body.appendChild(snakeOverlay)
-
-  snakeCanvas.addEventListener('touchstart', (e) => {
-    e.preventDefault()
-    if (snakeGameOver) 
-    {
-      resetSnakeGame()
-      return
-    }
-    snakeTouchStartX = e.touches[0].clientX
-    snakeTouchStartY = e.touches[0].clientY
-  }, { passive: false })
-
-  snakeCanvas.addEventListener('touchend', (e) => {
-    if (snakeGameOver) return
-    let diffX = e.changedTouches[0].clientX - snakeTouchStartX
-    let diffY = e.changedTouches[0].clientY - snakeTouchStartY
-
-    if (Math.abs(diffX) > Math.abs(diffY)) 
-    {
-      if (Math.abs(diffX) > 20) 
-      {
-        if (diffX > 0 && snakeDir.x === 0) snakeNextDir = { x: 1, y: 0 }
-        else if (diffX < 0 && snakeDir.x === 0) snakeNextDir = { x: -1, y: 0 }
-      }
-    } 
-    else 
-    {
-      if (Math.abs(diffY) > 20) 
-      {
-        if (diffY > 0 && snakeDir.y === 0) snakeNextDir = { x: 0, y: 1 }
-        else if (diffY < 0 && snakeDir.y === 0) snakeNextDir = { x: 0, y: -1 }
-      }
-    }
-  })
 
   snakeCanvas.addEventListener('click', () => {
     if (snakeGameOver) resetSnakeGame()
   })
 }
 
-function resetSnakeGame() 
+function resetSnakeGame()
 {
   snakeList = [
     { x: 10, y: 10 },
@@ -290,7 +345,7 @@ function resetSnakeGame()
   spawnSnakeFood()
 }
 
-function spawnSnakeFood() 
+function spawnSnakeFood()
 {
   snakeFood = {
     x: Math.floor(Math.random() * snakeTileCount),
@@ -298,36 +353,36 @@ function spawnSnakeFood()
   }
 }
 
-function handleSnakeInput(e) 
+function handleSnakeInput(e)
 {
-  if (e.key === 'ArrowUp' || e.key === 'w') 
+  if (e.key === 'ArrowUp' || e.key === 'w')
   {
     if (snakeDir.y === 0) snakeNextDir = { x: 0, y: -1 }
-  } 
-  else if (e.key === 'ArrowDown' || e.key === 's') 
+  }
+  else if (e.key === 'ArrowDown' || e.key === 's')
   {
     if (snakeDir.y === 0) snakeNextDir = { x: 0, y: 1 }
-  } 
-  else if (e.key === 'ArrowLeft' || e.key === 'a') 
+  }
+  else if (e.key === 'ArrowLeft' || e.key === 'a')
   {
     if (snakeDir.x === 0) snakeNextDir = { x: -1, y: 0 }
-  } 
-  else if (e.key === 'ArrowRight' || e.key === 'd') 
+  }
+  else if (e.key === 'ArrowRight' || e.key === 'd')
   {
     if (snakeDir.x === 0) snakeNextDir = { x: 1, y: 0 }
   }
 }
 
-function updateSnakeGame() 
+function updateSnakeGame()
 {
   let theme = getSnakeGameTheme()
   
-  if (snakeScoreScale > 1) 
+  if (snakeScoreScale > 1)
   {
     snakeScoreScale -= 0.05
   }
 
-  if (!snakeGameOver) 
+  if (!snakeGameOver)
   {
     snakeDir = snakeNextDir
     
@@ -336,30 +391,30 @@ function updateSnakeGame()
       y: (snakeList[0].y + snakeDir.y + snakeTileCount) % snakeTileCount 
     }
 
-    for (let segment of snakeList) 
+    for (let segment of snakeList)
     {
-      if (segment.x === head.x && segment.y === head.y) 
+      if (segment.x === head.x && segment.y === head.y)
       {
         triggerSnakeGameOver()
         break
       }
     }
 
-    if (!snakeGameOver) 
+    if (!snakeGameOver)
     {
       snakeList.unshift(head)
 
-      if (head.x === snakeFood.x && head.y === snakeFood.y) 
+      if (head.x === snakeFood.x && head.y === snakeFood.y)
       {
         snakeScore++
         snakeScoreScale = 1.5
         playSnakeSound('eat')
-        if (snakeScore > snakeHighScore || snakeHighScore === 0) 
+        if (snakeScore > snakeHighScore || snakeHighScore === 0)
         {
-          if (!snakeHighScoreBeaten) 
+          if (!snakeHighScoreBeaten)
           {
             triggerSnakeConfetti()
-            if (navigator.vibrate) 
+            if (navigator.vibrate)
             {
               navigator.vibrate([100, 50, 100, 50, 200])
             }
@@ -368,11 +423,11 @@ function updateSnakeGame()
           snakeHighScore = snakeScore
           localStorage.setItem('snake_highscore', snakeHighScore.toString())
           let sBox = document.getElementById('snake-score-box')
-          if (sBox) sBox.innerText = `High Score: ${snakeHighScore}`
+          if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
         }
         spawnSnakeFood()
-      } 
-      else 
+      }
+      else
       {
         snakeList.pop()
       }
@@ -382,26 +437,26 @@ function updateSnakeGame()
   drawSnakeGame(theme)
 }
 
-function triggerSnakeGameOver() 
+function triggerSnakeGameOver()
 {
   snakeGameOver = true
   playSnakeSound('gameover')
   
-  if (navigator.vibrate) 
+  if (navigator.vibrate)
   {
     navigator.vibrate(200)
   }
 
-  if (snakeScore > snakeHighScore) 
+  if (snakeScore > snakeHighScore)
   {
     snakeHighScore = snakeScore
     localStorage.setItem('snake_highscore', snakeHighScore.toString())
     let sBox = document.getElementById('snake-score-box')
-    if (sBox) sBox.innerText = `High Score: ${snakeHighScore}`
+    if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
   }
 }
 
-function drawSnakeGame(theme) 
+function drawSnakeGame(theme)
 {
   snakeCtx.fillStyle = theme.surface
   snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height)
@@ -417,7 +472,7 @@ function drawSnakeGame(theme)
   )
   snakeCtx.fill()
 
-  for (let i = 0; i < snakeList.length; i++) 
+  for (let i = 0; i < snakeList.length; i++)
   {
     snakeCtx.fillStyle = i === 0 ? theme.accent : theme.text
     snakeCtx.fillRect(
@@ -435,7 +490,7 @@ function drawSnakeGame(theme)
   snakeCtx.fillText(snakeScore, snakeCanvas.width / 2, 45)
   snakeCtx.restore()
 
-  if (snakeGameOver) 
+  if (snakeGameOver)
   {
     snakeCtx.fillStyle = 'rgba(0,0,0,0.5)'
     snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height)
@@ -445,7 +500,7 @@ function drawSnakeGame(theme)
     snakeCtx.textAlign = 'center'
     snakeCtx.fillText('GAME OVER', snakeCanvas.width / 2, snakeCanvas.height / 2 - 10)
 
-    snakeCtx.font = '14px sans-serif'
-    snakeCtx.fillText('Tap to Restart', snakeCanvas.width / 2, snakeCanvas.height / 2 + 20)
+    snakeCtx.font = 'bold 14px sans-serif'
+    snakeCtx.fillText('Tap Canvas to Restart', snakeCanvas.width / 2, snakeCanvas.height / 2 + 20)
   }
 }

@@ -27,34 +27,43 @@
       android:id="@+id/widget_sort_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
+      android:layout_marginStart="4dp"
       android:paddingStart="6dp"
       android:paddingEnd="6dp"
+      android:paddingTop="2dp"
+      android:paddingBottom="2dp"
       android:text="√s"
-      android:textColor="#CCCCCC"
-      android:textSize="14sp"
-      android:background="?android:attr/selectableItemBackgroundBorderless" />
+      android:textColor="#FFFFFF"
+      android:textSize="13sp"
+      android:background="@drawable/widget_button_bg" />
 
     <TextView
       android:id="@+id/widget_refresh_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
+      android:layout_marginStart="4dp"
       android:paddingStart="6dp"
       android:paddingEnd="6dp"
+      android:paddingTop="2dp"
+      android:paddingBottom="2dp"
       android:text="√r"
-      android:textColor="#CCCCCC"
-      android:textSize="14sp"
-      android:background="?android:attr/selectableItemBackgroundBorderless" />
+      android:textColor="#FFFFFF"
+      android:textSize="13sp"
+      android:background="@drawable/widget_button_bg" />
 
     <TextView
       android:id="@+id/widget_settings_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
+      android:layout_marginStart="4dp"
       android:paddingStart="6dp"
       android:paddingEnd="6dp"
+      android:paddingTop="2dp"
+      android:paddingBottom="2dp"
       android:text="√m"
-      android:textColor="#CCCCCC"
-      android:textSize="14sp"
-      android:background="?android:attr/selectableItemBackgroundBorderless" />
+      android:textColor="#FFFFFF"
+      android:textSize="13sp"
+      android:background="@drawable/widget_button_bg" />
 
   </LinearLayout>
 
