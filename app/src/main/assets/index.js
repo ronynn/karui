@@ -3,6 +3,7 @@ import { setupDragAndDrop } from './dragdrop.js'
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
 import { playSound, createRipple, tryRunGame } from './extras.js'
+import { initCalendar } from './calendar.js'
 
 // --- SECTION: VANILLA JS DOM UTILITIES ---
 export function autoExpandTextarea(el)
@@ -61,6 +62,10 @@ const appStore = reactive(
   noteInput: '',
   quoteText: '',
   quoteAuthor: '',
+
+  calendarEnabled: true,
+  calendarTabName: 'Calkarui',
+  calendarRef: null,
 
   modalVisible: false,
   modalTitle: '',
@@ -228,6 +233,14 @@ const appStore = reactive(
     this.inboxTabName = localStorage.getItem("inboxTabName") || "Inbox"
     this.syncFilePath = localStorage.getItem("syncFilePath") || ""
 
+    this.calendarEnabled = localStorage.getItem("calendarEnabled") !== "false"
+    this.calendarTabName = localStorage.getItem("calendarTabName") || "Calkarui"
+
+    if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
+    {
+      this.noteCategories.push(this.calendarTabName)
+    }
+
     let now = Date.now()
     this.noteCategories.forEach((cat, idx) =>
     {
@@ -264,6 +277,14 @@ const appStore = reactive(
     window.addEventListener('click', e => this.handleGlobalClick(e), true)
     setupNativeHooks(this)
     setupDragAndDrop(this)
+
+    if (this.calendarEnabled)
+    {
+      setTimeout(() =>
+      {
+        this.calendarRef = initCalendar(this)
+      }, 50)
+    }
   },
 
   saveData()
@@ -290,6 +311,14 @@ const appStore = reactive(
     localStorage.setItem("notificationEnabled", this.notificationEnabled)
     localStorage.setItem("inboxTabName", this.inboxTabName)
     localStorage.setItem("syncFilePath", this.syncFilePath)
+
+    localStorage.setItem("calendarEnabled", this.calendarEnabled)
+    localStorage.setItem("calendarTabName", this.calendarTabName)
+
+    if (this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
+    {
+      this.calendarRef.renderCalendar()
+    }
 
     if (this.syncFilePath)
     {
@@ -325,19 +354,136 @@ const appStore = reactive(
 
     if (Math.abs(deltaX) > 60 && Math.abs(deltaY) < 50)
     {
-      if (deltaX < 0 && this.currentScreenIdx === 0)
+      let maxIdx = this.calendarEnabled ? 2 : 1
+      if (deltaX < 0 && this.currentScreenIdx < maxIdx)
       {
-        this.switchScreen(1)
+        this.switchScreen(this.currentScreenIdx + 1)
       }
-      else if (deltaX > 0 && this.currentScreenIdx === 1)
+      else if (deltaX > 0 && this.currentScreenIdx > 0)
       {
-        this.switchScreen(0)
+        this.switchScreen(this.currentScreenIdx - 1)
       }
     }
     this.touchStartX = 0
     this.touchStartY = 0
     this.touchEndX = 0
     this.touchEndY = 0
+  },
+
+  toggleCalendarEnabled()
+  {
+    if (this.calendarEnabled)
+    {
+      if (!this.noteCategories.includes(this.calendarTabName))
+      {
+        this.noteCategories.push(this.calendarTabName)
+      }
+      if (this.currentScreenIdx === 1)
+      {
+        this.currentScreenIdx = 2
+      }
+    }
+    else
+    {
+      if (this.currentScreenIdx === 2)
+      {
+        this.currentScreenIdx = 1
+      }
+      else if (this.currentScreenIdx === 1)
+      {
+        this.currentScreenIdx = 0
+      }
+    }
+    this.saveData()
+    setTimeout(() =>
+    {
+      if (this.calendarEnabled && !this.calendarRef)
+      {
+        this.calendarRef = initCalendar(this)
+      }
+    }, 50)
+  },
+
+  updateCalendarTabName()
+  {
+    let oldName = this.calendarTabName
+    this.calendarTabName = this.calendarTabName.trim() || "Calkarui"
+    if (oldName !== this.calendarTabName)
+    {
+      this.renameTabInternal(oldName, this.calendarTabName)
+    }
+    this.saveData()
+  },
+
+  renameTabInternal(oldName, newName)
+  {
+    if (!oldName || !newName || oldName === newName) return
+    let trimmed = newName.trim()
+    if (!trimmed) return
+
+    let idx = this.noteCategories.indexOf(oldName)
+    if (idx !== -1)
+    {
+      this.noteCategories.splice(idx, 1, trimmed)
+    }
+    else if (!this.noteCategories.includes(trimmed))
+    {
+      this.noteCategories.push(trimmed)
+    }
+
+    if (this.calendarTabName === oldName)
+    {
+      this.calendarTabName = trimmed
+    }
+
+    let now = Date.now()
+    if (!this.categoryMeta) this.categoryMeta = {}
+    let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
+    meta.updatedAt = now
+    this.categoryMeta[trimmed] = meta
+    if (oldName !== trimmed) delete this.categoryMeta[oldName]
+
+    this.notes.forEach(n =>
+    {
+      if (n.category === oldName)
+      {
+        n.category = trimmed
+        n.updatedAt = now
+      }
+    })
+
+    if (this.activeCategory === oldName)
+    {
+      this.activeCategory = trimmed
+    }
+
+    this._dirtyNotes = true
+  },
+
+  renameCategory(oldCat, newCat)
+  {
+    if (!oldCat || !newCat || !newCat.trim() || oldCat === newCat) return
+    let trimmed = newCat.trim()
+
+    if (this.calendarTabName === oldCat)
+    {
+      this.calendarTabName = trimmed
+    }
+
+    this.renameTabInternal(oldCat, trimmed)
+    this.saveData()
+  },
+
+  renameCalendarTab(newName)
+  {
+    let trimmed = (newName || '').trim() || 'Calkarui'
+    let oldName = this.calendarTabName
+    if (oldName !== trimmed)
+    {
+      this.renameTabInternal(oldName, trimmed)
+      this.calendarTabName = trimmed
+      this.saveData()
+    }
   },
 
   handleTabTouchStart(e, tab)
@@ -375,6 +521,7 @@ const appStore = reactive(
   {
     startFontLongPress(fontName, this, 4000)
   },
+
   cancelFontHold()
   {
     clearFontLongPress()
@@ -686,6 +833,7 @@ const appStore = reactive(
 
   openPrompt(title, defaultVal, cb)
   {
+    this.closeAllMenus()
     this.modalTitle = title
     this.modalInput = defaultVal
     this.modalCb = cb
@@ -719,32 +867,8 @@ const appStore = reactive(
   {
     let oldName = this.contextTab || this.activeCategory
     if (!newName || oldName === newName) return
-    let idx = this.noteCategories.indexOf(oldName)
-    if (idx !== -1)
-    {
-      this.noteCategories[idx] = newName
-      let now = Date.now()
-
-      if (!this.categoryMeta) this.categoryMeta = {}
-      let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
-      meta.updatedAt = now
-      this.categoryMeta[newName] = meta
-      delete this.categoryMeta[oldName]
-
-      this.notes.forEach(n =>
-      {
-        if (n.category === oldName)
-        {
-          n.category = newName
-          n.updatedAt = now
-        }
-      })
-      if (this.activeCategory === oldName)
-      {
-        this.activeCategory = newName
-      }
-      this.saveData()
-    }
+    this.renameTabInternal(oldName, newName.trim())
+    this.saveData()
   },
 
   deleteTabClick()

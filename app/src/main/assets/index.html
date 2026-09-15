@@ -68,17 +68,16 @@
     .note-text.completed { text-decoration: line-through; opacity: 0.55; }
     .pin-icon { margin-right: 6px; font-size: calc(14px * var(--ui-scale)); text-decoration: none !important; display: inline-block; }
     .ghost { opacity: 0.35; border: 2px dashed var(--accent); }
-    .menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 12px; z-index: 300; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); }
-    .menu button { margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); }
-    .menu button:last-child { margin-bottom: 0; }
-    #context-menu { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; max-width: 320px; }
+.menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 12px; z-index: 2000; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); min-width: 140px; }
+.menu button { width: 100%; margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); display: block; }
+.menu button:last-child { margin-bottom: 0; }
     .menu-title { font-size: calc(14px * var(--ui-scale)); font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
     .ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0px; }
     .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
     .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
     .about-text { font-size: calc(14px * var(--ui-scale)); line-height: 1.5; color: var(--text); opacity: 0.9; }
     .about-text code { color: var(--accent); }
-    #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 25px; overflow-y:auto;}
+    #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
     .modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y:auto;}
     #toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -102,11 +101,12 @@
   <div id="app-title">Karui</div>
   <div class="pivot-container">
     <div id="tab-home" class="pivot-item" :class="{ active: currentScreenIdx === 0 }" @click="switchScreen(0)">home</div>
-    <div id="tab-settings" class="pivot-item" :class="{ active: currentScreenIdx === 1 }" @click="switchScreen(1)">settings</div>
+<div id="tab-calendar" v-if="calendarEnabled" class="pivot-item" :class="{ active: currentScreenIdx === 1 }" @click="switchScreen(1)">calendar</div>
+    <div id="tab-settings" class="pivot-item" :class="{ active: currentScreenIdx === (calendarEnabled ? 2 : 1) }" @click="switchScreen(calendarEnabled ? 2 : 1)">settings</div>
   </div>
 </header>
 
-<div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)` }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+<div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
   
   <div class="screen" id="home-screen" @scroll="handleScroll">
     <div class="box">
@@ -139,6 +139,18 @@
       </div>
     </div>
   </div>
+
+
+  <div v-if="calendarEnabled" class="screen" id="calendar-screen" @scroll="handleScroll">
+    <div class="box">
+      <span class="box-title" id="calendar-title" style="cursor: pointer;">Box 8: Calendar</span>
+      <div id="calendar-container"></div>
+    </div>
+  </div>
+
+
+
+  
 
   <div class="screen" id="settings-screen" @scroll="handleScroll">
     <div class="box">
@@ -253,6 +265,17 @@
           <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
           <input type="text" style="margin-top: 2px;" v-model="inboxTabName" @change="updateInboxTab">
         </div>
+        <div class="toggle-container">
+      <span>Calendar Tab</span>
+      <label class="switch">
+        <input type="checkbox" v-model="calendarEnabled" @change="toggleCalendarEnabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+<div style="margin-top: 8px;" v-if="calendarEnabled">
+  <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Calendar Tab Name:</label>
+  <input type="text" style="margin-top: 2px;" :value="calendarTabName" @input="renameCalendarTab($event.target.value)">
+</div>
       </div>
     </div>
 
@@ -330,8 +353,8 @@
     <div style="font-weight: bold;">{{ modalTitle }}</div>
     <textarea v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
     <div style="display: flex; gap: 10px;">
-      <button class="btn-subtle" @click="closeModal(false)">Cancel</button>
       <button @click="closeModal(true)">Save</button>
+      <button @click="closeModal(false)">Cancel</button>
     </div>
   </div>
 </div>
