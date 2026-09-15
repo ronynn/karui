@@ -1,43 +1,45 @@
-An open source, privacy focussed, 64kB aesthetic todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
+An open source, privacy focussed, 90kB aesthetic Google Tasks alternative todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
 
-Features
+This app never connects to the internet, you can setup sync to use Karui on other devices or alongside other markdown/text editors as the synced file is a markdown file. To use the widgets, first setup sync as the widget simply reads and writes to the markdown file, thus being energy efficient.
 
-- Simple note taking and list making: Includes an undo delete feature.
-- Retro terminalesque design: Inspired by Unix customizations found online.
+## Use it for
+
+- Daily quick notetaking
+- Tasks list with percentage remaining metrics
+- Taking notes from status bar or other app without switching to Karui or leaving opened app
+- Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok
+- Capture passing thoughts when on a jog
+- Journal events of your daily life on a separate tab, a daily log of activities
+- Making bucket lists
+- Playing quick mobile games (easter eggs)
+- Use it like a password manager, save your passwords for quick access with copy paste at one place
+
+## Features
+
+- Simple note taking and list making with home screen widgets, status bar input, offline sync, recycle bin, drag-and-drop sorting.
+- Bold New UI Design, leaning slightly more into windows-8 metro and windows mobile aesthetics with a mash up of retro terminalesque design inspired by Unix customizations found online.
 - Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - Highly customizable: Offers many themes with option for custom fonts.
-- To add a new note tab: use the `///TabName` format. Bringing some Linux Terminal vibes.
-- To remove any tab (except the Main tab): use the `\\\TabName` format.
+- To add a new note tab: use the `/TabName` format. Bringing some Linux Terminal vibes.
+- To remove any tab (except the Main tab): use the `\TabName` format.
 - Or just long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes)
 - Support for custom fonts, so pick and select any .ttf files you like from your files system
-
-New features
-
-So many new features might as well call it Karui++ now. Almost all new features are toggleable and don't add any bloat
-
 - Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
-- Bolder New UI Design, leaning slightly more into windows-8 metro and windows mobile aesthetics
-- Notes sorting and drag and drop optimized and now looks better
-- UI size options
-- Floating button on bottom right of the app to bring input box in focus
-- Sort Alphabetically
-- Notify when deleting or copying a note, system notifications when copying a note to Karui from another app
 - Add a % symbol on any tabname and it automatically counts percentage of tasks completed
 - Optionally disable screenshots for privacy when screensharing or in general
-- Optional UI Sounds
-- Optional celebration mode with confetti
-- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird and Snake. Use the codes FLAPTHEBIRD AND SLITHER to test them out, share your highscores on our telegram and reddit.
-- Optional button ripple effects
-- Previously I said editing notes features won't be added but now you can edit notes, √c and √d options replaced by a : dropdown
+- Optional UI Sounds, celebration mode with confetti, button ripple effects
+- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird, Snake and Moon lander. Use the codes FLAPTHEBIRD, SLITHER, MOONMAN to test them out, share your highscores on our telegram and reddit.
 
-Bug Fixes/Additional options
-- Keep keyboard on when switching tabs
-- Longpressing tab now always puts the dropdown in the center
 
-Some upcoming features/ ideas I have for the app include
-- Turning your todo tab into a text editor tab
-- Export your notes tabs as just .txt files
-- Markdown support when in text editing mode
-- Biometrics supports needs lot of library bloat so I'm thinking of just pin or password based lock but should it lock the whole app or just specific tabs or both? Open for discussion (tbh everything is open for discussion)
+## Technology/ Features that won't be added
 
-For more details on features, usage, customizations, discussions, visit the github repo. We have recently created a telegram group, discord server, subreddit and a youtube channel focussed on developing foss apps with optimized interfaces, so check out those links in the repo readme, and share your apps and games too. Github issues are still the fastest way to reach out.
+- Internet connectivity: Notepad is a sacred space and shouldn't connect to the internet, for syncing notes between devices this app provides features to set up a markdown file you can sync between devices with syncthing, and even edit with other editors
+- To avoid size bloat, android libraries like androidx that are typically used for statusbar remoteInput and dynamic themeing have been avoided, as a result:-
+    - The statusbar input box is handwritten native code without library dependencies
+    - While we are skipping dynamic themeing, if your color set is not present in the themes just let me know in the github issues or telegram group.
+
+
+
+For more details on features, usage, customizations, discussions, visit the github repo. We actively work out new features that align with our vision. And the dev shares their tech discoveries in the telegram group.
+
+We have recently created a telegram group, discord server, subreddit and a youtube channel focussed on developing foss apps with retro interfaces, so check out those links in the repo readme, and share your apps and games too. Github issues are still the fastest way to reach out.

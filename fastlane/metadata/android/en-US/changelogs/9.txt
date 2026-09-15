@@ -1,1 +1,7 @@
-- Widgets are now available in BETA, only works if you have setup sync, the widgets reads from that .md file.
+Vue rewrite and feature additions
+- Widgets are now available in BETA, only works if you have setup sync, the widget reads from that .md file
+- Widgets have transparency settings, sort, refresh buttons
+- Sync has now been optimised
+- New UI for the easter egg games, reset high scores feature
+- New sort and enter button below input bar
+

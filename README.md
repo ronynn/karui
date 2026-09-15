@@ -4,6 +4,10 @@
   <img src="fastlane/metadata/android/en-US/images/icon.png" alt="App Icon" width="45%">
 </div>
 
+An open source, privacy focussed, 90kB aesthetic todo list Google Tasks alternative to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
+
+This app never connects to the internet, you can setup sync to use Karui on other devices or alongside other markdown/text editors as the synced file is a markdown file. To use the widgets, first setup sync as the widget simply reads and writes to the markdown file, thus being energy efficient. 
+
 
 ![svelte](https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
 )
@@ -15,8 +19,7 @@
 ![android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 [![RB Status](https://shields.rbtlog.dev/simple/io.github.ronynn.karui?style=for-the-badge)](https://shields.rbtlog.dev/io.github.ronynn.karui)
 
-- An open source Google Tasks alternative to quickly jot down things to do, inspired by the system-24 theme and the Windows Mobile design system.
-- This app's design is set to evolve into something even more eye-catching.
+All versions of the app are completely reproducible, just fork the source code from any older release tag. For just a quick read of the older versions and their source code see the archive folder. There you will find the previous Alpine.js, Svelte and Vanilla Javascript versions.
 
 ## Screenshots
 
@@ -31,29 +34,44 @@
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/8.png" alt="Screenshot 8" width="45%">
 </div>
 
+
+## Use it for
+
+- Daily quick notetaking
+- Tasks list with percentage remaining metrics
+- Taking notes from status bar or other app without switching to Karui or leaving opened app
+- Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok
+- Capture passing thoughts when on a jog
+- Journal events of your daily life on a separate tab, a daily log of activities
+- Making bucket lists
+- Playing quick mobile games (easter eggs)
+- Use it like a password manager, save your passwords for quick access with copy paste at one place
+
+
 ## Features
 
-- **Simple note taking and list making:** Includes an undo delete feature.
-- **Retro terminalesque design:** Inspired by Unix customizations found online.
-- Use unix like commands to set or remove notes tabs.
-- **Lightweight:** Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
-- **Highly customizable:** Offers many themes with plans to add more customizations such as fonts, font sizes, and border colors.
-
-So many new features might as well call it Karui++ now. Almost all new features are toggleable and don't add any bloat per say
-
+- Simple note taking and list making with home screen widgets, status bar input, offline sync, recycle bin, drag-and-drop sorting.
+- Bold New UI Design, leaning slightly more into windows-8 metro and windows mobile aesthetics with a mash up of retro terminalesque design inspired by Unix customizations found online.
+- Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
+- Highly customizable: Offers many themes with option for custom fonts.
+- To add a new note tab: use the `/TabName` format. Bringing some Linux Terminal vibes.
+- To remove any tab (except the Main tab): use the `\TabName` format.
+- Or just long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes)
+- Support for custom fonts, so pick and select any .ttf files you like from your files system
 - Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
-- Bolder New UI Design, leaning slightly more into windows8 metro aspects
-- UI size options
-- Floating button on bottom right of the app to bring input box in focus
-- Sort Alphabetically
 - Add a % symbol on any tabname and it automatically counts percentage of tasks completed
 - Optionally disable screenshots for privacy when screensharing or in general
-- Optional UI Sounds
-- Optional celebration mode with confetti
-- Easter egg games (what? my todolist has games?), following the trend from back in the days
-- Optional button ripple effects
-- Now you can edit notes, √c and √d options replaced by a : dropdown
-- Upcoming feature with already working versions: Widgets
+- Optional UI Sounds, celebration mode with confetti, button ripple effects
+- Easter egg games (what? my todolist has games?), following the trend from retro software, games like Flappy Bird, Snake and Moon lander. Use the codes FLAPTHEBIRD, SLITHER, MOONMAN to test them out, share your highscores on our telegram and reddit.
+
+
+## Technology/ Features that won't be added
+
+- Internet connectivity: Notepad is a sacred space and shouldn't connect to the internet, for syncing notes between devices this app provides features to set up a markdown file you can sync between devices with syncthing, and even edit with other editors
+- To avoid size bloat, android libraries like androidx that are typically used for statusbar remoteInput and dynamic themeing have been avoided, as a result:-
+    - The statusbar input box is handwritten native code without library dependencies
+    - While we are skipping dynamic themeing, if your color set is not present in the themes just let me know in the github issues or telegram group.
+
 
 
 ## Working Demos before downloading
@@ -65,16 +83,6 @@ So many new features might as well call it Karui++ now. Almost all new features 
 
 - This app is designed to operate entirely locally, with no cloud storage involved. The app doesn't asks for internet permissions and cannot connect to the internet. Further updates won't add internet permissions either, by design.
 
-## Usage
-
-- Use the input box to make new notes, touch a note to strikethough it, marking it done.
-- Pressing √d deletes a note  it can be restored from recycle bin with √r, √e empties the recycle bin.
-- To add a new note tab, use the `///TabName` format.
-- To remove any tab (except the Main tab), use the `\\\TabName` format.
-- Long press any tab to rename or delete it, or add new tab.
-- Custom fonts are now supported.
-- Add a % symbol on any tabname and it automatically counts percentage of tasks completed
-- Easter Eggs: Read the source code to find codes that unlock easter egg games in the app.
 
 ## Latest Releases for Download
 
@@ -93,16 +101,9 @@ So many new features might as well call it Karui++ now. Almost all new features 
 ## Licenses
 Karui is being developed under the GPLv3 License.
 
-## Roadmap
+## Roadmap /Beta Features
 
-- [x] Enhance accessibility with larger touch areas
-- [x] Pivot control styled tab switcher
-- [x] Gesture flick to change tabs
-- [x] Font size settings
-- [x] Make the UI more responsive for tablets and larger screens
 - [x] Letting user to select their own fonts from file picker
-- [x] Tab adding bar position fix
-- [ ] Resolve dynamic color issues (Need PC Android Studio Setup)
 - [ ] Add translations (didn't face the need/demand)
 - [x] Develop widgets (e.g., Java fetching notes from the .md file that gets synced)
 - [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
