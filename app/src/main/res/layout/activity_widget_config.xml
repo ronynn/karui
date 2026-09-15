@@ -1,100 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
-  android:layout_height="wrap_content"
-  android:background="#1A1A1A"
-  android:padding="16dp">
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:fitsSystemWindows="true"
+  android:padding="24dp">
 
-  <LinearLayout
+  <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Widget Settings"
+    android:textSize="20sp"
+    android:textStyle="bold"
+    android:paddingBottom="16dp" />
+
+  <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Select Tab"
+    android:textSize="14sp"
+    android:paddingBottom="4dp" />
+
+  <Spinner
+    android:id="@+id/spinner_tabs"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:paddingBottom="16dp" />
 
-    <TextView
-      android:layout_width="match_parent"
+  <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Transparency"
+    android:textSize="14sp"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp" />
+
+  <SeekBar
+    android:id="@+id/seekbar_transparency"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:max="100"
+    android:paddingBottom="16dp" />
+
+  <TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Font Style"
+    android:textSize="14sp"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp" />
+
+  <RadioGroup
+    android:id="@+id/radiogroup_font"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingBottom="24dp">
+
+    <RadioButton
+      android:id="@+id/radio_font_default"
+      android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:text="WIDGET SETTINGS"
-      android:textColor="#33B5E5"
-      android:textSize="14sp"
-      android:textStyle="bold"
-      android:paddingBottom="4dp" />
+      android:text="Default"
+      android:checked="true" />
 
-    <View
-      android:layout_width="match_parent"
-      android:layout_height="1dp"
-      android:background="#33B5E5"
-      android:layout_marginBottom="16dp" />
-
-    <TextView
-      android:layout_width="match_parent"
+    <RadioButton
+      android:id="@+id/radio_font_mono"
+      android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:text="Target Tab:"
-      android:textColor="#CCCCCC"
-      android:textSize="13sp"
-      android:paddingBottom="4dp" />
+      android:layout_marginStart="16dp"
+      android:text="Monospace" />
 
-    <Spinner
-      android:id="@+id/spinner_tabs"
-      android:layout_width="match_parent"
-      android:layout_height="48dp"
-      android:background="@android:drawable/btn_dropdown" />
+  </RadioGroup>
 
-    <TextView
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:text="Transparency Level:"
-      android:textColor="#CCCCCC"
-      android:textSize="13sp"
-      android:paddingTop="16dp"
-      android:paddingBottom="4dp" />
+  <Button
+    android:id="@+id/btn_save_widget_config"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Save" />
 
-    <SeekBar
-      android:id="@+id/seekbar_transparency"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:max="100"
-      android:progress="15" />
-
-    <TextView
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:text="Font Style:"
-      android:textColor="#CCCCCC"
-      android:textSize="13sp"
-      android:paddingTop="16dp"
-      android:paddingBottom="4dp" />
-
-    <RadioGroup
-      android:id="@+id/radiogroup_font"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:orientation="horizontal"
-      android:paddingBottom="20dp">
-
-      <RadioButton
-        android:id="@+id/radio_font_default"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Default"
-        android:textColor="#FFFFFF"
-        android:checked="true" />
-
-      <RadioButton
-        android:id="@+id/radio_font_mono"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Monospace"
-        android:textColor="#FFFFFF"
-        android:layout_marginStart="24dp" />
-    </RadioGroup>
-
-    <Button
-      android:id="@+id/btn_save_widget_config"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:text="Save"
-      android:textColor="#FFFFFF"
-      android:background="@android:drawable/btn_default" />
-
-  </LinearLayout>
-</ScrollView>
+</LinearLayout>

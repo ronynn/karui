@@ -44,7 +44,7 @@
     button:active { filter: brightness(0.8); }
     .input-actions-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 8px; flex-wrap: wrap; }
     .box1-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-    .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; }
+    .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; text-transform:lowercase;}
     .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
     .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
     .toggle-container:last-of-type { border-bottom: none; }
@@ -113,8 +113,8 @@
       <div class="input-actions-bar">
         <span class="text-muted" style="font-size: calc(14px * var(--ui-scale));" id="stats">{{ statsText }}</span>
         <div class="box1-btns">
-          <button class="icon-btn-small" :class="{ active: sortAlphabetical }" @click="toggleSortAlphabetical" title="Sort Alphabetically">⌋</button>
-          <button class="icon-btn-small" @click="submitNote" title="Submit Note">↵</button>
+          <button class="icon-btn-small" :class="{ active: sortAlphabetical }" @click="toggleSortAlphabetical" title="Sort Alphabetically">√s</button>
+          <button class="icon-btn-small" @click="submitNote" title="Submit Note">√e</button>
         </div>
       </div>
     </div>

@@ -25,28 +25,36 @@
 
     <TextView
       android:id="@+id/widget_sort_btn"
-      android:layout_width="24dp"
-      android:layout_height="24dp"
-      android:background="?android:attr/selectableItemBackgroundBorderless"
-      android:src="@android:drawable/ic_menu_sort_alphabetically"
-      android:contentDescription="Sort" />
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:paddingStart="6dp"
+      android:paddingEnd="6dp"
+      android:text="√s"
+      android:textColor="#CCCCCC"
+      android:textSize="14sp"
+      android:background="?android:attr/selectableItemBackgroundBorderless" />
 
-    <ImageButton
+    <TextView
       android:id="@+id/widget_refresh_btn"
-      android:layout_width="24dp"
-      android:layout_height="24dp"
-      android:background="?android:attr/selectableItemBackgroundBorderless"
-      android:src="@android:drawable/ic_popup_sync"
-      android:contentDescription="Refresh" />
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:paddingStart="6dp"
+      android:paddingEnd="6dp"
+      android:text="√r"
+      android:textColor="#CCCCCC"
+      android:textSize="14sp"
+      android:background="?android:attr/selectableItemBackgroundBorderless" />
 
-    <ImageButton
+    <TextView
       android:id="@+id/widget_settings_btn"
-      android:layout_width="24dp"
-      android:layout_height="24dp"
-      android:layout_marginStart="8dp"
-      android:background="?android:attr/selectableItemBackgroundBorderless"
-      android:src="@android:drawable/ic_menu_more"
-      android:contentDescription="Settings" />
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:paddingStart="6dp"
+      android:paddingEnd="6dp"
+      android:text="√m"
+      android:textColor="#CCCCCC"
+      android:textSize="14sp"
+      android:background="?android:attr/selectableItemBackgroundBorderless" />
 
   </LinearLayout>
 

@@ -31,9 +31,9 @@ public class NotesWidgetProvider extends AppWidgetProvider
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
   {
     for (int appWidgetId : appWidgetIds)
-    {
-      updateAppWidget(context, appWidgetManager, appWidgetId);
-    }
+      {
+        updateAppWidget(context, appWidgetManager, appWidgetId);
+      }
   }
 
   // --- SECTION: RECEIVER AND ACTIONS ---
@@ -117,14 +117,14 @@ public class NotesWidgetProvider extends AppWidgetProvider
     );
     views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPendingIntent);
 
+    // --- SECTION: PENDING INTENTS ---
     Intent configIntent = new Intent(context, WidgetConfigActivity.class);
     configIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-    configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+    configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     PendingIntent configPendingIntent = PendingIntent.getActivity(
       context, appWidgetId, configIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
     );
     views.setOnClickPendingIntent(R.id.widget_settings_btn, configPendingIntent);
-
     Intent openAppIntent = new Intent(context, MainActivity.class);
     PendingIntent openAppPendingIntent = PendingIntent.getActivity(
       context, 0, openAppIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
@@ -146,72 +146,72 @@ public class NotesWidgetProvider extends AppWidgetProvider
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
-    {
-      Uri uri = Uri.parse(uriStr);
-      InputStream inputStream = context.getContentResolver().openInputStream(uri);
-      if (inputStream == null) return;
-
-      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-      List<String> fileLines = new ArrayList<>();
-      List<String> categoryNotes = new ArrayList<>();
-      String line;
-      String currentCategory = "Main";
-      int categoryStartIndex = -1;
-
-      while ((line = reader.readLine()) != null)
       {
-        String trimmed = line.trim();
-        if (trimmed.startsWith("## "))
-        {
-          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+        Uri uri = Uri.parse(uriStr);
+        InputStream inputStream = context.getContentResolver().openInputStream(uri);
+        if (inputStream == null) return;
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        List<String> fileLines = new ArrayList<>();
+        List<String> categoryNotes = new ArrayList<>();
+        String line;
+        String currentCategory = "Main";
+        int categoryStartIndex = -1;
+
+        while ((line = reader.readLine()) != null)
           {
-            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-            fileLines.addAll(categoryNotes);
-            categoryNotes.clear();
+            String trimmed = line.trim();
+            if (trimmed.startsWith("## "))
+            {
+              if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+              {
+                Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+                fileLines.addAll(categoryNotes);
+                categoryNotes.clear();
+              }
+              currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
+              fileLines.add(line);
+            }
+            else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
+            {
+              categoryNotes.add(line);
+            }
+            else
+            {
+              if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+              {
+                Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+                fileLines.addAll(categoryNotes);
+                categoryNotes.clear();
+              }
+              fileLines.add(line);
+            }
           }
-          currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
-          fileLines.add(line);
-        }
-        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
+
+        if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
         {
-          categoryNotes.add(line);
+          Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+          fileLines.addAll(categoryNotes);
         }
-        else
+
+        reader.close();
+
+        OutputStream outputStream = context.getContentResolver().openOutputStream(uri, "rwt");
+        if (outputStream != null)
         {
-          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
-          {
-            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-            fileLines.addAll(categoryNotes);
-            categoryNotes.clear();
-          }
-          fileLines.add(line);
+          BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+          for (int i = 0; i < fileLines.size(); i++)
+            {
+              writer.write(fileLines.get(i));
+              if (i < fileLines.size() - 1) writer.newLine();
+            }
+          writer.flush();
+          writer.close();
         }
       }
-
-      if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
-      {
-        Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-        fileLines.addAll(categoryNotes);
-      }
-
-      reader.close();
-
-      OutputStream outputStream = context.getContentResolver().openOutputStream(uri, "rwt");
-      if (outputStream != null)
-      {
-        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
-        for (int i = 0; i < fileLines.size(); i++)
-        {
-          writer.write(fileLines.get(i));
-          if (i < fileLines.size() - 1) writer.newLine();
-        }
-        writer.flush();
-        writer.close();
-      }
-    }
     catch (Exception e)
-    {
-      e.printStackTrace();
-    }
+      {
+        e.printStackTrace();
+      }
   }
 }
