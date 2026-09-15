@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.StrikethroughSpan;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
@@ -49,6 +52,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   {
   }
 
+  // --- SECTION: DATA LOADERS ---
   @Override
   public void onDataSetChanged()
   {
@@ -168,6 +172,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     return mNotes.size();
   }
 
+  // --- SECTION: ITEM BINDING ---
   @Override
   public RemoteViews getViewAt(int position)
   {
@@ -176,8 +181,13 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     NoteItem item = mNotes.get(position);
     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item);
 
-    String prefix = item.completed ? "[x] " : "[ ] ";
-    views.setTextViewText(R.id.widget_item_text, prefix + item.text);
+    SpannableString span = new SpannableString(item.text);
+    if (item.completed)
+    {
+      span.setSpan(new StrikethroughSpan(), 0, span.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    views.setTextViewText(R.id.widget_item_text, span);
 
     Intent fillInIntent = new Intent();
     fillInIntent.putExtra("raw_note", item.raw);
@@ -190,7 +200,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   @Override
   public RemoteViews getLoadingView()
   {
-    return null;
+    return new RemoteViews(mContext.getPackageName(), R.layout.widget_loading);
   }
 
   @Override

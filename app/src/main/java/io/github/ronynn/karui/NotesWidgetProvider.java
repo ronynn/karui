@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.widget.RemoteViews;
 
 public class NotesWidgetProvider extends AppWidgetProvider
@@ -42,15 +43,25 @@ public class NotesWidgetProvider extends AppWidgetProvider
     }
   }
 
-  // Section: Widget Update Logic
+  // --- SECTION: WIDGET UPDATE LOGIC ---
   public static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId)
   {
     SharedPreferences widgetPrefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
     String tabTitle = widgetPrefs.getString("widget_tab_" + appWidgetId, "Karui Notes");
     int transparencyPct = widgetPrefs.getInt("widget_transparency_" + appWidgetId, 15);
 
+    int baseColor;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+    {
+      baseColor = context.getColor(android.R.color.system_neutral1_900);
+    }
+    else
+    {
+      baseColor = Color.parseColor("#1E1E1E");
+    }
+
     int alpha = (int) ((1.0f - (transparencyPct / 100.0f)) * 255);
-    int backgroundColor = Color.argb(alpha, 255, 255, 255);
+    int backgroundColor = Color.argb(alpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor));
 
     Intent serviceIntent = new Intent(context, NotesWidgetService.class);
     serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
@@ -62,7 +73,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
     views.setRemoteAdapter(R.id.widget_list_view, serviceIntent);
     views.setEmptyView(R.id.widget_list_view, R.id.widget_empty_view);
 
-    // Section: Pending Intents Setup
+    // --- SECTION: PENDING INTENTS SETUP ---
     Intent toggleIntent = new Intent(context, WidgetToggleReceiver.class);
     PendingIntent togglePendingIntent = PendingIntent.getBroadcast(
       context, appWidgetId, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
