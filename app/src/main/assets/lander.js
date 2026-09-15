@@ -465,6 +465,7 @@ function resetLanderLevel(resetScore)
   landerGameOver = false
   landerLanded = false
   landerSettled = false
+  landerHighScoreBeaten = false
 }
 
 function handleLanderKeyDown(e)
@@ -614,7 +615,11 @@ function updateLanderGame(deltaFactor)
 function triggerLanderSuccess()
 {
   landerScore++
-  if (landerScore > landerHighScore || landerHighScore === 0)
+
+  let isFirstScoreEver = (landerHighScore === 0 && landerScore === 1)
+  let isNewHighScore = (landerScore > landerHighScore && landerHighScore > 0)
+
+  if (isFirstScoreEver || isNewHighScore)
   {
     if (!landerHighScoreBeaten)
     {
@@ -622,6 +627,10 @@ function triggerLanderSuccess()
       if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200])
       landerHighScoreBeaten = true
     }
+  }
+
+  if (landerScore > landerHighScore)
+  {
     landerHighScore = landerScore
     localStorage.setItem('lander_highscore', landerHighScore.toString())
   }
