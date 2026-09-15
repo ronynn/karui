@@ -69,13 +69,12 @@ public class WidgetConfigActivity extends Activity
     }
 
     ArrayAdapter<String> adapter = new ArrayAdapter<>(
-      this, android.R.layout.simple_spinner_item, categories);
-    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+      this, android.R.layout.simple_spinner_dropdown_item, categories);
     spinnerTabs.setAdapter(adapter);
 
     SharedPreferences prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE);
     String savedTab = prefs.getString("widget_tab_" + mAppWidgetId, categories.get(0));
-    int savedTrans = prefs.getInt("widget_transparency_" + mAppWidgetId, 15);
+    int savedTrans = prefs.getInt("widget_transparency_" + mAppWidgetId, 50);
     String savedFont = prefs.getString("widget_font_" + mAppWidgetId, "DEFAULT");
 
     int tabPos = categories.indexOf(savedTab);
@@ -97,6 +96,7 @@ public class WidgetConfigActivity extends Activity
     });
   }
 
+  // --- SECTION: PREFERENCE SAVING ---
   private void saveWidgetPreferences()
   {
     String selectedTab = (String) spinnerTabs.getSelectedItem();
@@ -122,6 +122,7 @@ public class WidgetConfigActivity extends Activity
     finish();
   }
 
+  // --- SECTION: CATEGORY PARSER ---
   private List<String> loadCategoriesFromMarkdown()
   {
     List<String> categories = new ArrayList<>();

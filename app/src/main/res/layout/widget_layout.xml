@@ -4,11 +4,9 @@
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:orientation="vertical"
-  android:background="@drawable/glass_background"
-  android:padding="12dp">
+  android:padding="8dp">
 
   <LinearLayout
-    android:id="@+id/widget_header"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -20,25 +18,36 @@
       android:layout_width="0dp"
       android:layout_height="wrap_content"
       android:layout_weight="1"
-      android:text="Karui Notes"
+      android:text="Notes"
       android:textColor="#FFFFFF"
-      android:textSize="14sp"
+      android:textSize="16sp"
       android:textStyle="bold" />
 
-    <ImageView
+    <TextView
+      android:id="@+id/widget_sort_btn"
+      android:layout_width="24dp"
+      android:layout_height="24dp"
+      android:background="?android:attr/selectableItemBackgroundBorderless"
+      android:src="@android:drawable/ic_menu_sort_alphabetically"
+      android:contentDescription="Sort" />
+
+    <ImageButton
       android:id="@+id/widget_refresh_btn"
-      android:layout_width="22dp"
-      android:layout_height="22dp"
-      android:layout_marginEnd="8dp"
+      android:layout_width="24dp"
+      android:layout_height="24dp"
+      android:background="?android:attr/selectableItemBackgroundBorderless"
       android:src="@android:drawable/ic_popup_sync"
       android:contentDescription="Refresh" />
 
-    <ImageView
+    <ImageButton
       android:id="@+id/widget_settings_btn"
-      android:layout_width="22dp"
-      android:layout_height="22dp"
-      android:src="@android:drawable/ic_menu_manage"
+      android:layout_width="24dp"
+      android:layout_height="24dp"
+      android:layout_marginStart="8dp"
+      android:background="?android:attr/selectableItemBackgroundBorderless"
+      android:src="@android:drawable/ic_menu_more"
       android:contentDescription="Settings" />
+
   </LinearLayout>
 
   <ListView
@@ -46,17 +55,16 @@
     android:layout_width="match_parent"
     android:layout_height="0dp"
     android:layout_weight="1"
-    android:divider="@android:color/transparent"
-    android:dividerHeight="2dp" />
+    android:divider="@null"
+    android:dividerHeight="0dp" />
 
   <TextView
     android:id="@+id/widget_empty_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center"
-    android:text="No notes found.\nSet up a sync file or select a tab."
+    android:text="No notes found! Set up sync and then select a tab. \n -ronynn"
     android:textColor="#AAAAAA"
-    android:textSize="13sp"
     android:visibility="gone" />
 
 </LinearLayout>

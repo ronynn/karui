@@ -12,9 +12,20 @@ import android.net.Uri;
 import android.os.Build;
 import android.widget.RemoteViews;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class NotesWidgetProvider extends AppWidgetProvider
 {
   public static final String ACTION_WIDGET_REFRESH = "io.github.ronynn.karui.ACTION_WIDGET_REFRESH";
+  public static final String ACTION_WIDGET_SORT = "io.github.ronynn.karui.ACTION_WIDGET_SORT";
 
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
@@ -25,15 +36,26 @@ public class NotesWidgetProvider extends AppWidgetProvider
     }
   }
 
+  // --- SECTION: RECEIVER AND ACTIONS ---
   @Override
   public void onReceive(Context context, Intent intent)
   {
     super.onReceive(context, intent);
 
     String action = intent.getAction();
+    if (ACTION_WIDGET_SORT.equals(action))
+    {
+      int appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+      if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID)
+      {
+        sortWidgetNotesAlphabetically(context, appWidgetId);
+      }
+    }
+
     if (MainActivity.ACTION_NOTE_ADDED.equals(action) ||
         AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action) ||
-        ACTION_WIDGET_REFRESH.equals(action))
+        ACTION_WIDGET_REFRESH.equals(action) ||
+        ACTION_WIDGET_SORT.equals(action))
     {
       AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
       ComponentName thisWidget = new ComponentName(context, NotesWidgetProvider.class);
@@ -48,12 +70,12 @@ public class NotesWidgetProvider extends AppWidgetProvider
   {
     SharedPreferences widgetPrefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
     String tabTitle = widgetPrefs.getString("widget_tab_" + appWidgetId, "Karui Notes");
-    int transparencyPct = widgetPrefs.getInt("widget_transparency_" + appWidgetId, 15);
+    int transparencyPct = widgetPrefs.getInt("widget_transparency_" + appWidgetId, 50);
 
     int baseColor;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
     {
-      baseColor = context.getColor(android.R.color.system_neutral1_900);
+      baseColor = context.getColor(android.R.color.system_accent1_900);
     }
     else
     {
@@ -73,12 +95,20 @@ public class NotesWidgetProvider extends AppWidgetProvider
     views.setRemoteAdapter(R.id.widget_list_view, serviceIntent);
     views.setEmptyView(R.id.widget_list_view, R.id.widget_empty_view);
 
-    // --- SECTION: PENDING INTENTS SETUP ---
+    // --- SECTION: PENDING INTENTS ---
     Intent toggleIntent = new Intent(context, WidgetToggleReceiver.class);
     PendingIntent togglePendingIntent = PendingIntent.getBroadcast(
       context, appWidgetId, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
     );
     views.setPendingIntentTemplate(R.id.widget_list_view, togglePendingIntent);
+
+    Intent sortIntent = new Intent(context, NotesWidgetProvider.class);
+    sortIntent.setAction(ACTION_WIDGET_SORT);
+    sortIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+    PendingIntent sortPendingIntent = PendingIntent.getBroadcast(
+      context, appWidgetId, sortIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+    );
+    views.setOnClickPendingIntent(R.id.widget_sort_btn, sortPendingIntent);
 
     Intent refreshIntent = new Intent(context, NotesWidgetProvider.class);
     refreshIntent.setAction(ACTION_WIDGET_REFRESH);
@@ -89,7 +119,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
 
     Intent configIntent = new Intent(context, WidgetConfigActivity.class);
     configIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-    configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
     PendingIntent configPendingIntent = PendingIntent.getActivity(
       context, appWidgetId, configIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
     );
@@ -102,5 +132,86 @@ public class NotesWidgetProvider extends AppWidgetProvider
     views.setOnClickPendingIntent(R.id.widget_title, openAppPendingIntent);
 
     appWidgetManager.updateAppWidget(appWidgetId, views);
+  }
+
+  // --- SECTION: FILE SORTING ---
+  private void sortWidgetNotesAlphabetically(Context context, int appWidgetId)
+  {
+    SharedPreferences widgetPrefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
+    String targetTab = widgetPrefs.getString("widget_tab_" + appWidgetId, "Main");
+
+    SharedPreferences syncPrefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
+    String uriStr = syncPrefs.getString("sync_file_uri", null);
+
+    if (uriStr == null || uriStr.isEmpty()) return;
+
+    try
+    {
+      Uri uri = Uri.parse(uriStr);
+      InputStream inputStream = context.getContentResolver().openInputStream(uri);
+      if (inputStream == null) return;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      List<String> fileLines = new ArrayList<>();
+      List<String> categoryNotes = new ArrayList<>();
+      String line;
+      String currentCategory = "Main";
+      int categoryStartIndex = -1;
+
+      while ((line = reader.readLine()) != null)
+      {
+        String trimmed = line.trim();
+        if (trimmed.startsWith("## "))
+        {
+          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+          {
+            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+            fileLines.addAll(categoryNotes);
+            categoryNotes.clear();
+          }
+          currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
+          fileLines.add(line);
+        }
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
+        {
+          categoryNotes.add(line);
+        }
+        else
+        {
+          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+          {
+            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+            fileLines.addAll(categoryNotes);
+            categoryNotes.clear();
+          }
+          fileLines.add(line);
+        }
+      }
+
+      if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+      {
+        Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+        fileLines.addAll(categoryNotes);
+      }
+
+      reader.close();
+
+      OutputStream outputStream = context.getContentResolver().openOutputStream(uri, "rwt");
+      if (outputStream != null)
+      {
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+        for (int i = 0; i < fileLines.size(); i++)
+        {
+          writer.write(fileLines.get(i));
+          if (i < fileLines.size() - 1) writer.newLine();
+        }
+        writer.flush();
+        writer.close();
+      }
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
   }
 }
