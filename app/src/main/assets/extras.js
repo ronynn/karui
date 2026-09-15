@@ -81,6 +81,7 @@ export function createRipple(e, btn)
 
 export const gameRegistry = {
   'FLAPTHEBIRD': () => typeof startFlapGame === 'function' && startFlapGame(),
+  'MOON': () => typeof startFlapGame === 'function' && startLanderGame(),
   'SLITHER': () => typeof startSnakeGame === 'function' && startSnakeGame()
 }
 

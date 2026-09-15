@@ -1,5 +1,3 @@
-// Confetti Script Loader & Helper (Snake Scoped)
-
 let snakeConfettiLoaded = false
 
 function ensureSnakeConfettiLoaded(callback)
@@ -139,7 +137,7 @@ function getSnakeGameTheme()
 let snakeOverlay = null
 let snakeCanvas = null
 let snakeCtx = null
-let snakeIntervalId = null
+let snakeAnimFrameId = null
 
 let snakeList = []
 let snakeFood = { x: 0, y: 0 }
@@ -151,7 +149,11 @@ let snakeScore = 0
 let snakeHighScore = parseInt(localStorage.getItem('snake_highscore') || '0', 10)
 let snakeGameOver = false
 let snakeHighScoreBeaten = false
-let snakeScoreScale = 1
+
+// Timing variables for rAF loop
+let lastFrameTime = 0
+let accumulatedTime = 0
+const tickRate = 110
 
 function startSnakeGame()
 {
@@ -168,14 +170,20 @@ function startSnakeGame()
   createSnakeUI()
   resetSnakeGame()
   window.addEventListener('keydown', handleSnakeInput)
-  snakeIntervalId = setInterval(updateSnakeGame, 110)
+  
+  lastFrameTime = performance.now()
+  accumulatedTime = 0
+  snakeAnimFrameId = requestAnimationFrame(gameLoop)
 }
 
 function stopSnakeGame()
 {
   if (!snakeOverlay) return
   
-  clearInterval(snakeIntervalId)
+  if (snakeAnimFrameId)
+  {
+    cancelAnimationFrame(snakeAnimFrameId)
+  }
   window.removeEventListener('keydown', handleSnakeInput)
   document.body.removeChild(snakeOverlay)
   snakeOverlay = null
@@ -188,8 +196,6 @@ function resetSnakeHighScore()
   snakeHighScore = 0
   localStorage.setItem('snake_highscore', '0')
   snakeHighScoreBeaten = false
-  let sBox = document.getElementById('snake-score-box')
-  if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
   resetSnakeGame()
 }
 
@@ -209,11 +215,13 @@ function createSnakeUI()
   snakeOverlay.style.flexDirection = 'column'
   snakeOverlay.style.alignItems = 'center'
   snakeOverlay.style.justifyContent = 'flex-start'
-  snakeOverlay.style.padding = '8px 4px'
+  snakeOverlay.style.paddingTop = 'calc(52px + env(safe-area-inset-top, 0px))'
+  snakeOverlay.style.paddingLeft = '8px'
+  snakeOverlay.style.paddingRight = '8px'
+  snakeOverlay.style.paddingBottom = '8px'
   snakeOverlay.style.boxSizing = 'border-box'
   snakeOverlay.style.fontWeight = 'bold'
 
-  // Top Bar Row with Back and Reset buttons
   let topBar = document.createElement('div')
   topBar.style.display = 'flex'
   topBar.style.alignItems = 'center'
@@ -221,46 +229,31 @@ function createSnakeUI()
   topBar.style.width = '100%'
   topBar.style.maxWidth = '380px'
   topBar.style.marginTop = '4px'
+  topBar.style.marginBottom = '12px'
 
   let backBtn = document.createElement('button')
-  backBtn.innerText = '√back'
-  backBtn.style.padding = '4px 8px'
-  backBtn.style.fontSize = '12px'
+  backBtn.innerText = 'back'
+  backBtn.style.padding = '10px 28px'
+  backBtn.style.fontSize = '18px'
   backBtn.style.fontWeight = 'bold'
   backBtn.style.width = 'auto'
+  backBtn.style.minWidth = '110px'
   backBtn.style.cursor = 'pointer'
   backBtn.onclick = stopSnakeGame
 
   let resetBtn = document.createElement('button')
-  resetBtn.innerText = '√reset'
-  resetBtn.style.padding = '4px 8px'
-  resetBtn.style.fontSize = '12px'
+  resetBtn.innerText = 'reset'
+  resetBtn.style.padding = '10px 28px'
+  resetBtn.style.fontSize = '18px'
   resetBtn.style.fontWeight = 'bold'
   resetBtn.style.width = 'auto'
+  resetBtn.style.minWidth = '110px'
   resetBtn.style.cursor = 'pointer'
   resetBtn.onclick = resetSnakeHighScore
 
   topBar.appendChild(backBtn)
   topBar.appendChild(resetBtn)
 
-  // Full width Best score box under the buttons
-  let scoreBox = document.createElement('div')
-  scoreBox.id = 'snake-score-box'
-  scoreBox.innerText = `Best: ${snakeHighScore}`
-  scoreBox.style.padding = '6px 12px'
-  scoreBox.style.fontSize = '16px'
-  scoreBox.style.fontWeight = 'bold'
-  scoreBox.style.color = theme.text
-  scoreBox.style.border = `2px solid ${theme.border}`
-  scoreBox.style.backgroundColor = theme.surface
-  scoreBox.style.textAlign = 'center'
-  scoreBox.style.width = '100%'
-  scoreBox.style.maxWidth = '380px'
-  scoreBox.style.boxSizing = 'border-box'
-  scoreBox.style.marginTop = '8px'
-  scoreBox.style.marginBottom = '8px'
-
-  // Enlarged Canvas
   snakeCanvas = document.createElement('canvas')
   snakeCanvas.width = snakeGridSize * snakeTileCount
   snakeCanvas.height = snakeGridSize * snakeTileCount
@@ -272,7 +265,6 @@ function createSnakeUI()
 
   snakeCtx = snakeCanvas.getContext('2d')
 
-  // Onscreen Arrow Controls
   let controlsContainer = document.createElement('div')
   controlsContainer.style.display = 'grid'
   controlsContainer.style.gridTemplateColumns = 'repeat(3, 1fr)'
@@ -299,16 +291,16 @@ function createSnakeUI()
     return btn
   }
 
-  let upBtn = makeArrowButton('▲', '1 / 2 / 2 / 3', () => {
+  let upBtn = makeArrowButton('W', '1 / 2 / 2 / 3', () => {
     if (snakeDir.y === 0) snakeNextDir = { x: 0, y: -1 }
   })
-  let leftBtn = makeArrowButton('◄', '2 / 1 / 3 / 2', () => {
+  let leftBtn = makeArrowButton('A', '2 / 1 / 3 / 2', () => {
     if (snakeDir.x === 0) snakeNextDir = { x: -1, y: 0 }
   })
-  let downBtn = makeArrowButton('▼', '2 / 2 / 3 / 3', () => {
+  let downBtn = makeArrowButton('S', '2 / 2 / 3 / 3', () => {
     if (snakeDir.y === 0) snakeNextDir = { x: 0, y: 1 }
   })
-  let rightBtn = makeArrowButton('►', '2 / 3 / 3 / 4', () => {
+  let rightBtn = makeArrowButton('D', '2 / 3 / 3 / 4', () => {
     if (snakeDir.x === 0) snakeNextDir = { x: 1, y: 0 }
   })
 
@@ -318,7 +310,6 @@ function createSnakeUI()
   controlsContainer.appendChild(rightBtn)
 
   snakeOverlay.appendChild(topBar)
-  snakeOverlay.appendChild(scoreBox)
   snakeOverlay.appendChild(snakeCanvas)
   snakeOverlay.appendChild(controlsContainer)
 
@@ -339,7 +330,6 @@ function resetSnakeGame()
   snakeDir = { x: 1, y: 0 }
   snakeNextDir = { x: 1, y: 0 }
   snakeScore = 0
-  snakeScoreScale = 1
   snakeGameOver = false
   snakeHighScoreBeaten = false
   spawnSnakeFood()
@@ -373,15 +363,8 @@ function handleSnakeInput(e)
   }
 }
 
-function updateSnakeGame()
+function updateSnakeGameLogic()
 {
-  let theme = getSnakeGameTheme()
-  
-  if (snakeScoreScale > 1)
-  {
-    snakeScoreScale -= 0.05
-  }
-
   if (!snakeGameOver)
   {
     snakeDir = snakeNextDir
@@ -407,7 +390,6 @@ function updateSnakeGame()
       if (head.x === snakeFood.x && head.y === snakeFood.y)
       {
         snakeScore++
-        snakeScoreScale = 1.5
         playSnakeSound('eat')
         if (snakeScore > snakeHighScore || snakeHighScore === 0)
         {
@@ -422,8 +404,6 @@ function updateSnakeGame()
           }
           snakeHighScore = snakeScore
           localStorage.setItem('snake_highscore', snakeHighScore.toString())
-          let sBox = document.getElementById('snake-score-box')
-          if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
         }
         spawnSnakeFood()
       }
@@ -433,8 +413,27 @@ function updateSnakeGame()
       }
     }
   }
+}
 
+function gameLoop(now)
+{
+  if (!snakeOverlay) return
+
+  let delta = now - lastFrameTime
+  lastFrameTime = now
+  accumulatedTime += delta
+
+  // Process game movement steps based on precise delta time
+  while (accumulatedTime >= tickRate)
+  {
+    updateSnakeGameLogic()
+    accumulatedTime -= tickRate
+  }
+
+  let theme = getSnakeGameTheme()
   drawSnakeGame(theme)
+
+  snakeAnimFrameId = requestAnimationFrame(gameLoop)
 }
 
 function triggerSnakeGameOver()
@@ -451,8 +450,6 @@ function triggerSnakeGameOver()
   {
     snakeHighScore = snakeScore
     localStorage.setItem('snake_highscore', snakeHighScore.toString())
-    let sBox = document.getElementById('snake-score-box')
-    if (sBox) sBox.innerText = `Best: ${snakeHighScore}`
   }
 }
 
@@ -483,12 +480,14 @@ function drawSnakeGame(theme)
     )
   }
 
-  snakeCtx.save()
   snakeCtx.fillStyle = theme.text
-  snakeCtx.font = `bold ${Math.floor(26 * snakeScoreScale)}px sans-serif`
-  snakeCtx.textAlign = 'center'
-  snakeCtx.fillText(snakeScore, snakeCanvas.width / 2, 45)
-  snakeCtx.restore()
+  snakeCtx.font = 'bold 16px monospace'
+  
+  snakeCtx.textAlign = 'left'
+  snakeCtx.fillText(`PTS ${snakeScore}`, 12, 28)
+
+  snakeCtx.textAlign = 'right'
+  snakeCtx.fillText(`HI ${snakeHighScore}`, snakeCanvas.width - 12, 28)
 
   if (snakeGameOver)
   {
@@ -496,11 +495,11 @@ function drawSnakeGame(theme)
     snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height)
 
     snakeCtx.fillStyle = '#fff'
-    snakeCtx.font = 'bold 26px sans-serif'
+    snakeCtx.font = 'bold 26px monospace'
     snakeCtx.textAlign = 'center'
     snakeCtx.fillText('GAME OVER', snakeCanvas.width / 2, snakeCanvas.height / 2 - 10)
 
-    snakeCtx.font = 'bold 14px sans-serif'
+    snakeCtx.font = 'bold 14px monospace'
     snakeCtx.fillText('Tap Canvas to Restart', snakeCanvas.width / 2, snakeCanvas.height / 2 + 20)
   }
 }
