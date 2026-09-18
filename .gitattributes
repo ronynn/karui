@@ -1,2 +1,5 @@
 *.html linguist-documentation=true
 *.css linguist-documentation=true
+
+# Ignore the archive folder for language stats
+archive/** linguist-detectable=false

@@ -37,7 +37,7 @@ All versions of the app are completely reproducible, just fork the source code f
 
 ## Use it for
 
-- Daily quick notetaking
+- Daily quick notetaking, tracking habits
 - Tasks list with percentage remaining metrics
 - Taking notes from status bar or other app without switching to Karui or leaving opened app
 - Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok
