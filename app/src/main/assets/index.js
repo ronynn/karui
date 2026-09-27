@@ -8,7 +8,10 @@ import { initCalendar } from './calendar.js'
 // --- SECTION: VANILLA JS DOM UTILITIES ---
 export function autoExpandTextarea(el)
 {
-  if (!el) return
+  if (!el)
+  {
+    return
+  }
   el.style.height = 'auto'
   let calculatedHeight = el.scrollHeight
   let maxHeight = window.innerHeight * 0.45
@@ -171,14 +174,27 @@ const appStore = reactive(
     let rem = 0
     let comp = 0
     let currentCatNotes = this.notes.filter(n => n.category === this.activeCategory)
-    currentCatNotes.forEach(n => n.completed ? comp++ : rem++)
+    currentCatNotes.forEach(n =>
+    {
+      if (n.completed)
+      {
+        comp++
+      }
+      else
+      {
+        rem++
+      }
+    })
     return `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`
   },
 
   get contextMenuStyle()
   {
     return {
-      display: this.contextMenuVisible ? 'block' : 'none'
+      display: this.contextMenuVisible ? 'block' : 'none',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)'
     }
   },
 
@@ -211,30 +227,30 @@ const appStore = reactive(
   // --- SECTION: INITIALISATION & LIFECYCLE ---
   async init()
   {
-    this.noteCategories = JSON.parse(localStorage.getItem("noteCategories")) || ["Main"]
-    this.notes = JSON.parse(localStorage.getItem("notes")) || []
-    this.recycleBin = JSON.parse(localStorage.getItem("recycleBin")) || []
-    this.categoryMeta = JSON.parse(localStorage.getItem("categoryMeta")) || {}
-    this.currentTheme = localStorage.getItem("theme") || "gruvbox"
-    this.currentFont = localStorage.getItem("font") || "system-ui"
-    this.uiScale = parseFloat(localStorage.getItem("uiScale")) || 1
-    this.doubleTapDelete = localStorage.getItem("doubleTapDelete") === "true"
-    this.celebrationMode = localStorage.getItem("celebrationMode") === "true"
-    this.keepKeyboard = localStorage.getItem("keepKeyboard") === "true"
-    this.uiSounds = localStorage.getItem("uiSounds") === "true"
-    this.buttonRipples = localStorage.getItem("buttonRipples") === "true"
-    this.showFab = localStorage.getItem("showFab") === "true"
-    this.sortAlphabetical = localStorage.getItem("sortAlphabetical") === "true"
-    this.addNoteBottom = localStorage.getItem("addNoteBottom") === "true"
-    this.moveCompletedBottom = localStorage.getItem("moveCompletedBottom") === "true"
-    this.disableSwipe = localStorage.getItem("disableSwipe") === "true"
-    this.disableScreenshots = localStorage.getItem("disableScreenshots") === "true"
-    this.notificationEnabled = localStorage.getItem("notificationEnabled") === "true"
-    this.inboxTabName = localStorage.getItem("inboxTabName") || "Inbox"
-    this.syncFilePath = localStorage.getItem("syncFilePath") || ""
+    this.noteCategories = JSON.parse(localStorage.getItem('noteCategories')) || ['Main']
+    this.notes = JSON.parse(localStorage.getItem('notes')) || []
+    this.recycleBin = JSON.parse(localStorage.getItem('recycleBin')) || []
+    this.categoryMeta = JSON.parse(localStorage.getItem('categoryMeta')) || {}
+    this.currentTheme = localStorage.getItem('theme') || 'gruvbox'
+    this.currentFont = localStorage.getItem('font') || 'system-ui'
+    this.uiScale = parseFloat(localStorage.getItem('uiScale')) || 1
+    this.doubleTapDelete = localStorage.getItem('doubleTapDelete') === 'true'
+    this.celebrationMode = localStorage.getItem('celebrationMode') === 'true'
+    this.keepKeyboard = localStorage.getItem('keepKeyboard') === 'true'
+    this.uiSounds = localStorage.getItem('uiSounds') === 'true'
+    this.buttonRipples = localStorage.getItem('buttonRipples') === 'true'
+    this.showFab = localStorage.getItem('showFab') === 'true'
+    this.sortAlphabetical = localStorage.getItem('sortAlphabetical') === 'true'
+    this.addNoteBottom = localStorage.getItem('addNoteBottom') === 'true'
+    this.moveCompletedBottom = localStorage.getItem('moveCompletedBottom') === 'true'
+    this.disableSwipe = localStorage.getItem('disableSwipe') === 'true'
+    this.disableScreenshots = localStorage.getItem('disableScreenshots') === 'true'
+    this.notificationEnabled = localStorage.getItem('notificationEnabled') === 'true'
+    this.inboxTabName = localStorage.getItem('inboxTabName') || 'Inbox'
+    this.syncFilePath = localStorage.getItem('syncFilePath') || ''
 
-    this.calendarEnabled = localStorage.getItem("calendarEnabled") !== "false"
-    this.calendarTabName = localStorage.getItem("calendarTabName") || "Calkarui"
+    this.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
+    this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calkarui'
 
     if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
     {
@@ -252,8 +268,14 @@ const appStore = reactive(
 
     this.notes.forEach((n, idx) =>
     {
-      if (!n.id) n.id = now + idx
-      if (!n.updatedAt) n.updatedAt = now
+      if (!n.id)
+      {
+        n.id = now + idx
+      }
+      if (!n.updatedAt)
+      {
+        n.updatedAt = now
+      }
     })
 
     this.customFonts = await initFontSystem()
@@ -264,7 +286,7 @@ const appStore = reactive(
 
     if (!this.noteCategories.includes(this.activeCategory))
     {
-      this.activeCategory = this.noteCategories[0] || "Main"
+      this.activeCategory = this.noteCategories[0] || 'Main'
     }
 
     if (typeof getRandomQuote === 'function')
@@ -290,30 +312,30 @@ const appStore = reactive(
   saveData()
   {
     this._dirtyNotes = true
-    localStorage.setItem("noteCategories", JSON.stringify(this.noteCategories))
-    localStorage.setItem("notes", JSON.stringify(this.notes))
-    localStorage.setItem("recycleBin", JSON.stringify(this.recycleBin))
-    localStorage.setItem("categoryMeta", JSON.stringify(this.categoryMeta))
-    localStorage.setItem("theme", this.currentTheme)
-    localStorage.setItem("font", this.currentFont)
-    localStorage.setItem("uiScale", this.uiScale)
-    localStorage.setItem("doubleTapDelete", this.doubleTapDelete)
-    localStorage.setItem("celebrationMode", this.celebrationMode)
-    localStorage.setItem("keepKeyboard", this.keepKeyboard)
-    localStorage.setItem("uiSounds", this.uiSounds)
-    localStorage.setItem("buttonRipples", this.buttonRipples)
-    localStorage.setItem("showFab", this.showFab)
-    localStorage.setItem("sortAlphabetical", this.sortAlphabetical)
-    localStorage.setItem("addNoteBottom", this.addNoteBottom)
-    localStorage.setItem("moveCompletedBottom", this.moveCompletedBottom)
-    localStorage.setItem("disableSwipe", this.disableSwipe)
-    localStorage.setItem("disableScreenshots", this.disableScreenshots)
-    localStorage.setItem("notificationEnabled", this.notificationEnabled)
-    localStorage.setItem("inboxTabName", this.inboxTabName)
-    localStorage.setItem("syncFilePath", this.syncFilePath)
+    localStorage.setItem('noteCategories', JSON.stringify(this.noteCategories))
+    localStorage.setItem('notes', JSON.stringify(this.notes))
+    localStorage.setItem('recycleBin', JSON.stringify(this.recycleBin))
+    localStorage.setItem('categoryMeta', JSON.stringify(this.categoryMeta))
+    localStorage.setItem('theme', this.currentTheme)
+    localStorage.setItem('font', this.currentFont)
+    localStorage.setItem('uiScale', this.uiScale)
+    localStorage.setItem('doubleTapDelete', this.doubleTapDelete)
+    localStorage.setItem('celebrationMode', this.celebrationMode)
+    localStorage.setItem('keepKeyboard', this.keepKeyboard)
+    localStorage.setItem('uiSounds', this.uiSounds)
+    localStorage.setItem('buttonRipples', this.buttonRipples)
+    localStorage.setItem('showFab', this.showFab)
+    localStorage.setItem('sortAlphabetical', this.sortAlphabetical)
+    localStorage.setItem('addNoteBottom', this.addNoteBottom)
+    localStorage.setItem('moveCompletedBottom', this.moveCompletedBottom)
+    localStorage.setItem('disableSwipe', this.disableSwipe)
+    localStorage.setItem('disableScreenshots', this.disableScreenshots)
+    localStorage.setItem('notificationEnabled', this.notificationEnabled)
+    localStorage.setItem('inboxTabName', this.inboxTabName)
+    localStorage.setItem('syncFilePath', this.syncFilePath)
 
-    localStorage.setItem("calendarEnabled", this.calendarEnabled)
-    localStorage.setItem("calendarTabName", this.calendarTabName)
+    localStorage.setItem('calendarEnabled', this.calendarEnabled)
+    localStorage.setItem('calendarTabName', this.calendarTabName)
 
     if (this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
     {
@@ -334,21 +356,30 @@ const appStore = reactive(
   // --- SECTION: GESTURES & INTERACTIONS ---
   handleTouchStart(e)
   {
-    if (this.disableSwipe) return
+    if (this.disableSwipe)
+    {
+      return
+    }
     this.touchStartX = e.touches[0].clientX
     this.touchStartY = e.touches[0].clientY
   },
 
   handleTouchMove(e)
   {
-    if (this.disableSwipe) return
+    if (this.disableSwipe)
+    {
+      return
+    }
     this.touchEndX = e.touches[0].clientX
     this.touchEndY = e.touches[0].clientY
   },
 
   handleTouchEnd()
   {
-    if (this.disableSwipe) return
+    if (this.disableSwipe)
+    {
+      return
+    }
     let deltaX = this.touchEndX - this.touchStartX
     let deltaY = this.touchEndY - this.touchStartY
 
@@ -407,7 +438,7 @@ const appStore = reactive(
   updateCalendarTabName()
   {
     let oldName = this.calendarTabName
-    this.calendarTabName = this.calendarTabName.trim() || "Calkarui"
+    this.calendarTabName = this.calendarTabName.trim() || 'Calkarui'
     if (oldName !== this.calendarTabName)
     {
       this.renameTabInternal(oldName, this.calendarTabName)
@@ -417,9 +448,15 @@ const appStore = reactive(
 
   renameTabInternal(oldName, newName)
   {
-    if (!oldName || !newName || oldName === newName) return
+    if (!oldName || !newName || oldName === newName)
+    {
+      return
+    }
     let trimmed = newName.trim()
-    if (!trimmed) return
+    if (!trimmed)
+    {
+      return
+    }
 
     let idx = this.noteCategories.indexOf(oldName)
     if (idx !== -1)
@@ -437,11 +474,17 @@ const appStore = reactive(
     }
 
     let now = Date.now()
-    if (!this.categoryMeta) this.categoryMeta = {}
+    if (!this.categoryMeta)
+    {
+      this.categoryMeta = {}
+    }
     let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
     meta.updatedAt = now
     this.categoryMeta[trimmed] = meta
-    if (oldName !== trimmed) delete this.categoryMeta[oldName]
+    if (oldName !== trimmed)
+    {
+      delete this.categoryMeta[oldName]
+    }
 
     this.notes.forEach(n =>
     {
@@ -462,7 +505,10 @@ const appStore = reactive(
 
   renameCategory(oldCat, newCat)
   {
-    if (!oldCat || !newCat || !newCat.trim() || oldCat === newCat) return
+    if (!oldCat || !newCat || !newCat.trim() || oldCat === newCat)
+    {
+      return
+    }
     let trimmed = newCat.trim()
 
     if (this.calendarTabName === oldCat)
@@ -507,7 +553,10 @@ const appStore = reactive(
 
   handleFabClick(e)
   {
-    if (e) e.preventDefault()
+    if (e)
+    {
+      e.preventDefault()
+    }
     let active = document.activeElement
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'))
     {
@@ -621,7 +670,10 @@ const appStore = reactive(
   submitNote()
   {
     let v = this.noteInput.trim()
-    if (!v) return
+    if (!v)
+    {
+      return
+    }
 
     if (tryRunGame(v))
     {
@@ -632,15 +684,24 @@ const appStore = reactive(
     if (v.startsWith('/'))
     {
       let t = v.slice(1).trim()
-      if (t) this.addTab(t)
+      if (t)
+      {
+        this.addTab(t)
+      }
     }
     else
     {
       playSound('add', this.uiSounds)
       let now = Date.now()
       let n = { id: now, text: v, completed: false, category: this.activeCategory, pinned: false, updatedAt: now }
-      if (this.addNoteBottom) this.notes.push(n)
-      else this.notes.unshift(n)
+      if (this.addNoteBottom)
+      {
+        this.notes.push(n)
+      }
+      else
+      {
+        this.notes.unshift(n)
+      }
     }
     this.noteInput = ''
     this.saveData()
@@ -658,7 +719,10 @@ const appStore = reactive(
         confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } })
       }
     }
-    if (navigator.vibrate) navigator.vibrate(30)
+    if (navigator.vibrate)
+    {
+      navigator.vibrate(30)
+    }
 
     let txt = n.text.trim()
     if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
@@ -675,8 +739,14 @@ const appStore = reactive(
       this.switchScreen(0)
     }
     let inp = document.getElementById('note-in')
-    if (document.activeElement === inp) inp.blur()
-    else inp.focus()
+    if (document.activeElement === inp)
+    {
+      inp.blur()
+    }
+    else
+    {
+      inp.focus()
+    }
   },
 
   showToast(msg)
@@ -731,7 +801,10 @@ const appStore = reactive(
 
   actionDeleteNote()
   {
-    if (!this.activeNoteMenuId) return
+    if (!this.activeNoteMenuId)
+    {
+      return
+    }
     let id = this.activeNoteMenuId
     if (this.doubleTapDelete)
     {
@@ -744,7 +817,10 @@ const appStore = reactive(
       }
       else
       {
-        if (navigator.vibrate) navigator.vibrate(15)
+        if (navigator.vibrate)
+        {
+          navigator.vibrate(15)
+        }
         this.showToast('Tap delete again to confirm')
       }
       this.lastTrashTap = now
@@ -759,7 +835,10 @@ const appStore = reactive(
 
   actionTogglePinNote()
   {
-    if (!this.activeNoteMenuId) return
+    if (!this.activeNoteMenuId)
+    {
+      return
+    }
     let n = this.notes.find(x => x.id === this.activeNoteMenuId)
     if (n)
     {
@@ -772,12 +851,18 @@ const appStore = reactive(
 
   actionCopyNote()
   {
-    if (!this.activeNoteMenuId) return
+    if (!this.activeNoteMenuId)
+    {
+      return
+    }
     let n = this.notes.find(x => x.id === this.activeNoteMenuId)
     if (n)
     {
       navigator.clipboard.writeText(n.text)
-      if (navigator.vibrate) navigator.vibrate(15)
+      if (navigator.vibrate)
+      {
+        navigator.vibrate(15)
+      }
       this.showToast('Note copied')
     }
     this.closeAllMenus()
@@ -785,7 +870,10 @@ const appStore = reactive(
 
   actionEditNote()
   {
-    if (!this.activeNoteMenuId) return
+    if (!this.activeNoteMenuId)
+    {
+      return
+    }
     let n = this.notes.find(x => x.id === this.activeNoteMenuId)
     if (n)
     {
@@ -857,7 +945,10 @@ const appStore = reactive(
       this.noteCategories.push(n)
       this.activeCategory = n
       let now = Date.now()
-      if (!this.categoryMeta) this.categoryMeta = {}
+      if (!this.categoryMeta)
+      {
+        this.categoryMeta = {}
+      }
       this.categoryMeta[n] = { id: now, updatedAt: now }
       this.saveData()
     }
@@ -866,7 +957,10 @@ const appStore = reactive(
   renameTab(newName)
   {
     let oldName = this.contextTab || this.activeCategory
-    if (!newName || oldName === newName) return
+    if (!newName || oldName === newName)
+    {
+      return
+    }
     this.renameTabInternal(oldName, newName.trim())
     this.saveData()
   },
@@ -888,7 +982,10 @@ const appStore = reactive(
         }
         return true
       })
-      if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
+      if (this.activeCategory === t)
+      {
+        this.activeCategory = this.noteCategories[0]
+      }
       this.saveData()
     }
     this.closeAllMenus()
@@ -897,7 +994,10 @@ const appStore = reactive(
   moveTab(dir)
   {
     let idx = this.noteCategories.indexOf(this.contextTab)
-    if (idx < 0) return
+    if (idx < 0)
+    {
+      return
+    }
     let nIdx = idx + dir
     if (nIdx >= 0 && nIdx < this.noteCategories.length)
     {
@@ -916,7 +1016,10 @@ const appStore = reactive(
     if (this.buttonRipples)
     {
       let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
-      if (targetBtn) createRipple(e, targetBtn)
+      if (targetBtn)
+      {
+        createRipple(e, targetBtn)
+      }
     }
     if (!e.target.closest('.menu'))
     {
@@ -928,7 +1031,10 @@ const appStore = reactive(
   triggerFontUpload()
   {
     let el = document.getElementById('font-file-input')
-    if (el) el.click()
+    if (el)
+    {
+      el.click()
+    }
   },
 
   async loadCustomFont(e)
@@ -944,7 +1050,7 @@ const appStore = reactive(
     }
     catch (err)
     {
-      alert("Failed to load font file.")
+      alert('Failed to load font file.')
     }
     finally
     {
@@ -977,7 +1083,10 @@ const appStore = reactive(
     else
     {
       let el = document.getElementById('import-json-input')
-      if (el) el.click()
+      if (el)
+      {
+        el.click()
+      }
     }
   },
 
@@ -989,11 +1098,17 @@ const appStore = reactive(
 
   mergeNotes(imported)
   {
-    if (!Array.isArray(imported)) return
+    if (!Array.isArray(imported))
+    {
+      return
+    }
     let now = Date.now()
     imported.forEach((n, idx) =>
     {
-      if (!n || typeof n.text !== 'string') return
+      if (!n || typeof n.text !== 'string')
+      {
+        return
+      }
       let cat = n.category || 'Main'
       if (!this.noteCategories.includes(cat))
       {
@@ -1063,7 +1178,10 @@ const appStore = reactive(
     else
     {
       let el = document.getElementById('import-md-input')
-      if (el) el.click()
+      if (el)
+      {
+        el.click()
+      }
     }
   },
 
@@ -1077,7 +1195,7 @@ const appStore = reactive(
   {
     if (window.Android && window.Android.setupSyncFile)
     {
-      window.Android.setupSyncFile("file.md", generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta))
+      window.Android.setupSyncFile('file.md', generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta))
     }
     else
     {
@@ -1110,11 +1228,17 @@ const appStore = reactive(
 
   exportMarkdownSilent()
   {
-    if (!this.syncFilePath) return
+    if (!this.syncFilePath)
+    {
+      return
+    }
     let now = Date.now()
     this.notes.forEach(n =>
     {
-      if (!n.updatedAt) n.updatedAt = now
+      if (!n.updatedAt)
+      {
+        n.updatedAt = now
+      }
     })
     let mdStr = generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta)
     if (window.Android && window.Android.saveFileSync)
@@ -1143,7 +1267,7 @@ const appStore = reactive(
 
   updateInboxTab()
   {
-    this.inboxTabName = this.inboxTabName.trim() || "Inbox"
+    this.inboxTabName = this.inboxTabName.trim() || 'Inbox'
     if (!this.noteCategories.includes(this.inboxTabName))
     {
       this.noteCategories.push(this.inboxTabName)
