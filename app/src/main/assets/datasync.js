@@ -14,7 +14,8 @@ export function generateMarkdownString(noteCategories, notes, categoryMeta = {})
       let mark = n.completed ? 'x' : ' '
       let pin = n.pinned ? ' pinned:true' : ''
       let updated = n.updatedAt || Date.now()
-      let sanitizedText = (n.text || '').replace(/\r?\n/g, '\\n')
+      let rawText = (n.text || '').replace(/^(?:- \[[ xX]\]\s*)+/, '')
+      let sanitizedText = rawText.replace(/\r?\n/g, '\\n')
       mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin} -->\n`
     })
     if (idx < noteCategories.length - 1)
@@ -60,10 +61,10 @@ export function parseMarkdownAndMerge(text, appStore)
           importedCategories.push({ id: null, name: currentCat, updatedAt: Date.now() })
         }
       }
-      else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]'))
+      else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]'))
       {
-        let completed = trimmed.startsWith('- [x]')
-        let content = trimmed.replace(/^- \[(x\vert{} )\]\s*/, '').trim()
+        let completed = trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]')
+        let content = trimmed.replace(/^(?:- \[[ xX]\]\s*)+/, '').trim()
         let noteId = null
         let pinned = false
         let updatedAt = Date.now()
