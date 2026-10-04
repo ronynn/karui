@@ -8,14 +8,10 @@ An open source, privacy focussed, 90kB aesthetic todo list Google Tasks alternat
 
 This app never connects to the internet, you can setup sync to use Karui on other devices or alongside other markdown/text editors as the synced file is a markdown file. To use the widgets, first setup sync as the widget simply reads and writes to the markdown file, thus being energy efficient. 
 
-
-![svelte](https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
-)
-![vite](https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)
-![pnpm](https://img.shields.io/badge/pnpm-yellow?style=for-the-badge&logo=pnpm&logoColor=white)
-![node](https://img.shields.io/badge/Node%20js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Vue.js](https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D) 
+![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
 ![notepad++](https://img.shields.io/badge/Notepad++-90E59A.svg?style=for-the-badge&logo=notepad%2B%2B&logoColor=black)
-![alpine](https://img.shields.io/badge/Alpine_Linux-0D597F?style=for-the-badge&logo=alpine-linux&logoColor=white)
+![Retro](https://img.shields.io/badge/Retro-FF6B35?style=for-the-badge&logo=retroarch&logoColor=white)
 ![android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 [![RB Status](https://shields.rbtlog.dev/simple/io.github.ronynn.karui?style=for-the-badge)](https://shields.rbtlog.dev/io.github.ronynn.karui)
 
@@ -24,14 +20,11 @@ All versions of the app are completely reproducible, just fork the source code f
 ## Screenshots
 
 <div align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="Screenshot 1" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" alt="Screenshot 2" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" alt="Screenshot 3" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" alt="Screenshot 4" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" alt="Screenshot 5" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" alt="Screenshot 6" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.png" alt="Screenshot 7" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/8.png" alt="Screenshot 8" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Screenshot 1" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Screenshot 2" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" alt="Screenshot 3" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Screenshot 4" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" alt="Screenshot 5" width="45%">
 </div>
 
 

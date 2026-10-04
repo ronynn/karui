@@ -1,1 +1,1 @@
-90kB aesthetic terminalesque todo list app with offline sync and widgets
+120kB aesthetic terminalesque todo list app with calendar, offline sync and widgets

@@ -3,4 +3,5 @@ Karui 2.0 is here!
 - Fixed: New line in note no longer replicated as duplicate note when sync is on
 - Fixed: Drag and drop bug when dragged with two fingers
 - Fixed: No more crash when picking inaccessible folder
+- Adds a button in tab menu to Puff ( delete all marked notes in that tab) single click
 - Adds a new calendar

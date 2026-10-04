@@ -36,7 +36,7 @@
     .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
     #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
     .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(106px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh;}
-    .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 30px;}
+    .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 20px;}
     .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
     input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; position: relative; overflow: hidden; }
     textarea { resize: none; overflow-y: auto; height: auto; min-height: calc(80px * var(--ui-scale)); max-height: calc(280px * var(--ui-scale)); padding-top: calc(10px * var(--ui-scale)); }
@@ -100,9 +100,9 @@
 <header id="top-bar" :class="{ scrolled: isScrolled }">
   <div id="app-title">Karui</div>
   <div class="pivot-container">
-    <div id="tab-home" class="pivot-item" :class="{ active: currentScreenIdx === 0 }" @click="switchScreen(0)">home</div>
-<div id="tab-calendar" v-if="calendarEnabled" class="pivot-item" :class="{ active: currentScreenIdx === 1 }" @click="switchScreen(1)">calendar</div>
-    <div id="tab-settings" class="pivot-item" :class="{ active: currentScreenIdx === (calendarEnabled ? 2 : 1) }" @click="switchScreen(calendarEnabled ? 2 : 1)">settings</div>
+    <div id="tab-home" class="pivot-item" :class="{ active: currentScreen === 'home' }" @click="switchScreen('home')">home</div>
+<div id="tab-calendar" v-if="calendarEnabled" class="pivot-item" :class="{ active: currentScreen === 'calendar' }" @click="switchScreen('calendar')">calendar</div>
+    <div id="tab-settings" class="pivot-item" :class="{ active: currentScreen === 'settings' }" @click="switchScreen('settings')">settings</div>
   </div>
 </header>
 
@@ -280,14 +280,14 @@
     </div>
 
     <div class="box">
-      <span class="box-title">Box 4: About Karui</span>
+      <span class="box-title">Box 4: Instructions</span>
       <div class="about-text">
         - Use /tabName to add a new tab. √s is sort, √e is enter, √r on widget is refresh, √m is for menu<br/>
         - Long press from your launcher homescreen to add Karui widgets. <br/>
-        - You can just long press any tab to rename or delete it or add a new tab. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
+        - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
         - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
         - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
-        - Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram.
+        - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram.
       </div>
     </div>
 
@@ -315,7 +315,7 @@
       <h1 style="margin-top: 15px; font-size: calc(20px * var(--ui-scale));">Recycle Bin</h1>
       <div id="trash-list">
         <div v-for="(n, idx) in recycleBin" :key="idx" class="note-item" style="padding: 8px 0;">
-          <span>{{ n.text }}</span>
+          <span style="flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; padding-right: 8px;">{{ n.text }}</span>
           <span class="text-muted" style="padding: 0 5px; flex-shrink: 0; cursor: pointer;" @click="restoreNote(idx)">√r</span>
         </div>
       </div>
@@ -330,7 +330,7 @@
   </div>
 </div>
 
-<div id="fab-btn" v-if="showFab && currentScreenIdx === 0" @mousedown.prevent="handleFabClick" @touchstart.prevent="handleFabClick">&gt;_</div>
+<div id="fab-btn" v-if="showFab && currentScreen === 'home' && !modalVisible" @mousedown.prevent="handleFabClick" @touchstart.prevent="handleFabClick">&gt;_</div>
 
 <div id="context-menu" class="menu" :style="contextMenuStyle">
   <div class="menu-title">{{ contextTab }}</div>
@@ -338,6 +338,7 @@
   <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
   <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
   <button @click="deleteTabClick">Delete</button>
+  <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
   <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
 </div>
 
@@ -351,7 +352,7 @@
 <div id="modal-overlay" v-if="modalVisible">
   <div class="modal-box">
     <div style="font-weight: bold;">{{ modalTitle }}</div>
-    <textarea v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
+    <textarea id="modal-input" v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
     <div style="display: flex; gap: 10px;">
       <button @click="closeModal(true)">Save</button>
       <button @click="closeModal(false)">Cancel</button>
@@ -380,6 +381,7 @@
   }
 
   */
+
 </script>
 
 </body>

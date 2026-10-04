@@ -1,10 +1,10 @@
-An open source, privacy focussed, 90kB aesthetic Google Tasks alternative todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
+An open source, privacy focussed, 120kB aesthetic Google Tasks alternative todo list app to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
 
 This app never connects to the internet, you can setup sync to use Karui on other devices or alongside other markdown/text editors as the synced file is a markdown file. To use the widgets, first setup sync as the widget simply reads and writes to the markdown file, thus being energy efficient.
 
 ## Use it for
 
-- Daily quick notetaking
+- Daily quick notetaking, calendar event marking
 - Tasks list with percentage remaining metrics
 - Taking notes from status bar or other app without switching to Karui or leaving opened app
 - Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok

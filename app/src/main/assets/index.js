@@ -1,4 +1,4 @@
-import { createApp, reactive } from './petite-vue.es.js'
+import { createApp, reactive, nextTick } from './petite-vue.es.js'
 import { setupDragAndDrop } from './dragdrop.js'
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
@@ -60,7 +60,7 @@ const appStore = reactive(
   inboxTabName: 'Inbox',
   customFonts: [],
   syncFilePath: '',
-  currentScreenIdx: 0,
+  currentScreen: 'home',
   isScrolled: false,
   noteInput: '',
   quoteText: '',
@@ -186,6 +186,37 @@ const appStore = reactive(
       }
     })
     return `Remaining: ${rem} \u00A0\u00A0 Completed: ${comp}`
+  },
+
+  get screenOrder()
+  {
+    return this.calendarEnabled ? ['home', 'calendar', 'settings'] : ['home', 'settings']
+  },
+
+  get currentScreenIdx()
+  {
+    if (this.currentScreen === 'home') return 0
+    if (this.currentScreen === 'calendar') return 1
+    if (this.currentScreen === 'settings') return this.calendarEnabled ? 2 : 1
+    return 0
+  },
+
+  get puffableCount()
+  {
+    let cat = this.contextTab
+    if (!cat)
+    {
+      return 0
+    }
+    let c = 0
+    for (let i = 0; i < this.notes.length; i++)
+    {
+      if (this.notes[i].category === cat && this.notes[i].completed)
+      {
+        c++
+      }
+    }
+    return c
   },
 
   get contextMenuStyle()
@@ -385,14 +416,15 @@ const appStore = reactive(
 
     if (Math.abs(deltaX) > 60 && Math.abs(deltaY) < 50)
     {
-      let maxIdx = this.calendarEnabled ? 2 : 1
-      if (deltaX < 0 && this.currentScreenIdx < maxIdx)
+      let screens = this.screenOrder
+      let idx = screens.indexOf(this.currentScreen)
+      if (deltaX < 0 && idx < screens.length - 1)
       {
-        this.switchScreen(this.currentScreenIdx + 1)
+        this.switchScreen(screens[idx + 1])
       }
-      else if (deltaX > 0 && this.currentScreenIdx > 0)
+      else if (deltaX > 0 && idx > 0)
       {
-        this.switchScreen(this.currentScreenIdx - 1)
+        this.switchScreen(screens[idx - 1])
       }
     }
     this.touchStartX = 0
@@ -409,20 +441,12 @@ const appStore = reactive(
       {
         this.noteCategories.push(this.calendarTabName)
       }
-      if (this.currentScreenIdx === 1)
-      {
-        this.currentScreenIdx = 2
-      }
     }
     else
     {
-      if (this.currentScreenIdx === 2)
+      if (this.currentScreen === 'calendar')
       {
-        this.currentScreenIdx = 1
-      }
-      else if (this.currentScreenIdx === 1)
-      {
-        this.currentScreenIdx = 0
+        this.currentScreen = 'home'
       }
     }
     this.saveData()
@@ -568,7 +592,7 @@ const appStore = reactive(
 
   startFontHold(fontName)
   {
-    startFontLongPress(fontName, this, 4000)
+    startFontLongPress(fontName, this, 1000)
   },
 
   cancelFontHold()
@@ -577,11 +601,12 @@ const appStore = reactive(
   },
 
   // --- SECTION: NAVIGATION & UI CONTROLS ---
-  switchScreen(idx)
+  switchScreen(name)
   {
-    this.currentScreenIdx = idx
+    this.currentScreen = name
     this.closeAllMenus()
     const screens = document.querySelectorAll('.screen')
+    const idx = this.currentScreenIdx
     if (screens[idx])
     {
       this.isScrolled = screens[idx].scrollTop > 10
@@ -734,9 +759,9 @@ const appStore = reactive(
 
   focusNoteInput()
   {
-    if (this.currentScreenIdx !== 0)
+    if (this.currentScreen !== 'home')
     {
-      this.switchScreen(0)
+      this.switchScreen('home')
     }
     let inp = document.getElementById('note-in')
     if (document.activeElement === inp)
@@ -926,6 +951,18 @@ const appStore = reactive(
     this.modalInput = defaultVal
     this.modalCb = cb
     this.modalVisible = true
+    nextTick(() =>
+    {
+      let el = document.getElementById('modal-input')
+      if (el)
+      {
+        autoExpandTextarea(el)
+        if (this.keepKeyboard)
+        {
+          el.focus()
+        }
+      }
+    })
   },
 
   closeModal(saveAction)
@@ -988,6 +1025,26 @@ const appStore = reactive(
       }
       this.saveData()
     }
+    this.closeAllMenus()
+  },
+
+  puffCompleted()
+  {
+    let cat = this.contextTab || this.activeCategory
+    let targets = this.notes.filter(n => n.category === cat && n.completed)
+    if (!targets.length)
+    {
+      this.showToast('Nothing to puff')
+      this.closeAllMenus()
+      return
+    }
+    let now = Date.now()
+    targets.forEach(n => { n.updatedAt = now })
+    this.notes = this.notes.filter(n => !(n.category === cat && n.completed))
+    this.recycleBin.push(...targets)
+    playSound('scratch', this.uiSounds)
+    this.showToast(`Puffed ${targets.length} note${targets.length === 1 ? '' : 's'}`)
+    this.saveData()
     this.closeAllMenus()
   },
 

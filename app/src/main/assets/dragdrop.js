@@ -6,6 +6,33 @@ let hoveredTab = null
 let touchTimer = null
 let startX = 0
 let startY = 0
+let activeTouchId = null
+
+function findTrackedTouch(touchList)
+{
+  if (activeTouchId === null || !touchList)
+  {
+    return null
+  }
+  for (let i = 0; i < touchList.length; i++)
+  {
+    if (touchList[i].identifier === activeTouchId)
+    {
+      return touchList[i]
+    }
+  }
+  return null
+}
+
+function cancelPendingDrag()
+{
+  if (touchTimer)
+  {
+    clearTimeout(touchTimer)
+    touchTimer = null
+  }
+  activeTouchId = null
+}
 
 function moveDragImg(x, y)
 {
@@ -18,7 +45,7 @@ function moveDragImg(x, y)
 
 function cleanDrag(appStore)
 {
-  clearTimeout(touchTimer)
+  cancelPendingDrag()
   document.querySelectorAll('.tab').forEach(t =>
   {
     t.style.opacity = '1'
@@ -73,16 +100,43 @@ export function setupDragAndDrop(appStore)
   }
 
   homeScreen.addEventListener('touchstart', e => {
+    // If a second finger lands (or starts landing), kill everything:
+    // no drag should ever begin or continue from a multi-touch gesture.
+    if (e.touches.length > 1)
+    {
+      cancelPendingDrag()
+      if (dragTarget)
+      {
+        cleanDrag(appStore)
+      }
+      return
+    }
+
+    // Already tracking a touch — ignore this one.
+    if (activeTouchId !== null)
+    {
+      return
+    }
+
     const item = e.target.closest('.note-item')
     if (!item || e.target.closest('.note-menu-trigger'))
     {
       return
     }
 
-    startX = e.touches[0].clientX
-    startY = e.touches[0].clientY
+    const touch = e.changedTouches[0]
+    activeTouchId = touch.identifier
+    startX = touch.clientX
+    startY = touch.clientY
 
     touchTimer = setTimeout(() => {
+      // Guard: something cancelled us between scheduling and firing.
+      if (activeTouchId === null)
+      {
+        touchTimer = null
+        return
+      }
+
       dragTarget = item
       dragType = 'note'
       dragTarget.classList.add('ghost')
@@ -95,25 +149,45 @@ export function setupDragAndDrop(appStore)
       dragImg.style.width = item.offsetWidth + 'px'
       document.body.appendChild(dragImg)
       moveDragImg(startX, startY)
+      touchTimer = null
     }, 300)
   }, { passive: true })
 
   homeScreen.addEventListener('touchmove', e => {
+    // Second finger appeared mid-move: abort everything.
+    if (e.touches.length > 1)
+    {
+      cancelPendingDrag()
+      if (dragTarget)
+      {
+        cleanDrag(appStore)
+      }
+      return
+    }
+
     if (!dragTarget || !dragImg || dragType !== 'note')
     {
+      // Still inside the long-press window — cancel it if the finger drifts.
       if (touchTimer)
       {
-        const touch = e.touches[0]
-        if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10)
+        const tracked = findTrackedTouch(e.touches) || e.changedTouches[0]
+        if (tracked && (Math.abs(tracked.clientX - startX) > 10 || Math.abs(tracked.clientY - startY) > 10))
         {
-          clearTimeout(touchTimer)
+          cancelPendingDrag()
         }
       }
       return
     }
 
+    const touch = findTrackedTouch(e.touches)
+    if (!touch)
+    {
+      // The finger we were tracking has vanished — bail out safely.
+      cleanDrag(appStore)
+      return
+    }
+
     e.preventDefault()
-    const touch = e.touches[0]
     moveDragImg(touch.clientX, touch.clientY)
 
     let elPoint = document.elementFromPoint(touch.clientX, touch.clientY)
@@ -145,7 +219,25 @@ export function setupDragAndDrop(appStore)
     }
   }, { passive: false })
 
-  homeScreen.addEventListener('touchend', () => {
+  homeScreen.addEventListener('touchend', e => {
+    // If a touch we aren't tracking ended, ignore it — the real finger
+    // is still down and we want the drag to continue.
+    if (activeTouchId !== null)
+    {
+      let ended = false
+      for (let i = 0; i < e.changedTouches.length; i++)
+      {
+        if (e.changedTouches[i].identifier === activeTouchId)
+        {
+          ended = true
+          break
+        }
+      }
+      if (!ended)
+      {
+        return
+      }
+    }
     cleanDrag(appStore)
   })
 
