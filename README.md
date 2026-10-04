@@ -43,7 +43,7 @@ All versions of the app are completely reproducible, just fork the source code f
 
 ## Features
 
-- Simple note taking and list making with home screen widgets, status bar input, offline sync, recycle bin, drag-and-drop sorting.
+- Simple note taking and list making with home screen widgets, status bar input, offline sync, recycle bin, drag-and-drop sorting, and a new calendar.
 - Bold New UI Design, leaning slightly more into windows-8 metro and windows mobile aesthetics with a mash up of retro terminalesque design inspired by Unix customizations found online.
 - Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - Highly customizable: Offers many themes with option for custom fonts.
