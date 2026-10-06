@@ -1,69 +1,199 @@
-let flapConfettiLoaded = false
+// flap.js — Flappy Bird clone, merged + optimized ES module.
+import {
+  createGameOverlay,
+  getGameTheme,
+  playGameSound,
+  triggerConfetti
+} from './extras.js'
 
-function ensureFlapConfettiLoaded(callback) 
+// ---- constants ----
+const CANVAS_W = 360
+const CANVAS_H = 476
+const GROUND_H = 24
+const PIPE_W = 45
+const PIPE_GAP = 110
+const PIPE_CAP_H = 14
+const PIPE_CAP_OVERHANG = 4
+const PIPE_SPAWN_MS = 1400
+const PIPE_SPEED = 2.2
+const MAX_PIPES = 6
+const MAX_PARTICLES = 12
+const TRACK_SIZE = 500
+
+const BIRD_X = 50
+const BIRD_W = 22
+const BIRD_H = 22
+const BIRD_GRAVITY = 0.38
+const BIRD_LIFT = -7.5
+
+// Rotation profile (classic flappy feel).
+const ROT_UP = -0.5        // nose up when rising
+const ROT_DOWN = 1.2       // nose dive when falling
+const ROT_VEL_SCALE = 12   // how strongly vy maps to rotation
+const ROT_LERP = 0.15      // smoothing per frame
+
+const PULSE_DECAY_MS = 120
+const SHAKE_FRAMES = 12
+const FLASH_FRAMES = 5
+
+// ---- module session ----
+let session = null
+
+export function startFlapGame()
 {
-  if (typeof confetti === 'function') 
+  if (session)
   {
-    if (callback) callback()
     return
   }
 
-  let existingScript = document.querySelector('script[src="confetti.browser.min.js"]')
-  if (!existingScript) 
+  if (document.activeElement && typeof document.activeElement.blur === 'function')
   {
-    let scriptTag = document.createElement('script')
-    scriptTag.src = 'confetti.browser.min.js'
-    scriptTag.onload = () => {
-      flapConfettiLoaded = true
-      if (callback) callback()
-    }
-    scriptTag.onerror = () => {
-      console.error('Failed to load confetti.browser.min.js from repository root.')
-    }
-    document.head.appendChild(scriptTag)
-  } 
-  else 
-  {
-    existingScript.addEventListener('load', () => {
-      flapConfettiLoaded = true
-      if (callback) callback()
-    })
+    document.activeElement.blur()
   }
-}
 
-function triggerFlapConfetti() 
-{
-  ensureFlapConfettiLoaded(() => {
-    if (typeof confetti === 'function') 
-    {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        zIndex: 100000
-      })
-    }
+  const theme = getGameTheme()
+  const overlay = createGameOverlay({
+    onBack: stopFlapGame,
+    onReset: resetFlapHighScore,
+    resetLabel: 'reset'
   })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = CANVAS_W
+  canvas.height = CANVAS_H
+  Object.assign(canvas.style, {
+    width: '94%',
+    maxHeight: '72vh',
+    border: `2px solid ${theme.border}`,
+    backgroundColor: theme.surface,
+    willChange: 'transform',
+    transform: 'translateZ(0)',
+    display: 'block',
+    touchAction: 'manipulation'
+  })
+  overlay.contentHost.appendChild(canvas)
+
+  const ctx = canvas.getContext('2d', { alpha: false })
+  ctx.imageSmoothingEnabled = false
+
+  const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
+
+  // Pipe pool.
+  const pipes = []
+  for (let i = 0; i < MAX_PIPES; i++)
+  {
+    pipes.push({ active: false, x: 0, top: 0, bottom: 0, passed: false })
+  }
+
+  // Particle pool.
+  const particles = []
+  for (let i = 0; i < MAX_PARTICLES; i++)
+  {
+    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0 })
+  }
+
+  // Precomputed pipe heights.
+  const heights = new Float32Array(TRACK_SIZE)
+  const minH = 40
+  const maxH = CANVAS_H - GROUND_H - PIPE_GAP - 40
+  for (let i = 0; i < TRACK_SIZE; i++)
+  {
+    heights[i] = minH + Math.random() * (maxH - minH)
+  }
+
+  session = {
+    overlay,
+    canvas,
+    ctx,
+    theme,
+    highScore,
+    highScoreBeaten: false,
+    pipes,
+    particles,
+    heights,
+    trackIndex: 0,
+    bird: { y: CANVAS_H / 2, vy: 0, pulse: 0, rot: 0 },
+    spawnAccumulator: 0,
+    score: 0,
+    started: false,
+    gameOver: false,
+    shakeFrames: 0,
+    flashFrames: 0,
+    lastFrame: 0,
+    rafId: null
+  }
+
+  resetFlapGame()
+
+  const handleTap = (e) =>
+  {
+    if (e) e.preventDefault()
+    flapAction()
+  }
+  canvas.addEventListener('mousedown', handleTap)
+  canvas.addEventListener('touchstart', handleTap, { passive: false })
+  window.addEventListener('keydown', handleKey)
+
+  session.lastFrame = performance.now()
+  session.rafId = requestAnimationFrame(loop)
 }
 
-const MAX_JUMP_PARTICLES = 12
-let flapParticlesPool = []
-
-function initFlapParticlePool()
+export function stopFlapGame()
 {
-  flapParticlesPool = []
-  for (let i = 0; i < MAX_JUMP_PARTICLES; i++)
+  if (!session)
   {
-    flapParticlesPool.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0 })
+    return
   }
+  if (session.rafId)
+  {
+    cancelAnimationFrame(session.rafId)
+  }
+  window.removeEventListener('keydown', handleKey)
+  session.overlay.remove()
+  session = null
+}
+
+function handleKey(e)
+{
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.key === 'w')
+  {
+    e.preventDefault()
+    flapAction()
+  }
+}
+
+function flapAction()
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  if (s.gameOver)
+  {
+    resetFlapGame()
+    return
+  }
+  if (!s.started)
+  {
+    s.started = true
+  }
+  s.bird.vy = BIRD_LIFT
+  s.bird.pulse = 1
+  spawnJumpParticles(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H)
 }
 
 function spawnJumpParticles(x, y)
 {
-  let spawned = 0
-  for (let i = 0; i < MAX_JUMP_PARTICLES && spawned < 12; i++)
+  const s = session
+  if (!s)
   {
-    let p = flapParticlesPool[i]
+    return
+  }
+  let spawned = 0
+  for (let i = 0; i < MAX_PARTICLES && spawned < 6; i++)
+  {
+    const p = s.particles[i]
     if (!p.active)
     {
       p.active = true
@@ -77,529 +207,352 @@ function spawnJumpParticles(x, y)
   }
 }
 
-let flapAudioCtx = null
-
-function getFlapAudioContext() 
-{
-  if (!flapAudioCtx) 
-  {
-    let AudioCtxClass = window.AudioContext || window.webkitAudioContext
-    if (AudioCtxClass) 
-    {
-      flapAudioCtx = new AudioCtxClass()
-    }
-  }
-  if (flapAudioCtx && flapAudioCtx.state === 'suspended') 
-  {
-    flapAudioCtx.resume()
-  }
-  return flapAudioCtx
-}
-
-function playFlapSound(type) 
-{
-  let ctx = getFlapAudioContext()
-  if (!ctx) return
-
-  let oscNode = ctx.createOscillator()
-  let gainNode = ctx.createGain()
-  oscNode.connect(gainNode)
-  gainNode.connect(ctx.destination)
-
-  let nowTime = ctx.currentTime
-
-  if (type === 'score') 
-  {
-    oscNode.type = 'triangle'
-    oscNode.frequency.setValueAtTime(523.25, nowTime)
-    oscNode.frequency.setValueAtTime(659.25, nowTime + 0.08)
-    gainNode.gain.setValueAtTime(0.2, nowTime)
-    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.2)
-    oscNode.start(nowTime)
-    oscNode.stop(nowTime + 0.2)
-  } 
-  else if (type === 'gameover') 
-  {
-    oscNode.type = 'sawtooth'
-    oscNode.frequency.setValueAtTime(200, nowTime)
-    oscNode.frequency.exponentialRampToValueAtTime(60, nowTime + 0.3)
-    gainNode.gain.setValueAtTime(0.4, nowTime)
-    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.3)
-    oscNode.start(nowTime)
-    oscNode.stop(nowTime + 0.3)
-  }
-}
-
-function getFlapThemeColor(varName, fallback) 
-{
-  let target = document.body || document.documentElement
-  let val = getComputedStyle(target).getPropertyValue(varName).trim()
-  return val ? val : fallback
-}
-
-function getFlapGameTheme() 
-{
-  return {
-    bg: getFlapThemeColor('--bg', '#1d2021'),
-    surface: getFlapThemeColor('--surface', '#282828'),
-    border: getFlapThemeColor('--border', '#3c3836'),
-    text: getFlapThemeColor('--text', '#fbf1c7'),
-    accent: getFlapThemeColor('--accent', '#fe8019'),
-    accentTxt: getFlapThemeColor('--accent-txt', '#282828'),
-    gray: getFlapThemeColor('--gray', '#928374')
-  }
-}
-
-let flapOverlay = null
-let flapCanvas = null
-let flapCtx = null
-let flapAnimationId = null
-
-let flapBird = { x: 50, y: 150, width: 22, height: 22, gravity: 0.38, lift: -7.5, velocity: 0 }
-
-const MAX_PIPES = 6
-let flapPipesPool = []
-
-const PRECOMPUTED_TRACK_SIZE = 500
-let flapPrecomputedHeights = new Float32Array(PRECOMPUTED_TRACK_SIZE)
-let flapTrackIndex = 0
-
-let flapFrameAccumulator = 0
-let flapScore = 0
-let flapHighScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
-let flapIsGameOver = false
-let flapIsStarted = false
-let flapHighScoreBeaten = false
-
-let flapShakeTimer = 0
-let flapFlashTimer = 0
-let flapLastFrameTime = 0
-let flapCachedTheme = null
-
-function initFlapPoolsAndTrack() 
-{
-  flapPipesPool = []
-  for (let i = 0; i < MAX_PIPES; i++) 
-  {
-    flapPipesPool.push({ active: false, x: 0, top: 0, bottom: 0, passed: false })
-  }
-
-  initFlapParticlePool()
-
-  let gap = 110
-  let minHeight = 40
-  let maxHeight = 460 - gap - minHeight - 40
-  for (let i = 0; i < PRECOMPUTED_TRACK_SIZE; i++) 
-  {
-    flapPrecomputedHeights[i] = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight
-  }
-}
-
-function startFlapGame() 
-{
-  if (flapOverlay) return
-  
-  if (flapAnimationId) 
-  {
-    cancelAnimationFrame(flapAnimationId)
-    flapAnimationId = null
-  }
-
-  if (document.activeElement && typeof document.activeElement.blur === 'function') 
-  {
-    document.activeElement.blur()
-  }
-
-  ensureFlapConfettiLoaded()
-  flapHighScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
-  flapHighScoreBeaten = false
-  
-  initFlapPoolsAndTrack()
-  createFlapUI()
-  resetFlapGame()
-  
-  window.addEventListener('keydown', handleFlapInput)
-  flapLastFrameTime = performance.now()
-  flapAnimationId = requestAnimationFrame(updateFlapGame)
-}
-
-function stopFlapGame() 
-{
-  if (!flapOverlay) return
-  
-  if (flapAnimationId)
-  {
-    cancelAnimationFrame(flapAnimationId)
-    flapAnimationId = null
-  }
-  window.removeEventListener('keydown', handleFlapInput)
-  document.body.removeChild(flapOverlay)
-  flapOverlay = null
-  flapCanvas = null
-  flapCtx = null
-  flapCachedTheme = null
-}
-
 function resetFlapHighScore()
 {
-  flapHighScore = 0
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  s.highScore = 0
+  s.highScoreBeaten = false
   localStorage.setItem('flap_highscore', '0')
-  flapHighScoreBeaten = false
   resetFlapGame()
 }
 
-function createFlapUI() 
+function resetFlapGame()
 {
-  flapCachedTheme = getFlapGameTheme()
-
-  flapOverlay = document.createElement('div')
-  flapOverlay.style.position = 'fixed'
-  flapOverlay.style.top = '0'
-  flapOverlay.style.left = '0'
-  flapOverlay.style.width = '100vw'
-  flapOverlay.style.height = '100vh'
-  flapOverlay.style.backgroundColor = flapCachedTheme.bg
-  flapOverlay.style.zIndex = '99999'
-  flapOverlay.style.display = 'flex'
-  flapOverlay.style.flexDirection = 'column'
-  flapOverlay.style.alignItems = 'center'
-  flapOverlay.style.justifyContent = 'flex-start'
-  flapOverlay.style.paddingTop = 'calc(52px + env(safe-area-inset-top, 0px))'
-  flapOverlay.style.paddingLeft = '12px'
-  flapOverlay.style.paddingRight = '12px'
-  flapOverlay.style.paddingBottom = '8px'
-  flapOverlay.style.boxSizing = 'border-box'
-  flapOverlay.style.fontWeight = 'bold'
-
-  let topBar = document.createElement('div')
-  topBar.style.display = 'flex'
-  topBar.style.alignItems = 'center'
-  topBar.style.justifyContent = 'space-between'
-  topBar.style.width = '100%'
-  topBar.style.maxWidth = '380px'
-  topBar.style.marginTop = '4px'
-  topBar.style.marginBottom = '12px'
-
-  let backBtn = document.createElement('button')
-  backBtn.innerText = 'back'
-  backBtn.style.padding = '10px 28px'
-  backBtn.style.fontSize = '18px'
-  backBtn.style.fontWeight = 'bold'
-  backBtn.style.width = 'auto'
-  backBtn.style.minWidth = '110px'
-  backBtn.style.cursor = 'pointer'
-  backBtn.onclick = stopFlapGame
-
-  let resetBtn = document.createElement('button')
-  resetBtn.innerText = 'reset'
-  resetBtn.style.padding = '10px 28px'
-  resetBtn.style.fontSize = '18px'
-  resetBtn.style.fontWeight = 'bold'
-  resetBtn.style.width = 'auto'
-  resetBtn.style.minWidth = '110px'
-  resetBtn.style.cursor = 'pointer'
-  resetBtn.onclick = resetFlapHighScore
-
-  topBar.appendChild(backBtn)
-  topBar.appendChild(resetBtn)
-
-  flapCanvas = document.createElement('canvas')
-  flapCanvas.width = 360
-  flapCanvas.height = 476
-  flapCanvas.style.width = '94%'
-  flapCanvas.style.maxHeight = '72vh'
-  flapCanvas.style.border = `2px solid ${flapCachedTheme.border}`
-  flapCanvas.style.backgroundColor = flapCachedTheme.surface
-  flapCanvas.style.willChange = 'transform'
-  flapCanvas.style.transform = 'translateZ(0)'
-
-  flapCtx = flapCanvas.getContext('2d', { alpha: false })
-  flapCtx.imageSmoothingEnabled = false
-
-  flapOverlay.appendChild(topBar)
-  flapOverlay.appendChild(flapCanvas)
-
-  document.body.appendChild(flapOverlay)
-
-  flapCanvas.addEventListener('touchstart', (e) => {
-    e.preventDefault()
-    flapAction()
-  }, { passive: false })
-
-  flapCanvas.addEventListener('click', flapAction)
-}
-
-function resetFlapGame() 
-{
-  flapBird.y = flapCanvas.height / 2
-  flapBird.velocity = 0
-  
-  for (let i = 0; i < MAX_PIPES; i++) 
+  const s = session
+  if (!s)
   {
-    flapPipesPool[i].active = false
-  }
-
-  for (let i = 0; i < MAX_JUMP_PARTICLES; i++)
-  {
-    flapParticlesPool[i].active = false
-  }
-
-  flapFrameAccumulator = 0
-  flapTrackIndex = 0
-  flapScore = 0
-  flapShakeTimer = 0
-  flapFlashTimer = 0
-  flapIsGameOver = false
-  flapIsStarted = false
-  flapHighScoreBeaten = false
-}
-
-function handleFlapInput(e) 
-{
-  if (e.code === 'Space' || e.code === 'ArrowUp' || e.key === 'w') 
-  {
-    e.preventDefault()
-    flapAction()
-  }
-}
-
-function flapAction() 
-{
-  if (flapIsGameOver) 
-  {
-    resetFlapGame()
     return
   }
-  if (!flapIsStarted) 
+  s.bird.y = CANVAS_H / 2
+  s.bird.vy = 0
+  s.bird.pulse = 0
+  s.bird.rot = 0
+  for (let i = 0; i < MAX_PIPES; i++)
   {
-    flapIsStarted = true
+    s.pipes[i].active = false
   }
-  
-  flapBird.velocity = flapBird.lift
-  spawnJumpParticles(flapBird.x + flapBird.width / 2, flapBird.y + flapBird.height)
+  for (let i = 0; i < MAX_PARTICLES; i++)
+  {
+    s.particles[i].active = false
+  }
+  s.trackIndex = 0
+  s.spawnAccumulator = 0
+  s.score = 0
+  s.started = false
+  s.gameOver = false
+  s.shakeFrames = 0
+  s.flashFrames = 0
 }
 
-function spawnPipeFromPool() 
+function spawnPipe()
 {
-  for (let i = 0; i < MAX_PIPES; i++) 
+  const s = session
+  if (!s)
   {
-    let p = flapPipesPool[i]
-    if (!p.active) 
+    return
+  }
+  for (let i = 0; i < MAX_PIPES; i++)
+  {
+    const p = s.pipes[i]
+    if (!p.active)
     {
-      let topHeight = flapPrecomputedHeights[flapTrackIndex]
-      flapTrackIndex = (flapTrackIndex + 1) % PRECOMPUTED_TRACK_SIZE
-      
-      let gap = 110
+      const top = s.heights[s.trackIndex]
+      s.trackIndex = (s.trackIndex + 1) % TRACK_SIZE
       p.active = true
-      p.x = flapCanvas.width
-      p.top = topHeight
-      p.bottom = flapCanvas.height - topHeight - gap
+      p.x = CANVAS_W
+      p.top = top
+      p.bottom = CANVAS_H - GROUND_H - top - PIPE_GAP
       p.passed = false
-      break
+      return
     }
   }
 }
 
-function updateFlapGame(now) 
+function triggerGameOver()
 {
-  if (!flapOverlay) return
-
-  let delta = now - flapLastFrameTime
-  flapLastFrameTime = now
-
-  let clampedDelta = Math.min(delta, 32)
-  let timeFactor = clampedDelta / 16.667
-
-  if (flapShakeTimer > 0) flapShakeTimer--
-  if (flapFlashTimer > 0) flapFlashTimer--
-
-  if (flapShakeTimer > 0) 
+  const s = session
+  if (!s || s.gameOver)
   {
-    flapCtx.save()
-    let dx = (Math.random() - 0.5) * 8
-    let dy = (Math.random() - 0.5) * 8
-    flapCtx.translate(dx, dy)
+    return
   }
-
-  if (flapIsStarted && !flapIsGameOver) 
-  {
-    flapFrameAccumulator += timeFactor
-    
-    flapBird.velocity += flapBird.gravity * timeFactor
-    flapBird.y += flapBird.velocity * timeFactor
-
-    if (flapFrameAccumulator >= 85) 
-    {
-      flapFrameAccumulator = 0
-      spawnPipeFromPool()
-    }
-
-    for (let i = 0; i < MAX_PIPES; i++) 
-    {
-      let p = flapPipesPool[i]
-      if (!p.active) continue
-
-      p.x -= 2.2 * timeFactor
-
-      if (!p.passed && p.x + 45 < flapBird.x) 
-      {
-        p.passed = true
-        flapScore++
-        playFlapSound('score')
-        
-        if (flapScore > flapHighScore || flapHighScore === 0) 
-        {
-          if (!flapHighScoreBeaten) 
-          {
-            triggerFlapConfetti()
-            if (navigator.vibrate) 
-            {
-              navigator.vibrate([100, 50, 100, 50, 200])
-            }
-            flapHighScoreBeaten = true
-          }
-          flapHighScore = flapScore
-          localStorage.setItem('flap_highscore', flapHighScore.toString())
-        }
-      }
-
-      if (
-        flapBird.x + flapBird.width > p.x &&
-        flapBird.x < p.x + 45 &&
-        (flapBird.y < p.top || flapBird.y + flapBird.height > flapCanvas.height - p.bottom)
-      ) 
-      {
-        triggerFlapGameOver()
-      }
-
-      if (p.x + 45 < 0) 
-      {
-        p.active = false
-      }
-    }
-
-    if (flapBird.y + flapBird.height >= flapCanvas.height - 24 || flapBird.y <= 0) 
-    {
-      triggerFlapGameOver()
-    }
-
-    for (let i = 0; i < MAX_JUMP_PARTICLES; i++)
-    {
-      let particle = flapParticlesPool[i]
-      if (!particle.active) continue
-
-      particle.x += particle.vx * timeFactor
-      particle.y += particle.vy * timeFactor
-      particle.life -= timeFactor
-
-      if (particle.life <= 0)
-      {
-        particle.active = false
-      }
-    }
-  }
-
-  drawFlapGame(flapCachedTheme)
-  if (flapShakeTimer > 0) 
-  {
-    flapCtx.restore()
-  }
-
-  if (flapFlashTimer > 0) 
-  {
-    flapCtx.fillStyle = 'rgba(255, 255, 255, 0.3)'
-    flapCtx.fillRect(0, 0, flapCanvas.width, flapCanvas.height)
-  }
-
-  flapAnimationId = requestAnimationFrame(updateFlapGame)
-}
-
-function triggerFlapGameOver() 
-{
-  if (flapIsGameOver) return
-  flapIsGameOver = true
-  flapShakeTimer = 12
-  flapFlashTimer = 5
-  playFlapSound('gameover')
-  
-  if (navigator.vibrate) 
+  s.gameOver = true
+  s.shakeFrames = SHAKE_FRAMES
+  s.flashFrames = FLASH_FRAMES
+  playGameSound('gameover')
+  if (navigator.vibrate)
   {
     navigator.vibrate(200)
   }
-
-  if (flapScore > flapHighScore) 
+  if (s.score > s.highScore)
   {
-    flapHighScore = flapScore
-    localStorage.setItem('flap_highscore', flapHighScore.toString())
+    s.highScore = s.score
+    localStorage.setItem('flap_highscore', s.highScore.toString())
   }
 }
 
-function drawFlapGame(theme) 
+function update(dt)
 {
-  flapCtx.fillStyle = theme.surface
-  flapCtx.fillRect(0, 0, flapCanvas.width, flapCanvas.height - 24)
-
-  flapCtx.fillStyle = theme.gray
-  flapCtx.fillRect(0, flapCanvas.height - 24, flapCanvas.width, 24)
-  flapCtx.fillStyle = theme.accent
-  flapCtx.fillRect(0, flapCanvas.height - 24, flapCanvas.width, 4)
-
-  flapCtx.fillStyle = theme.border
-  for (let i = 0; i < MAX_PIPES; i++) 
+  const s = session
+  if (!s || !s.started || s.gameOver)
   {
-    let p = flapPipesPool[i]
-    if (!p.active) continue
-
-    flapCtx.fillRect(p.x, 0, 45, p.top)
-
-    let bottomY = flapCanvas.height - p.bottom
-    flapCtx.fillRect(p.x, bottomY, 45, p.bottom)
+    return
   }
 
-  flapCtx.fillStyle = theme.accent
-  flapCtx.fillRect(flapBird.x, flapBird.y, flapBird.width, flapBird.height)
+  // Bird physics.
+  s.bird.vy += BIRD_GRAVITY * dt
+  s.bird.y += s.bird.vy * dt
 
-  flapCtx.fillStyle = theme.accentTxt
-  flapCtx.fillRect(flapBird.x + flapBird.width - 6, flapBird.y + 4, 4, 4)
+  // Rotation follows velocity, clamped, smoothed.
+  const targetRot = Math.max(ROT_UP, Math.min(ROT_DOWN, s.bird.vy / ROT_VEL_SCALE))
+  s.bird.rot += (targetRot - s.bird.rot) * Math.min(1, ROT_LERP * dt)
 
-  flapCtx.fillStyle = theme.accent
-  for (let i = 0; i < MAX_JUMP_PARTICLES; i++)
+  // Pulse decay.
+  s.bird.pulse *= Math.exp(-(16.67 * dt) / PULSE_DECAY_MS)
+
+  // Spawn timer.
+  s.spawnAccumulator += 16.67 * dt
+  if (s.spawnAccumulator >= PIPE_SPAWN_MS)
   {
-    let particle = flapParticlesPool[i]
-    if (particle.active)
+    s.spawnAccumulator -= PIPE_SPAWN_MS
+    spawnPipe()
+  }
+
+  // Pipes.
+  for (let i = 0; i < MAX_PIPES; i++)
+  {
+    const p = s.pipes[i]
+    if (!p.active)
     {
-      flapCtx.fillRect(particle.x, particle.y, 3, 3)
+      continue
+    }
+    p.x -= PIPE_SPEED * dt
+
+    if (!p.passed && p.x + PIPE_W < BIRD_X)
+    {
+      p.passed = true
+      s.score++
+      playGameSound('score')
+      if (s.score > s.highScore)
+      {
+        if (!s.highScoreBeaten)
+        {
+          triggerConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
+          if (navigator.vibrate)
+          {
+            navigator.vibrate([100, 50, 100, 50, 200])
+          }
+          s.highScoreBeaten = true
+        }
+        s.highScore = s.score
+        localStorage.setItem('flap_highscore', s.highScore.toString())
+      }
+    }
+
+    // AABB collision, accounting for cap overhang on the x-axis.
+    const bTop = s.bird.y
+    const bBottom = s.bird.y + BIRD_H
+    const bRight = BIRD_X + BIRD_W
+    const colLeft = p.x - PIPE_CAP_OVERHANG
+    const colRight = p.x + PIPE_W + PIPE_CAP_OVERHANG
+    if (bRight > colLeft && BIRD_X < colRight)
+    {
+      if (bTop < p.top || bBottom > CANVAS_H - GROUND_H - p.bottom)
+      {
+        triggerGameOver()
+        return
+      }
+    }
+
+    if (p.x + PIPE_W < 0)
+    {
+      p.active = false
     }
   }
 
-  flapCtx.fillStyle = theme.text
-  flapCtx.font = 'bold 16px monospace'
-  
-  flapCtx.textAlign = 'left'
-  flapCtx.fillText(`PTS ${flapScore}`, 12, 28)
-
-  flapCtx.textAlign = 'right'
-  flapCtx.fillText(`HI ${flapHighScore}`, flapCanvas.width - 12, 28)
-
-  if (!flapIsStarted) 
+  // Particles.
+  for (let i = 0; i < MAX_PARTICLES; i++)
   {
-    flapCtx.fillStyle = theme.text
-    flapCtx.font = '15px monospace'
-    flapCtx.textAlign = 'center'
-    flapCtx.fillText('Tap or Space to Jump', flapCanvas.width / 2, flapCanvas.height / 2)
+    const p = s.particles[i]
+    if (!p.active)
+    {
+      continue
+    }
+    p.x += p.vx * dt
+    p.y += p.vy * dt
+    p.life -= dt
+    if (p.life <= 0)
+    {
+      p.active = false
+    }
   }
 
-  if (flapIsGameOver) 
+  // World bounds.
+  if (s.bird.y + BIRD_H >= CANVAS_H - GROUND_H || s.bird.y <= 0)
   {
-    flapCtx.fillStyle = 'rgba(0,0,0,0.5)'
-    flapCtx.fillRect(0, 0, flapCanvas.width, flapCanvas.height)
-    
-    flapCtx.fillStyle = '#fff'
-    flapCtx.font = 'bold 26px monospace'
-    flapCtx.textAlign = 'center'
-    flapCtx.fillText('GAME OVER', flapCanvas.width / 2, flapCanvas.height / 2 - 10)
-    
-    flapCtx.font = 'bold 14px monospace'
-    flapCtx.fillText('Tap Canvas to Restart', flapCanvas.width / 2, flapCanvas.height / 2 + 20)
+    triggerGameOver()
+  }
+}
+
+function loop(now)
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+
+  const deltaMs = Math.min(32, now - s.lastFrame)
+  s.lastFrame = now
+  const dt = deltaMs / 16.667
+
+  update(dt)
+
+  if (s.shakeFrames > 0)
+  {
+    s.shakeFrames--
+  }
+  if (s.flashFrames > 0)
+  {
+    s.flashFrames--
+  }
+
+  draw()
+  s.rafId = requestAnimationFrame(loop)
+}
+
+function draw()
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  const ctx = s.ctx
+  const theme = s.theme
+
+  ctx.save()
+
+  // Shake.
+  if (s.shakeFrames > 0)
+  {
+    const amp = (s.shakeFrames / SHAKE_FRAMES) * 8
+    ctx.translate(
+      (Math.random() - 0.5) * amp,
+      (Math.random() - 0.5) * amp
+    )
+  }
+
+  // Sky (oversized so shake doesn't expose edges).
+  ctx.fillStyle = theme.surface
+  ctx.fillRect(-12, -12, CANVAS_W + 24, CANVAS_H + 24)
+
+  // Pipes: body in border color, caps in accent color at the gap ends.
+  for (let i = 0; i < MAX_PIPES; i++)
+  {
+    const p = s.pipes[i]
+    if (!p.active)
+    {
+      continue
+    }
+
+    const bottomY = CANVAS_H - GROUND_H - p.bottom
+
+    // Top pipe body + cap.
+    ctx.fillStyle = theme.border
+    ctx.fillRect(p.x, 0, PIPE_W, p.top)
+    ctx.fillStyle = theme.accent
+    ctx.fillRect(
+      p.x - PIPE_CAP_OVERHANG,
+      p.top - PIPE_CAP_H,
+      PIPE_W + PIPE_CAP_OVERHANG * 2,
+      PIPE_CAP_H
+    )
+
+    // Bottom pipe body + cap.
+    ctx.fillStyle = theme.border
+    ctx.fillRect(p.x, bottomY, PIPE_W, p.bottom)
+    ctx.fillStyle = theme.accent
+    ctx.fillRect(
+      p.x - PIPE_CAP_OVERHANG,
+      bottomY,
+      PIPE_W + PIPE_CAP_OVERHANG * 2,
+      PIPE_CAP_H
+    )
+  }
+
+  // Ground.
+  ctx.fillStyle = theme.gray
+  ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, GROUND_H)
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, 4)
+
+  // Particles.
+  ctx.fillStyle = theme.accent
+  for (let i = 0; i < MAX_PARTICLES; i++)
+  {
+    const p = s.particles[i]
+    if (p.active)
+    {
+      ctx.fillRect(p.x, p.y, 3, 3)
+    }
+  }
+
+  // Bird, rotated + squash pulse.
+  const pulse = s.bird.pulse
+  const w = BIRD_W * (1 + pulse * 0.15)
+  const h = BIRD_H * (1 - pulse * 0.15)
+
+  ctx.save()
+  ctx.translate(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H / 2)
+  ctx.rotate(s.bird.rot)
+
+  // Body (centered on origin after translate).
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(-w / 2, -h / 2, w, h)
+
+  // Eye.
+  ctx.fillStyle = theme.accentTxt
+  ctx.fillRect(w / 2 - 6, -h / 2 + 4, 4, 4)
+
+  ctx.restore()
+
+  ctx.restore()
+
+  // HUD (not affected by shake).
+  ctx.fillStyle = theme.text
+  ctx.font = 'bold 16px monospace'
+  ctx.textAlign = 'left'
+  ctx.fillText(`PTS ${s.score}`, 12, 28)
+  ctx.textAlign = 'right'
+  ctx.fillText(`HI ${s.highScore}`, CANVAS_W - 12, 28)
+
+  if (!s.started && !s.gameOver)
+  {
+    ctx.fillStyle = theme.text
+    ctx.font = '15px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('Tap or Space to Jump', CANVAS_W / 2, CANVAS_H / 2)
+  }
+
+  if (s.gameOver)
+  {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 26px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('GAME OVER', CANVAS_W / 2, CANVAS_H / 2 - 10)
+    ctx.font = 'bold 14px monospace'
+    ctx.fillText('Tap Canvas to Restart', CANVAS_W / 2, CANVAS_H / 2 + 20)
+  }
+
+  if (s.flashFrames > 0)
+  {
+    ctx.fillStyle = `rgba(255,255,255,${(s.flashFrames / FLASH_FRAMES) * 0.3})`
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
   }
 }

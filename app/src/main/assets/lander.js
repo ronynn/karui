@@ -1,782 +1,834 @@
-let landerConfettiLoaded = false
+// lander.js — Lunar Lander, merged + optimized ES module.
+import {
+  createGameOverlay,
+  getGameTheme,
+  getGameAudioContext,
+  playGameSound,
+  triggerConfetti
+} from './extras.js'
 
-function ensureLanderConfettiLoaded(callback)
+// ---- constants ----
+const CANVAS_W = 376
+const CANVAS_H = 400
+
+const PLATFORM_WIDTH = 65
+const PLATFORM_HEIGHT = 6
+const MIN_PLATFORM_SPACING = 130
+const MIN_PLATFORM_VERTICAL_DIFF = 70
+const PLATFORM_Y_MIN = 160
+const PLATFORM_Y_MAX = CANVAS_H - 40
+
+const GRAVITY = 0.025
+const THRUST_FORCE = 0.065
+const ROTATION_SPEED = 0.05
+const FUEL_START = 100
+const FUEL_BURN = 0.5
+
+const ROCKET_HALF_W = 10
+const ROCKET_HALF_H = 16
+const ROCKET_OFFSET_Y = 18
+
+const SAFE_ANGLE = 0.35
+const SAFE_SPEED = 1.4
+const MAX_DRIFT_SPEED = 6
+
+const LANDING_SETTLE_RATE = 0.15
+const LANDING_SETTLE_ANGLE = 0.05
+const LANDING_SETTLE_SPEED = 0.1
+
+const MAX_THRUST_PARTICLES = 30
+
+// ---- module session + thrust loop ----
+let session = null
+let thrustSource = null
+let thrustGain = null
+
+export function startLanderGame()
 {
-  if (typeof confetti === 'function')
+  if (session)
   {
-    if (callback) callback()
     return
   }
 
-  let existingScript = document.querySelector('script[src="confetti.browser.min.js"]')
-  if (!existingScript)
-  {
-    let scriptTag = document.createElement('script')
-    scriptTag.src = 'confetti.browser.min.js'
-    scriptTag.onload = () => {
-      landerConfettiLoaded = true
-      if (callback) callback()
-    }
-    scriptTag.onerror = () => {
-      console.error('Failed to load confetti.browser.min.js from repository root.')
-    }
-    document.head.appendChild(scriptTag)
-  }
-  else
-  {
-    existingScript.addEventListener('load', () => {
-      landerConfettiLoaded = true
-      if (callback) callback()
-    })
-  }
-}
-
-function triggerLanderConfetti()
-{
-  ensureLanderConfettiLoaded(() => {
-    if (typeof confetti === 'function')
-    {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        zIndex: 100000
-      })
-    }
-  })
-}
-
-let landerAudioCtx = null
-let thrustSourceNode = null
-let thrustGainNode = null
-
-function getLanderAudioContext()
-{
-  if (!landerAudioCtx)
-  {
-    let AudioCtxClass = window.AudioContext || window.webkitAudioContext
-    if (AudioCtxClass)
-    {
-      landerAudioCtx = new AudioCtxClass()
-    }
-  }
-  if (landerAudioCtx && landerAudioCtx.state === 'suspended')
-  {
-    landerAudioCtx.resume()
-  }
-  return landerAudioCtx
-}
-
-// Section: Audio Processing
-
-function startThrustSound()
-{
-  let ctx = getLanderAudioContext()
-  if (!ctx) return
-  if (ctx.state === 'suspended')
-  {
-    ctx.resume()
-  }
-  if (thrustSourceNode) return
-
-  let bufferSize = ctx.sampleRate * 1
-  let buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-  let data = buffer.getChannelData(0)
-  for (let i = 0; i < bufferSize; i++)
-  {
-    data[i] = Math.random() * 2 - 1
-  }
-
-  thrustSourceNode = ctx.createBufferSource()
-  thrustSourceNode.buffer = buffer
-  thrustSourceNode.loop = true
-
-  let filter = ctx.createBiquadFilter()
-  filter.type = 'lowpass'
-  filter.frequency.setValueAtTime(600, ctx.currentTime)
-
-  thrustGainNode = ctx.createGain()
-  thrustGainNode.gain.setValueAtTime(0.85, ctx.currentTime)
-
-  thrustSourceNode.connect(filter)
-  filter.connect(thrustGainNode)
-  thrustGainNode.connect(ctx.destination)
-
-  thrustSourceNode.start()
-}
-
-function stopThrustSound()
-{
-  if (thrustGainNode && landerAudioCtx)
-  {
-    thrustGainNode.gain.linearRampToValueAtTime(0.001, landerAudioCtx.currentTime + 0.05)
-    setTimeout(() => {
-      if (thrustSourceNode)
-      {
-        try { thrustSourceNode.stop() } catch (e) {}
-        thrustSourceNode.disconnect()
-        thrustSourceNode = null
-        thrustGainNode = null
-      }
-    }, 50)
-  }
-}
-
-function playLanderSound(type)
-{
-  let ctx = getLanderAudioContext()
-  if (!ctx) return
-  if (ctx.state === 'suspended')
-  {
-    ctx.resume()
-  }
-
-  let nowTime = ctx.currentTime
-
-  if (type === 'land')
-  {
-    let osc1 = ctx.createOscillator()
-    let gain1 = ctx.createGain()
-    osc1.type = 'square'
-    osc1.frequency.setValueAtTime(600, nowTime)
-    osc1.frequency.exponentialRampToValueAtTime(100, nowTime + 0.15)
-    gain1.gain.setValueAtTime(0.3, nowTime)
-    gain1.gain.exponentialRampToValueAtTime(0.001, nowTime + 0.2)
-
-    osc1.connect(gain1)
-    gain1.connect(ctx.destination)
-    osc1.start(nowTime)
-    osc1.stop(nowTime + 0.2)
-
-    let osc2 = ctx.createOscillator()
-    let gain2 = ctx.createGain()
-    osc2.type = 'triangle'
-    osc2.frequency.setValueAtTime(1800, nowTime)
-    osc2.frequency.exponentialRampToValueAtTime(400, nowTime + 0.25)
-    gain2.gain.setValueAtTime(0.25, nowTime)
-    gain2.gain.exponentialRampToValueAtTime(0.001, nowTime + 0.25)
-
-    osc2.connect(gain2)
-    gain2.connect(ctx.destination)
-    osc2.start(nowTime)
-    osc2.stop(nowTime + 0.25)
-  }
-  else if (type === 'crash')
-  {
-    let oscNode = ctx.createOscillator()
-    let gainNode = ctx.createGain()
-    oscNode.connect(gainNode)
-    gainNode.connect(ctx.destination)
-
-    oscNode.type = 'sawtooth'
-    oscNode.frequency.setValueAtTime(150, nowTime)
-    oscNode.frequency.exponentialRampToValueAtTime(30, nowTime + 0.4)
-    
-    gainNode.gain.setValueAtTime(0.4, nowTime)
-    gainNode.gain.linearRampToValueAtTime(0.01, nowTime + 0.4)
-    
-    oscNode.start(nowTime)
-    oscNode.stop(nowTime + 0.4)
-  }
-}
-
-function getLanderThemeColor(varName, fallback)
-{
-  let target = document.body || document.documentElement
-  let val = getComputedStyle(target).getPropertyValue(varName).trim()
-  return val ? val : fallback
-}
-
-function getLanderGameTheme()
-{
-  return {
-    bg: getLanderThemeColor('--bg', '#1d2021'),
-    surface: getLanderThemeColor('--surface', '#282828'),
-    border: getLanderThemeColor('--border', '#3c3836'),
-    text: getLanderThemeColor('--text', '#fbf1c7'),
-    accent: getLanderThemeColor('--accent', '#fe8019'),
-    accentTxt: getLanderThemeColor('--accent-txt', '#282828'),
-    gray: getLanderThemeColor('--gray', '#928374')
-  }
-}
-
-let landerOverlay = null
-let landerCanvas = null
-let landerCtx = null
-let landerAnimFrameId = null
-
-let landerRocket = { x: 0, y: 0, vx: 0, vy: 0, angle: 0 }
-let landerFuel = 100
-let landerScore = 0
-let landerHighScore = parseInt(localStorage.getItem('lander_highscore') || '0', 10)
-
-let landerStartPlatform = { x: 0, y: 0, width: 65 }
-let landerTargetPlatform = { x: 0, y: 0, width: 65 }
-
-let landerKeys = { left: false, right: false, thrust: false }
-let landerGameOver = false
-let landerLanded = false
-let landerSettled = false
-let landerHighScoreBeaten = false
-
-let landerLastFrameTime = 0
-
-function startLanderGame()
-{
-  if (landerOverlay) return
-  
   if (document.activeElement && typeof document.activeElement.blur === 'function')
   {
     document.activeElement.blur()
   }
 
-  ensureLanderConfettiLoaded()
-  landerHighScore = parseInt(localStorage.getItem('lander_highscore') || '0', 10)
-  landerHighScoreBeaten = false
-  
-  createLanderUI()
+  const theme = getGameTheme()
+  const overlay = createGameOverlay({
+    onBack: stopLanderGame,
+    onReset: resetLanderHighScore,
+    resetLabel: 'reset'
+  })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = CANVAS_W
+  canvas.height = CANVAS_H
+  Object.assign(canvas.style, {
+    width: '100%',
+    maxWidth: '380px',
+    maxHeight: '52vh',
+    border: `2px solid ${theme.border}`,
+    backgroundColor: theme.surface,
+    display: 'block',
+    touchAction: 'manipulation'
+  })
+  overlay.contentHost.appendChild(canvas)
+  const ctx = canvas.getContext('2d', { alpha: false })
+
+  const controls = buildControls()
+  overlay.contentHost.appendChild(controls)
+
+  const highScore = parseInt(localStorage.getItem('lander_highscore') || '0', 10)
+
+  // Thrust particle pool.
+  const thrustParticles = []
+  for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
+  {
+    thrustParticles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0 })
+  }
+
+  session = {
+    overlay,
+    canvas,
+    ctx,
+    theme,
+    highScore,
+    highScoreBeaten: false,
+    rocket: { x: 0, y: 0, vx: 0, vy: 0, angle: 0 },
+    fuel: FUEL_START,
+    score: 0,
+    startPlatform: { x: 0, y: 0, width: PLATFORM_WIDTH },
+    targetPlatform: { x: 0, y: 0, width: PLATFORM_WIDTH },
+    keys: { left: false, right: false, thrust: false },
+    gameOver: false,
+    landed: false,
+    settled: false,
+    thrustParticles,
+    lastFrame: 0,
+    rafId: null
+  }
+
   resetLanderLevel(true)
-  
-  window.addEventListener('keydown', handleLanderKeyDown)
-  window.addEventListener('keyup', handleLanderKeyUp)
-  
-  landerLastFrameTime = performance.now()
-  landerAnimFrameId = requestAnimationFrame(landerGameLoop)
+
+  const handleTap = (e) =>
+  {
+    if (e) e.preventDefault()
+    if (session && (session.gameOver || session.settled))
+    {
+      triggerContinueOrRestart()
+    }
+  }
+  canvas.addEventListener('mousedown', handleTap)
+  canvas.addEventListener('touchstart', handleTap, { passive: false })
+
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+
+  session.lastFrame = performance.now()
+  session.rafId = requestAnimationFrame(loop)
 }
 
-function stopLanderGame()
+export function stopLanderGame()
 {
-  if (!landerOverlay) return
-  
-  stopThrustSound()
-  if (landerAnimFrameId)
+  if (!session)
   {
-    cancelAnimationFrame(landerAnimFrameId)
-    landerAnimFrameId = null
+    return
   }
-  
-  window.removeEventListener('keydown', handleLanderKeyDown)
-  window.removeEventListener('keyup', handleLanderKeyUp)
-  document.body.removeChild(landerOverlay)
-  
-  landerOverlay = null
-  landerCanvas = null
-  landerCtx = null
+  stopThrustSound()
+  if (session.rafId)
+  {
+    cancelAnimationFrame(session.rafId)
+  }
+  window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keyup', handleKeyUp)
+  session.overlay.remove()
+  session = null
+}
+
+// ---- controls ----
+function buildControls()
+{
+  const host = document.createElement('div')
+  Object.assign(host.style, {
+    display: 'flex',
+    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: '380px',
+    marginTop: '12px',
+    gap: '8px'
+  })
+
+  const rotRow = document.createElement('div')
+  Object.assign(rotRow.style, { display: 'flex', gap: '8px' })
+
+  const makeHoldBtn = (label, width, onDown, onUp) =>
+  {
+    const b = document.createElement('button')
+    b.innerText = label
+    Object.assign(b.style, {
+      padding: '14px',
+      fontSize: '18px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      userSelect: 'none',
+      width: width,
+      touchAction: 'none'
+    })
+    const down = (e) => { e.preventDefault(); if (onDown) onDown() }
+    const up = (e) => { e.preventDefault(); if (onUp) onUp() }
+    b.addEventListener('touchstart', down, { passive: false })
+    b.addEventListener('touchend', up, { passive: false })
+    b.addEventListener('mousedown', down)
+    b.addEventListener('mouseup', up)
+    b.addEventListener('mouseleave', up)
+    return b
+  }
+
+  const leftBtn = makeHoldBtn('L', '55px',
+    () => { if (session) session.keys.left = true },
+    () => { if (session) session.keys.left = false })
+
+  const rightBtn = makeHoldBtn('R', '55px',
+    () => { if (session) session.keys.right = true },
+    () => { if (session) session.keys.right = false })
+
+  rotRow.appendChild(leftBtn)
+  rotRow.appendChild(rightBtn)
+
+  const thrustBtn = makeHoldBtn('THRUST', '180px',
+    () =>
+    {
+      const s = session
+      if (!s)
+      {
+        return
+      }
+      if (s.gameOver || s.settled)
+      {
+        triggerContinueOrRestart()
+      }
+      else
+      {
+        s.keys.thrust = true
+        startThrustSound()
+      }
+    },
+    () =>
+    {
+      if (session)
+      {
+        session.keys.thrust = false
+      }
+      stopThrustSound()
+    })
+
+  host.appendChild(rotRow)
+  host.appendChild(thrustBtn)
+  return host
+}
+
+function handleKeyDown(e)
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  getGameAudioContext()
+
+  if (s.gameOver || s.settled)
+  {
+    if (e.code === 'Space' || e.key === 'w' || e.key === 'ArrowUp')
+    {
+      e.preventDefault()
+      triggerContinueOrRestart()
+    }
+    return
+  }
+
+  if (e.key === 'ArrowLeft' || e.key === 'a')
+  {
+    s.keys.left = true
+  }
+  if (e.key === 'ArrowRight' || e.key === 'd')
+  {
+    s.keys.right = true
+  }
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.code === 'Space')
+  {
+    e.preventDefault()
+    if (!s.keys.thrust)
+    {
+      startThrustSound()
+    }
+    s.keys.thrust = true
+  }
+}
+
+function handleKeyUp(e)
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'a')
+  {
+    s.keys.left = false
+  }
+  if (e.key === 'ArrowRight' || e.key === 'd')
+  {
+    s.keys.right = false
+  }
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.code === 'Space')
+  {
+    s.keys.thrust = false
+    stopThrustSound()
+  }
+}
+
+// ---- thrust loop sound (own loop, shared audio context) ----
+function startThrustSound()
+{
+  const ctx = getGameAudioContext()
+  if (!ctx || thrustSource)
+  {
+    return
+  }
+
+  const bufferSize = Math.floor(ctx.sampleRate * 1)
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++)
+  {
+    data[i] = Math.random() * 2 - 1
+  }
+
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(600, ctx.currentTime)
+
+  thrustGain = ctx.createGain()
+  thrustGain.gain.setValueAtTime(0.85, ctx.currentTime)
+
+  thrustSource = ctx.createBufferSource()
+  thrustSource.buffer = buffer
+  thrustSource.loop = true
+
+  thrustSource.connect(filter)
+  filter.connect(thrustGain)
+  thrustGain.connect(ctx.destination)
+  thrustSource.start()
+}
+
+function stopThrustSound()
+{
+  if (!thrustSource)
+  {
+    return
+  }
+  const ctx = getGameAudioContext()
+  const src = thrustSource
+  const gain = thrustGain
+  thrustSource = null
+  thrustGain = null
+
+  if (ctx && gain)
+  {
+    gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.05)
+  }
+  setTimeout(() =>
+  {
+    try { src.stop() } catch (e) {}
+    try { src.disconnect() } catch (e) {}
+    if (gain)
+    {
+      try { gain.disconnect() } catch (e) {}
+    }
+  }, 60)
+}
+
+// ---- level generation ----
+function generatePlatforms()
+{
+  const s = session
+  const pw = PLATFORM_WIDTH
+
+  const x1 = 10 + Math.floor(Math.random() * (CANVAS_W - pw - 20))
+  const y1 = PLATFORM_Y_MIN + Math.floor(Math.random() * (PLATFORM_Y_MAX - PLATFORM_Y_MIN))
+
+  let x2 = 0
+  let y2 = 0
+  let valid = false
+  let attempts = 0
+  while (!valid && attempts < 100)
+  {
+    x2 = 10 + Math.floor(Math.random() * (CANVAS_W - pw - 20))
+    y2 = PLATFORM_Y_MIN + Math.floor(Math.random() * (PLATFORM_Y_MAX - PLATFORM_Y_MIN))
+    const dx = Math.abs(x1 - x2)
+    const dy = Math.abs(y1 - y2)
+    if (dx >= MIN_PLATFORM_SPACING || dy >= MIN_PLATFORM_VERTICAL_DIFF)
+    {
+      valid = true
+    }
+    attempts++
+  }
+
+  s.startPlatform = { x: x1, y: y1, width: pw }
+  s.targetPlatform = { x: x2, y: y2, width: pw }
 }
 
 function resetLanderHighScore()
 {
-  landerHighScore = 0
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  s.highScore = 0
+  s.highScoreBeaten = false
   localStorage.setItem('lander_highscore', '0')
-  landerHighScoreBeaten = false
-  landerScore = 0
+  s.score = 0
   resetLanderLevel(false)
-}
-
-function triggerContinueOrRestart()
-{
-  if (landerGameOver || landerLanded)
-  {
-    if (landerGameOver) landerScore = 0
-    resetLanderLevel(false)
-  }
-}
-
-// Section: UI Initialization
-
-function createLanderUI()
-{
-  let theme = getLanderGameTheme()
-
-  landerOverlay = document.createElement('div')
-  landerOverlay.style.position = 'fixed'
-  landerOverlay.style.top = '0'
-  landerOverlay.style.left = '0'
-  landerOverlay.style.width = '100vw'
-  landerOverlay.style.height = '100vh'
-  landerOverlay.style.backgroundColor = theme.bg
-  landerOverlay.style.zIndex = '99999'
-  landerOverlay.style.display = 'flex'
-  landerOverlay.style.flexDirection = 'column'
-  landerOverlay.style.alignItems = 'center'
-  landerOverlay.style.justifyContent = 'flex-start'
-  landerOverlay.style.paddingTop = 'calc(52px + env(safe-area-inset-top, 0px))'
-  landerOverlay.style.paddingLeft = '8px'
-  landerOverlay.style.paddingRight = '8px'
-  landerOverlay.style.paddingBottom = '8px'
-  landerOverlay.style.boxSizing = 'border-box'
-  landerOverlay.style.fontWeight = 'bold'
-
-  let topBar = document.createElement('div')
-  topBar.style.display = 'flex'
-  topBar.style.alignItems = 'center'
-  topBar.style.justifyContent = 'space-between'
-  topBar.style.width = '100%'
-  topBar.style.maxWidth = '380px'
-  topBar.style.marginTop = '4px'
-  topBar.style.marginBottom = '12px'
-
-  let backBtn = document.createElement('button')
-  backBtn.innerText = 'back'
-  backBtn.style.padding = '10px 28px'
-  backBtn.style.fontSize = '18px'
-  backBtn.style.fontWeight = 'bold'
-  backBtn.style.width = 'auto'
-  backBtn.style.minWidth = '110px'
-  backBtn.style.cursor = 'pointer'
-  backBtn.onclick = stopLanderGame
-
-  let resetBtn = document.createElement('button')
-  resetBtn.innerText = 'reset'
-  resetBtn.style.padding = '10px 28px'
-  resetBtn.style.fontSize = '18px'
-  resetBtn.style.fontWeight = 'bold'
-  resetBtn.style.width = 'auto'
-  resetBtn.style.minWidth = '110px'
-  resetBtn.style.cursor = 'pointer'
-  resetBtn.onclick = resetLanderHighScore
-
-  topBar.appendChild(backBtn)
-  topBar.appendChild(resetBtn)
-
-  landerCanvas = document.createElement('canvas')
-  landerCanvas.width = 376
-  landerCanvas.height = 400
-  landerCanvas.style.width = '100%'
-  landerCanvas.style.maxWidth = '380px'
-  landerCanvas.style.maxHeight = '52vh'
-  landerCanvas.style.border = `2px solid ${theme.border}`
-  landerCanvas.style.backgroundColor = theme.surface
-
-  landerCtx = landerCanvas.getContext('2d')
-
-  let controlsContainer = document.createElement('div')
-  controlsContainer.style.display = 'flex'
-  controlsContainer.style.justifyContent = 'space-between'
-  controlsContainer.style.width = '100%'
-  controlsContainer.style.maxWidth = '380px'
-  controlsContainer.style.marginTop = '12px'
-  controlsContainer.style.gap = '8px'
-
-  let rotContainer = document.createElement('div')
-  rotContainer.style.display = 'flex'
-  rotContainer.style.gap = '8px'
-
-  function makeBtn(label, width, onStart, onEnd)
-  {
-    let btn = document.createElement('button')
-    btn.innerText = label
-    btn.style.padding = '14px'
-    btn.style.fontSize = '18px'
-    btn.style.fontWeight = 'bold'
-    btn.style.cursor = 'pointer'
-    btn.style.userSelect = 'none'
-    btn.style.width = width
-    
-    btn.addEventListener('touchstart', (e) => { e.preventDefault(); onStart() }, { passive: false })
-    btn.addEventListener('touchend', (e) => { e.preventDefault(); onEnd() }, { passive: false })
-    btn.addEventListener('mousedown', (e) => { e.preventDefault(); onStart() })
-    btn.addEventListener('mouseup', (e) => { e.preventDefault(); onEnd() })
-    btn.addEventListener('mouseleave', (e) => { e.preventDefault(); onEnd() })
-    
-    return btn
-  }
-
-  let leftBtn = makeBtn('L', '55px', () => { landerKeys.left = true }, () => { landerKeys.left = false })
-  let rightBtn = makeBtn('R', '55px', () => { landerKeys.right = true }, () => { landerKeys.right = false })
-  
-  rotContainer.appendChild(leftBtn)
-  rotContainer.appendChild(rightBtn)
-
-  let thrustBtn = makeBtn('THRUST', '180px', () => { 
-    if (landerGameOver || landerLanded)
-    {
-      triggerContinueOrRestart()
-    }
-    else
-    {
-      landerKeys.thrust = true
-      startThrustSound()
-    }
-  }, () => { 
-    landerKeys.thrust = false
-    stopThrustSound()
-  })
-
-  controlsContainer.appendChild(rotContainer)
-  controlsContainer.appendChild(thrustBtn)
-
-  landerOverlay.appendChild(topBar)
-  landerOverlay.appendChild(landerCanvas)
-  landerOverlay.appendChild(controlsContainer)
-
-  document.body.appendChild(landerOverlay)
-
-  landerCanvas.addEventListener('click', triggerContinueOrRestart)
-}
-
-function generatePlatforms()
-{
-  let pWidth = 65
-  let minSpacing = 130
-  
-  let yMin = 160
-  let yMax = landerCanvas.height - 40
-  
-  let x1 = Math.floor(Math.random() * (landerCanvas.width - pWidth - 20)) + 10
-  let y1 = Math.floor(Math.random() * (yMax - yMin)) + yMin
-  
-  let x2 = 0
-  let y2 = 0
-  
-  let valid = false
-  while (!valid)
-  {
-    x2 = Math.floor(Math.random() * (landerCanvas.width - pWidth - 20)) + 10
-    y2 = Math.floor(Math.random() * (yMax - yMin)) + yMin
-    
-    let dx = Math.abs(x1 - x2)
-    let dy = Math.abs(y1 - y2)
-    
-    if (dx >= minSpacing || dy >= 70)
-    {
-      valid = true
-    }
-  }
-
-  landerStartPlatform = { x: x1, y: y1, width: pWidth }
-  landerTargetPlatform = { x: x2, y: y2, width: pWidth }
 }
 
 function resetLanderLevel(resetScore)
 {
+  const s = session
+  if (!s)
+  {
+    return
+  }
   stopThrustSound()
-  if (resetScore) landerScore = 0
-  
+  if (resetScore)
+  {
+    s.score = 0
+  }
+
   generatePlatforms()
-  
-  landerRocket.x = landerStartPlatform.x + landerStartPlatform.width / 2
-  landerRocket.y = landerStartPlatform.y - 18
-  landerRocket.vx = 0
-  landerRocket.vy = 0
-  landerRocket.angle = 0
-  
-  landerFuel = 100
-  landerGameOver = false
-  landerLanded = false
-  landerSettled = false
-  landerHighScoreBeaten = false
+
+  s.rocket.x = s.startPlatform.x + s.startPlatform.width / 2
+  s.rocket.y = s.startPlatform.y - ROCKET_OFFSET_Y
+  s.rocket.vx = 0
+  s.rocket.vy = 0
+  s.rocket.angle = 0
+
+  s.fuel = FUEL_START
+  s.gameOver = false
+  s.landed = false
+  s.settled = false
+  s.keys.left = false
+  s.keys.right = false
+  s.keys.thrust = false
+  s.highScoreBeaten = false
+  for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
+  {
+    s.thrustParticles[i].active = false
+  }
 }
 
-function handleLanderKeyDown(e)
+function triggerContinueOrRestart()
 {
-  getLanderAudioContext()
-
-  if (landerGameOver || landerLanded)
+  const s = session
+  if (!s)
   {
-    if (e.code === 'Space' || e.key === 'w' || e.key === 'ArrowUp')
-    {
-      triggerContinueOrRestart()
-    }
     return
   }
-
-  if (e.key === 'ArrowLeft' || e.key === 'a') landerKeys.left = true
-  if (e.key === 'ArrowRight' || e.key === 'd') landerKeys.right = true
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.code === 'Space')
+  if (s.gameOver)
   {
-    if (!landerKeys.thrust) startThrustSound()
-    landerKeys.thrust = true
+    s.score = 0
   }
+  resetLanderLevel(false)
 }
 
-function handleLanderKeyUp(e)
+// ---- physics ----
+function spawnThrustParticle(x, y, angle)
 {
-  if (e.key === 'ArrowLeft' || e.key === 'a') landerKeys.left = false
-  if (e.key === 'ArrowRight' || e.key === 'd') landerKeys.right = false
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.code === 'Space')
+  const s = session
+  for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
   {
-    landerKeys.thrust = false
-    stopThrustSound()
-  }
-}
-
-// Section: Game Loop & Dynamics
-
-function updateLanderGame(deltaFactor)
-{
-  let sp = landerStartPlatform
-  let tp = landerTargetPlatform
-  let speed = Math.sqrt(landerRocket.vx * landerRocket.vx + landerRocket.vy * landerRocket.vy)
-
-  let onStartPlat = (
-    landerRocket.x >= sp.x - 5 && 
-    landerRocket.x <= sp.x + sp.width + 5 &&
-    Math.abs(landerRocket.y - (sp.y - 18)) < 2
-  )
-
-  let onTargetPlat = (
-    landerRocket.x >= tp.x - 5 && 
-    landerRocket.x <= tp.x + tp.width + 5 &&
-    Math.abs(landerRocket.y - (tp.y - 18)) < 2
-  )
-
-  let isGrounded = (onStartPlat || onTargetPlat) && speed < 0.05
-
-  if (landerLanded && !landerSettled)
-  {
-    landerRocket.angle += (0 - landerRocket.angle) * 0.15 * deltaFactor
-    landerRocket.vx *= 0.7
-    landerRocket.vy *= 0.7
-
-    if (Math.abs(landerRocket.angle) < 0.05 && speed < 0.1)
+    const p = s.thrustParticles[i]
+    if (!p.active)
     {
-      landerRocket.angle = 0
-      landerRocket.vx = 0
-      landerRocket.vy = 0
-      landerSettled = true
-      playLanderSound('land')
-      triggerLanderSuccess()
-    }
-    return
-  }
-
-  if (landerGameOver || landerSettled) return
-
-  if (!isGrounded)
-  {
-    if (landerKeys.left) landerRocket.angle -= 0.05 * deltaFactor
-    if (landerKeys.right) landerRocket.angle += 0.05 * deltaFactor
-  }
-
-  landerRocket.vy += 0.025 * deltaFactor
-
-  if (landerKeys.thrust && landerFuel > 0)
-  {
-    let force = 0.065
-    landerRocket.vx += Math.sin(landerRocket.angle) * force * deltaFactor
-    landerRocket.vy -= Math.cos(landerRocket.angle) * force * deltaFactor
-    landerFuel -= 0.5 * deltaFactor
-    if (landerFuel <= 0)
-    {
-      landerFuel = 0
-      stopThrustSound()
-    }
-  }
-
-  landerRocket.x += landerRocket.vx * deltaFactor
-  landerRocket.y += landerRocket.vy * deltaFactor
-
-  if (
-    landerRocket.x >= sp.x - 5 && 
-    landerRocket.x <= sp.x + sp.width + 5 &&
-    landerRocket.y >= sp.y - 18 && 
-    landerRocket.y <= sp.y
-  )
-  {
-    if (speed > 1.4)
-    {
-      triggerLanderGameOver()
+      p.active = true
+      p.x = x + (Math.random() - 0.5) * 4
+      p.y = y + (Math.random() - 0.5) * 4
+      p.vx = -Math.sin(angle) * 2 + (Math.random() - 0.5)
+      p.vy = Math.cos(angle) * 2 + (Math.random() - 0.5)
+      p.life = 1
       return
     }
-    landerRocket.y = sp.y - 18
-    landerRocket.vy = 0
-    landerRocket.vx *= 0.9
-  }
-
-  if (
-    landerRocket.x >= tp.x - 5 && 
-    landerRocket.x <= tp.x + tp.width + 5 &&
-    landerRocket.y >= tp.y - 18 && 
-    landerRocket.y <= tp.y
-  )
-  {
-    let safeAngle = Math.abs(landerRocket.angle) < 0.35
-    let safeSpeed = speed < 1.4
-
-    if (safeAngle && safeSpeed)
-    {
-      landerLanded = true
-      landerRocket.y = tp.y - 18
-    }
-    else
-    {
-      triggerLanderGameOver()
-    }
-    return
-  }
-
-  if (landerRocket.x < 0 || landerRocket.x > landerCanvas.width || landerRocket.y < 0 || landerRocket.y >= landerCanvas.height - 10)
-  {
-    triggerLanderGameOver()
-  }
-}
-
-function triggerLanderSuccess()
-{
-  landerScore++
-
-  let isFirstScoreEver = (landerHighScore === 0 && landerScore === 1)
-  let isNewHighScore = (landerScore > landerHighScore && landerHighScore > 0)
-
-  if (isFirstScoreEver || isNewHighScore)
-  {
-    if (!landerHighScoreBeaten)
-    {
-      triggerLanderConfetti()
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200])
-      landerHighScoreBeaten = true
-    }
-  }
-
-  if (landerScore > landerHighScore)
-  {
-    landerHighScore = landerScore
-    localStorage.setItem('lander_highscore', landerHighScore.toString())
   }
 }
 
 function triggerLanderGameOver()
 {
-  if (landerGameOver) return
+  const s = session
+  if (!s || s.gameOver)
+  {
+    return
+  }
   stopThrustSound()
-  landerGameOver = true
-  playLanderSound('crash')
-  if (navigator.vibrate) navigator.vibrate(200)
+  s.gameOver = true
+  playGameSound('hit')
+  if (navigator.vibrate)
+  {
+    navigator.vibrate(200)
+  }
+  if (s.score > s.highScore)
+  {
+    s.highScore = s.score
+    localStorage.setItem('lander_highscore', s.highScore.toString())
+  }
 }
 
-function landerGameLoop(now)
+function triggerLanderSuccess()
 {
-  if (!landerOverlay) return
+  const s = session
+  s.score++
+  playGameSound('eat')
 
-  let delta = now - landerLastFrameTime
-  landerLastFrameTime = now
-  
-  let deltaFactor = Math.min(delta / 16.667, 2)
-
-  updateLanderGame(deltaFactor)
-  
-  let theme = getLanderGameTheme()
-  drawLanderGame(theme)
-
-  landerAnimFrameId = requestAnimationFrame(landerGameLoop)
-}
-
-// Section: Rendering
-
-function drawLanderGame(theme)
-{
-  landerCtx.fillStyle = theme.surface
-  landerCtx.fillRect(0, 0, landerCanvas.width, landerCanvas.height)
-
-  landerCtx.fillStyle = theme.gray
-  landerCtx.fillRect(landerStartPlatform.x, landerStartPlatform.y, landerStartPlatform.width, 6)
-
-  landerCtx.fillStyle = theme.accent
-  landerCtx.fillRect(landerTargetPlatform.x, landerTargetPlatform.y, landerTargetPlatform.width, 6)
-
-  landerCtx.save()
-  landerCtx.translate(landerRocket.x, landerRocket.y)
-  landerCtx.rotate(landerRocket.angle)
-
-  if (landerKeys.thrust && landerFuel > 0 && !landerGameOver && !landerSettled)
+  const isFirstEver = (s.highScore === 0 && s.score === 1)
+  const isNewHigh = (s.score > s.highScore && s.highScore > 0)
+  if ((isFirstEver || isNewHigh) && !s.highScoreBeaten)
   {
-    landerCtx.fillStyle = theme.accent
-    landerCtx.beginPath()
-    landerCtx.moveTo(-6, 12)
-    landerCtx.lineTo(6, 12)
-    landerCtx.lineTo(0, 12 + Math.random() * 10 + 6)
-    landerCtx.closePath()
-    landerCtx.fill()
-  }
-
-  landerCtx.fillStyle = theme.text
-  landerCtx.beginPath()
-  landerCtx.moveTo(0, -16)
-  landerCtx.lineTo(10, 12)
-  landerCtx.lineTo(-10, 12)
-  landerCtx.closePath()
-  landerCtx.fill()
-
-  landerCtx.restore()
-
-  landerCtx.fillStyle = theme.text
-  landerCtx.font = 'bold 16px monospace'
-  landerCtx.textAlign = 'left'
-  landerCtx.fillText(`PTS ${landerScore}`, 12, 28)
-
-  landerCtx.textAlign = 'right'
-  landerCtx.fillText(`HI ${landerHighScore}`, landerCanvas.width - 12, 28)
-
-  let barWidth = 70
-  let barHeight = 6
-  let startX = 12
-  let startY = landerCanvas.height - 42
-
-  landerCtx.fillStyle = theme.text
-  landerCtx.font = 'bold 10px monospace'
-  landerCtx.textAlign = 'left'
-
-  landerCtx.fillText('FUEL', startX, startY)
-  landerCtx.fillStyle = '#cc241d'
-  landerCtx.fillRect(startX + 40, startY - 7, barWidth, barHeight)
-  landerCtx.fillStyle = theme.accent
-  let currentFuelPct = Math.max(0, Math.min(100, landerFuel)) / 100
-  landerCtx.fillRect(startX + 40, startY - 7, barWidth * currentFuelPct, barHeight)
-
-  let tiltY = startY + 14
-  landerCtx.fillStyle = theme.text
-  landerCtx.fillText('TILT', startX, tiltY)
-  landerCtx.fillStyle = theme.border
-  landerCtx.fillRect(startX + 40, tiltY - 7, barWidth, barHeight)
-  
-  let clampedAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, landerRocket.angle))
-  let tiltNormalized = (clampedAngle + Math.PI / 2) / Math.PI
-  let indicatorPos = (startX + 40) + tiltNormalized * barWidth
-  
-  landerCtx.fillStyle = theme.text
-  landerCtx.fillRect((startX + 40) + barWidth / 2 - 1, tiltY - 8, 2, barHeight + 2)
-  landerCtx.fillStyle = theme.accent
-  landerCtx.fillRect(indicatorPos - 2, tiltY - 8, 4, barHeight + 2)
-
-  let speedY = tiltY + 14
-  let currentSpeed = Math.sqrt(landerRocket.vx * landerRocket.vx + landerRocket.vy * landerRocket.vy)
-  let maxSpeedScale = 2.0
-  let speedPct = Math.min(currentSpeed / maxSpeedScale, 1.0)
-  
-  landerCtx.fillStyle = theme.text
-  landerCtx.fillText('SPD', startX, speedY)
-  landerCtx.fillStyle = theme.border
-  landerCtx.fillRect(startX + 40, speedY - 7, barWidth, barHeight)
-  landerCtx.fillStyle = currentSpeed > 0.4 ? '#fb4934' : theme.accent
-  
-  let fillWidth = barWidth * speedPct
-  if (currentSpeed > 0.01 && fillWidth < 2)
-  {
-    fillWidth = 2
-  }
-  landerCtx.fillRect(startX + 40, speedY - 7, fillWidth, barHeight)
-
-  if (landerGameOver || landerSettled)
-  {
-    landerCtx.fillStyle = 'rgba(0,0,0,0.5)'
-    landerCtx.fillRect(0, 0, landerCanvas.width, landerCanvas.height)
-
-    landerCtx.fillStyle = '#fff'
-    landerCtx.font = 'bold 26px monospace'
-    landerCtx.textAlign = 'center'
-    
-    if (landerSettled)
+    triggerConfetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } })
+    if (navigator.vibrate)
     {
-      landerCtx.fillText('SUCCESSFUL LANDING!', landerCanvas.width / 2, landerCanvas.height / 2 - 10)
-      landerCtx.font = 'bold 14px monospace'
-      landerCtx.fillText('Tap Canvas or Press Thrust to Continue', landerCanvas.width / 2, landerCanvas.height / 2 + 20)
+      navigator.vibrate([100, 50, 100, 50, 200])
+    }
+    s.highScoreBeaten = true
+  }
+
+  if (s.score > s.highScore)
+  {
+    s.highScore = s.score
+    localStorage.setItem('lander_highscore', s.highScore.toString())
+  }
+}
+
+function update(dt)
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+
+  const rocket = s.rocket
+  const sp = s.startPlatform
+  const tp = s.targetPlatform
+
+  const speed = Math.hypot(rocket.vx, rocket.vy)
+
+  // Settling animation after a successful landing.
+  if (s.landed && !s.settled)
+  {
+    rocket.angle += (0 - rocket.angle) * LANDING_SETTLE_RATE * dt
+    rocket.vx *= Math.pow(0.7, dt)
+    rocket.vy *= Math.pow(0.7, dt)
+
+    if (Math.abs(rocket.angle) < LANDING_SETTLE_ANGLE && speed < LANDING_SETTLE_SPEED)
+    {
+      rocket.angle = 0
+      rocket.vx = 0
+      rocket.vy = 0
+      s.settled = true
+      triggerLanderSuccess()
+    }
+    return
+  }
+
+  if (s.gameOver || s.settled)
+  {
+    return
+  }
+
+  // Rotation.
+  if (s.keys.left)
+  {
+    rocket.angle -= ROTATION_SPEED * dt
+  }
+  if (s.keys.right)
+  {
+    rocket.angle += ROTATION_SPEED * dt
+  }
+
+  // Gravity.
+  rocket.vy += GRAVITY * dt
+
+  // Thrust.
+  if (s.keys.thrust && s.fuel > 0)
+  {
+    rocket.vx += Math.sin(rocket.angle) * THRUST_FORCE * dt
+    rocket.vy -= Math.cos(rocket.angle) * THRUST_FORCE * dt
+    s.fuel -= FUEL_BURN * dt
+    if (s.fuel <= 0)
+    {
+      s.fuel = 0
+      stopThrustSound()
+    }
+
+    if (Math.random() < 0.7)
+    {
+      const px = rocket.x - Math.sin(rocket.angle) * ROCKET_HALF_H * 0.7
+      const py = rocket.y + Math.cos(rocket.angle) * ROCKET_HALF_H * 0.7
+      spawnThrustParticle(px, py, rocket.angle)
+    }
+  }
+
+  // Clamp extreme velocities.
+  if (rocket.vx > MAX_DRIFT_SPEED) rocket.vx = MAX_DRIFT_SPEED
+  if (rocket.vx < -MAX_DRIFT_SPEED) rocket.vx = -MAX_DRIFT_SPEED
+  if (rocket.vy > MAX_DRIFT_SPEED) rocket.vy = MAX_DRIFT_SPEED
+  if (rocket.vy < -MAX_DRIFT_SPEED) rocket.vy = -MAX_DRIFT_SPEED
+
+  // Integrate.
+  rocket.x += rocket.vx * dt
+  rocket.y += rocket.vy * dt
+
+  // Update particles.
+  for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
+  {
+    const p = s.thrustParticles[i]
+    if (!p.active)
+    {
+      continue
+    }
+    p.x += p.vx * dt
+    p.y += p.vy * dt
+    p.life -= 0.06 * dt
+    if (p.life <= 0)
+    {
+      p.active = false
+    }
+  }
+
+  // Platform collision — start platform.
+  if (
+    rocket.x >= sp.x - 5 &&
+    rocket.x <= sp.x + sp.width + 5 &&
+    rocket.y + ROCKET_HALF_H >= sp.y &&
+    rocket.y - ROCKET_HALF_H <= sp.y
+  )
+  {
+    if (speed > SAFE_SPEED)
+    {
+      triggerLanderGameOver()
+      return
+    }
+    rocket.y = sp.y - ROCKET_OFFSET_Y
+    rocket.vy = 0
+    rocket.vx *= Math.pow(0.9, dt)
+  }
+
+  // Platform collision — target platform.
+  if (
+    rocket.x >= tp.x - 5 &&
+    rocket.x <= tp.x + tp.width + 5 &&
+    rocket.y + ROCKET_HALF_H >= tp.y &&
+    rocket.y - ROCKET_HALF_H <= tp.y
+  )
+  {
+    const safeAngle = Math.abs(rocket.angle) < SAFE_ANGLE
+    const safeSpeed = speed < SAFE_SPEED
+    if (safeAngle && safeSpeed)
+    {
+      s.landed = true
+      rocket.y = tp.y - ROCKET_OFFSET_Y
+      rocket.vy = 0
     }
     else
     {
-      landerCtx.fillText('CRASHED!', landerCanvas.width / 2, landerCanvas.height / 2 - 10)
-      landerCtx.font = 'bold 14px monospace'
-      landerCtx.fillText('Tap Canvas or Press Thrust to Restart', landerCanvas.width / 2, landerCanvas.height / 2 + 20)
+      triggerLanderGameOver()
+    }
+    return
+  }
+
+  // World bounds.
+  if (
+    rocket.x < 0 ||
+    rocket.x > CANVAS_W ||
+    rocket.y < 0 ||
+    rocket.y > CANVAS_H + 20
+  )
+  {
+    triggerLanderGameOver()
+  }
+}
+
+function loop(now)
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  const deltaMs = Math.min(32, now - s.lastFrame)
+  s.lastFrame = now
+  const dt = Math.min(deltaMs / 16.667, 2)
+
+  update(dt)
+  draw()
+  s.rafId = requestAnimationFrame(loop)
+}
+
+// ---- rendering ----
+function draw()
+{
+  const s = session
+  if (!s)
+  {
+    return
+  }
+  const ctx = s.ctx
+  const theme = s.theme
+  const rocket = s.rocket
+
+  ctx.fillStyle = theme.surface
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+
+  // Starfield (deterministic dots).
+  ctx.fillStyle = theme.gray
+  for (let i = 0; i < 22; i++)
+  {
+    const sx = (i * 53) % CANVAS_W
+    const sy = (i * 97) % (CANVAS_H - 40)
+    ctx.fillRect(sx, sy, 1, 1)
+  }
+
+  // Start platform (gray) — where you launch from.
+  ctx.fillStyle = theme.gray
+  ctx.fillRect(s.startPlatform.x, s.startPlatform.y, s.startPlatform.width, PLATFORM_HEIGHT)
+
+  // Target platform (accent) — where you want to land.
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(s.targetPlatform.x, s.targetPlatform.y, s.targetPlatform.width, PLATFORM_HEIGHT)
+  ctx.fillStyle = theme.accentTxt
+  for (let i = 0; i < 3; i++)
+  {
+    ctx.fillRect(s.targetPlatform.x + s.targetPlatform.width / 2 - 12 + i * 10, s.targetPlatform.y + 2, 4, 2)
+  }
+
+  // Thrust particles.
+  for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
+  {
+    const p = s.thrustParticles[i]
+    if (!p.active)
+    {
+      continue
+    }
+    ctx.fillStyle = `rgba(255, 200, 100, ${p.life})`
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 2.5 * p.life + 0.5, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // Rocket.
+  ctx.save()
+  ctx.translate(rocket.x, rocket.y)
+  ctx.rotate(rocket.angle)
+
+  if (s.keys.thrust && s.fuel > 0 && !s.gameOver && !s.settled)
+  {
+    ctx.fillStyle = theme.accent
+    ctx.beginPath()
+    ctx.moveTo(-6, 12)
+    ctx.lineTo(6, 12)
+    ctx.lineTo(0, 12 + Math.random() * 10 + 6)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  ctx.fillStyle = theme.text
+  ctx.beginPath()
+  ctx.moveTo(0, -16)
+  ctx.lineTo(ROCKET_HALF_W, 12)
+  ctx.lineTo(-ROCKET_HALF_W, 12)
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.fillStyle = theme.accentTxt
+  ctx.beginPath()
+  ctx.arc(0, -6, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.restore()
+
+  // HUD.
+  ctx.fillStyle = theme.text
+  ctx.font = 'bold 16px monospace'
+  ctx.textAlign = 'left'
+  ctx.fillText(`PTS ${s.score}`, 12, 26)
+  ctx.textAlign = 'right'
+  ctx.fillText(`HI ${s.highScore}`, CANVAS_W - 12, 26)
+
+  // Fuel / tilt / speed readouts.
+  const barW = 70
+  const barH = 6
+  const sx = 12
+  let sy = CANVAS_H - 42
+
+  ctx.font = 'bold 10px monospace'
+  ctx.textAlign = 'left'
+
+  ctx.fillStyle = theme.text
+  ctx.fillText('FUEL', sx, sy)
+  ctx.fillStyle = '#cc241d'
+  ctx.fillRect(sx + 40, sy - 7, barW, barH)
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(sx + 40, sy - 7, barW * Math.max(0, s.fuel / FUEL_START), barH)
+
+  const tiltY = sy + 14
+  ctx.fillStyle = theme.text
+  ctx.fillText('TILT', sx, tiltY)
+  ctx.fillStyle = theme.border
+  ctx.fillRect(sx + 40, tiltY - 7, barW, barH)
+
+  const clampedAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rocket.angle))
+  const tiltNorm = (clampedAngle + Math.PI / 2) / Math.PI
+  const tiltX = sx + 40 + tiltNorm * barW
+
+  ctx.fillStyle = theme.text
+  ctx.fillRect(sx + 40 + barW / 2 - 1, tiltY - 8, 2, barH + 2)
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(tiltX - 2, tiltY - 8, 4, barH + 2)
+
+  const speedY = tiltY + 14
+  const curSpeed = Math.hypot(rocket.vx, rocket.vy)
+  const speedPct = Math.min(curSpeed / 2.0, 1)
+  ctx.fillStyle = theme.text
+  ctx.fillText('SPD', sx, speedY)
+  ctx.fillStyle = theme.border
+  ctx.fillRect(sx + 40, speedY - 7, barW, barH)
+  ctx.fillStyle = curSpeed > SAFE_SPEED ? '#fb4934' : theme.accent
+  let fillW = barW * speedPct
+  if (curSpeed > 0.01 && fillW < 2)
+  {
+    fillW = 2
+  }
+  ctx.fillRect(sx + 40, speedY - 7, fillW, barH)
+
+  if (s.gameOver || s.settled)
+  {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 26px monospace'
+    ctx.textAlign = 'center'
+    if (s.settled)
+    {
+      ctx.fillText('SUCCESSFUL LANDING!', CANVAS_W / 2, CANVAS_H / 2 - 10)
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('Tap Canvas or Thrust to Continue', CANVAS_W / 2, CANVAS_H / 2 + 20)
+    }
+    else
+    {
+      ctx.fillText('CRASHED!', CANVAS_W / 2, CANVAS_H / 2 - 10)
+      ctx.font = 'bold 14px monospace'
+      ctx.fillText('Tap Canvas or Thrust to Restart', CANVAS_W / 2, CANVAS_H / 2 + 20)
     }
   }
 }
