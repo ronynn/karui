@@ -1,391 +1,296 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
-  <title>Karui</title>
-  <script src="quotes.js"></script>
-  <script src="confetti.browser.min.js"></script>
-  <script src="flap.js"></script>
-  <script src="snake.js"></script>
-  <script src="lander.js"></script>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
+    <title>Karui</title>
+    <script src="quotes.js"></script>
+    <script src="confetti.browser.min.js"></script>
+    <script src="flap.js"></script>
+    <script src="snake.js"></script>
+    <script src="lander.js"></script>
 
+    <link rel="stylesheet" href="style.css">
+  </head>
 
-  <style>
-    [v-cloak] { display: none !important; }
-    a { color: gray; }
-    :root { --bg: #282828; --surface: #3c3836; --border: #d79921; --text: #ebdbb2; --accent: #fabd2f; --accent-txt: #282828; --gray: #928374; --ui-scale: 1; }
-    [data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
-    [data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #e6db74; }
-    [data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #d8dee9; --accent: #81a1c1; --accent-txt: #2e3440; --gray: #4c566a; }
-    [data-theme="purple"] { --bg: #ffffff; --surface: #f5f5f5; --border: #8e24aa; --text: #333333; --accent: #8e24aa; --accent-txt: #ffffff; --gray: #888888; }
-    [data-theme="amoled"] { --bg: #000000; --surface: #121212; --border: #ffffff; --text: #ffffff; --accent: #ffffff; --accent-txt: #000000; --gray: #888888; }
-    [data-theme="cupcake"] { --bg: #faf7f5; --surface: #efeae6; --border: #ffb6c1; --text: #2e282a; --accent: #ffb6c1; --accent-txt: #2e282a; --gray: #b0a8a6; }
-    [data-theme="catppuccin"] { --bg: #1e1e2e; --surface: #313244; --border: #cba6f7; --text: #cdd6f4; --accent: #cba6f7; --accent-txt: #11111b; --gray: #6c7086; }
-    [data-theme="catppuccin-frappe"] { --bg: #303446; --surface: #414559; --border: #ca9ee6; --text: #c6d0f5; --accent: #ca9ee6; --accent-txt: #232634; --gray: #737994; }
-    [data-theme="everforest"] { --bg: #2d353b; --surface: #3d484d; --border: #a7c080; --text: #d3c6aa; --accent: #a7c080; --accent-txt: #232a2e; --gray: #859289; }
-    [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
-    [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); padding-top:12px;}
-    header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(16px); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: all 0.25s ease-out; padding-top: 24px; margin-bottom:44px;}
-    #app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.25s ease-out; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 18px; line-height: 1; overflow: hidden; transform: translateY(0); }
-    header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 0; transform: translateY(-20px); pointer-events: none; }
-    .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
-    .pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
-    .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
-    #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
-    .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(106px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh;}
-    .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 20px;}
-    .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
-    input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.2s; font-family: inherit; position: relative; overflow: hidden; }
-    textarea { resize: none; overflow-y: auto; height: auto; min-height: calc(80px * var(--ui-scale)); max-height: calc(280px * var(--ui-scale)); padding-top: calc(10px * var(--ui-scale)); }
-    input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
-    input:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
-    button { background: var(--accent); color: var(--accent-txt); cursor: pointer; border: none; text-transform: uppercase; font-weight: bold; }
-    button:active { filter: brightness(0.8); }
-    .input-actions-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 8px; flex-wrap: wrap; }
-    .box1-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-    .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; text-transform:lowercase;}
-    .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
-    .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
-    .toggle-container:last-of-type { border-bottom: none; }
-    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--surface); border: 2px solid var(--border); transition: 0.2s ease; }
-    .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 4px; bottom: 4px; background-color: var(--gray); transition: 0.2s ease; }
-    .switch input:checked + .slider { background-color: var(--accent); }
-    .switch input:checked + .slider:before { transform: translateX(18px); background-color: var(--accent-txt); }
-    .switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
-    .tabs-container { display: flex; flex-wrap: wrap; gap: 8px; overflow-x: auto; padding-bottom: 0px; margin-bottom: 5px; scrollbar-width: none; }
-    .tab { position: relative; overflow: hidden; padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
-    .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
-    .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .theme-btn { position: relative; overflow: hidden; padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: calc(11px * var(--ui-scale)); font-weight: bold; white-space: nowrap; text-overflow: ellipsis; width: 100%; text-align: center; display: flex; align-items: center; justify-content: center; }
-    .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
-    .note-item { display: flex; justify-content: space-between; align-items: flex-start; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 1px dashed rgba(255,255,255,0.08); font-size: calc(16px * var(--ui-scale)); }
-    .note-text { white-space: pre-wrap; word-break: break-word; font-family: inherit; }
-    .note-text.completed { text-decoration: line-through; opacity: 0.55; }
-    .pin-icon { margin-right: 6px; font-size: calc(14px * var(--ui-scale)); text-decoration: none !important; display: inline-block; }
-    .ghost { opacity: 0.35; border: 2px dashed var(--accent); }
-.menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 12px; z-index: 2000; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); min-width: 140px; }
-.menu button { width: 100%; margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); display: block; }
-.menu button:last-child { margin-bottom: 0; }
-    .menu-title { font-size: calc(14px * var(--ui-scale)); font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
-    .ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0px; }
-    .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
-    .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
-    .about-text { font-size: calc(14px * var(--ui-scale)); line-height: 1.5; color: var(--text); opacity: 0.9; }
-    .about-text code { color: var(--accent); }
-    #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
-    .modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y:auto;}
-    #toast { position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-    .has-ripple { position: relative; overflow: hidden; }
-    .ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
-    @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
-    #fab-btn { position: fixed; bottom: 55px; right: 25px; width: calc(52px * var(--ui-scale)); height: calc(52px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: calc(20px * var(--ui-scale)); font-weight: bold; cursor: pointer; z-index: 999; transition: transform 0.15s ease-out; overflow: hidden; }
-    #fab-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6); }
-    .btn-subtle { background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(12px * var(--ui-scale)); }
-    .section-divider { margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 10px; }
-    .toggle-hr { border: 0; border-top: 1px dashed var(--border); margin: 10px 0; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 15px; }
-    .text-muted { color: var(--gray); }
-    .note-menu-trigger { padding: 0 0 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0; line-height: 1; margin-top: 2px; }
-  </style>
-</head>
+  <body v-scope v-cloak @vue:mounted="init">
 
-<body v-scope v-cloak @vue:mounted="init">
-
-<header id="top-bar" :class="{ scrolled: isScrolled }">
-  <div id="app-title">Karui</div>
-  <div class="pivot-container">
-    <div id="tab-home" class="pivot-item" :class="{ active: currentScreen === 'home' }" @click="switchScreen('home')">home</div>
-<div id="tab-calendar" v-if="calendarEnabled" class="pivot-item" :class="{ active: currentScreen === 'calendar' }" @click="switchScreen('calendar')">calendar</div>
-    <div id="tab-settings" class="pivot-item" :class="{ active: currentScreen === 'settings' }" @click="switchScreen('settings')">settings</div>
-  </div>
-</header>
-
-<div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
-  
-  <div class="screen" id="home-screen" @scroll="handleScroll">
-    <div class="box">
-      <span class="box-title">Box 1: Notes Input</span>
-      <textarea id="note-in" v-model="noteInput" rows="1" placeholder="Type note or command" @keydown="onInputKeydown" @input="autoExpandTextarea($event.target)"></textarea>
-      <div class="input-actions-bar">
-        <span class="text-muted" style="font-size: calc(14px * var(--ui-scale));" id="stats">{{ statsText }}</span>
-        <div class="box1-btns">
-          <button class="icon-btn-small" :class="{ active: sortAlphabetical }" @click="toggleSortAlphabetical" title="Sort Alphabetically">s</button>
-          <button class="icon-btn-small" @click="submitNote" title="Submit Note">e</button>
-        </div>
+    <header id="top-bar" :class="{ scrolled: isScrolled }">
+      <div id="app-title">Karui</div>
+      <div class="pivot-container">
+        <div id="tab-home" class="pivot-item" :class="{ active: currentScreen === 'home' }" @click="switchScreen('home')">home</div>
+        <div id="tab-calendar" v-if="calendarEnabled" class="pivot-item" :class="{ active: currentScreen === 'calendar' }" @click="switchScreen('calendar')">calendar</div>
+        <div id="tab-settings" class="pivot-item" :class="{ active: currentScreen === 'settings' }" @click="switchScreen('settings')">settings</div>
       </div>
-    </div>
+    </header>
 
-    <div class="box">
-      <span class="box-title">Box 2: Notes List</span>
-      <div class="tabs-container" id="tabs-bar">
-        <div v-for="t in noteCategories" :key="t" :data-tab="t" class="tab" :class="{ active: activeCategory === t }" @click="selectTab(t)" @touchstart="handleTabTouchStart($event, t)" @touchend="handleTabTouchEnd" @touchmove="handleTabTouchCancel" @contextmenu.prevent="openContextMenu($event, t)">
-          {{ getTabLabel(t) }}
-        </div>
-      </div>
-      <div id="notes-list">
-        <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
-          <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
-            <span v-if="n.pinned" class="pin-icon">⊢</span>
-            <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+    <div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+
+      <div class="screen" id="home-screen" @scroll="handleScroll">
+        <div class="box">
+          <span class="box-title">Box 1: Notes Input</span>
+          <textarea id="note-in" v-model="noteInput" rows="1" placeholder="Type note or command" @keydown="onInputKeydown" @input="autoExpandTextarea($event.target)"></textarea>
+          <div class="input-actions-bar">
+            <span class="text-muted" style="font-size: calc(14px * var(--ui-scale));" id="stats">{{ statsText }}</span>
+            <div class="box1-btns">
+              <button class="icon-btn-small" :class="{ active: sortAlphabetical }" @click="toggleSortAlphabetical" title="Sort Alphabetically">s</button>
+              <button class="icon-btn-small" @click="submitNote" title="Submit Note">e</button>
+            </div>
           </div>
-          <span class="note-menu-trigger text-muted" @click.stop="openNoteMenu($event, n.id)">:</span>
+        </div>
+
+        <div class="box">
+          <span class="box-title">Box 2: Notes List</span>
+          <div class="tabs-container" id="tabs-bar">
+            <div v-for="t in noteCategories" :key="t" :data-tab="t" class="tab" :class="{ active: activeCategory === t }" @click="selectTab(t)" @touchstart="handleTabTouchStart($event, t)" @touchend="handleTabTouchEnd" @touchmove="handleTabTouchCancel" @contextmenu.prevent="openContextMenu($event, t)">
+              {{ getTabLabel(t) }}
+            </div>
+          </div>
+          <div id="notes-list">
+            <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
+              <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
+                <span v-if="n.pinned" class="pin-icon">⊢</span>
+                <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+              </div>
+              <span class="note-menu-trigger text-muted" @click.stop="openNoteMenu($event, n.id)">:</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div v-if="calendarEnabled" class="screen" id="calendar-screen" @scroll="handleScroll">
+        <div class="box">
+          <span class="box-title" id="calendar-title" style="cursor: pointer;">Box 7: Calendar</span>
+          <div id="calendar-container"></div>
+        </div>
+      </div>
+
+
+
+
+
+      <div class="screen" id="settings-screen" @scroll="handleScroll">
+        <div class="box">
+          <span class="box-title">Box 3: Visuals & Usage</span>
+          <p style="padding-bottom: 5px;">Themes</p>
+          <div class="grid-btns" id="theme-btns">
+            <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
+              {{ t.label }}
+            </button>
+          </div>
+
+          <p style="padding-top: 10px;padding-bottom:5px;">Fonts</p>
+          <div class="grid-btns">
+            <button v-for="f in defaultFonts" :key="f.val" class="theme-btn" :class="{ active: currentFont === f.val }" @click="setFont(f.val)">
+              {{ f.name }}
+            </button>
+            <button v-for="cf in customFonts" :key="cf.name" class="theme-btn" :class="{ active: currentFont === cf.name }" @click="setFont(cf.name)" @touchstart="startFontHold(cf.name)" @touchend="cancelFontHold" @mousedown="startFontHold(cf.name)" @mouseup="cancelFontHold" @mouseleave="cancelFontHold">          <span style="overflow:hidden; text-overflow:ellipsis;">{{ cf.label.toUpperCase() }}</span>
+              <span v-if="currentFont !== cf.name" style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 14px; padding: 0 4px; cursor: pointer;" @click.stop="deleteCustomFont(cf.name)">&times;</span>
+            </button>
+            <button class="theme-btn" style="border-style: dashed;" @click="triggerFontUpload">+ CUSTOM</button>
+          </div>
+          <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" style="display:none" @change="loadCustomFont">
+          <br/>
+          <div class="ui-size-ctrl">
+            <button v-for="size in uiSizes" :key="size.scale" :class="{ active: Math.abs(uiScale - size.scale) < 0.05 }" @click="setUiSize(size.scale)">
+              {{ size.label }}
+            </button>
+          </div>
+
+          <div class="section-divider">
+            <div style="text-align:center;padding-top:15px;">Customization</div>
+
+            <div class="toggle-container">
+              <span>Floating Quick Input Button</span>
+              <label class="switch">
+                <input type="checkbox" v-model="showFab" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Keep keyboard when switching tabs</span>
+              <label class="switch">
+                <input type="checkbox" v-model="keepKeyboard" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Disable Screen Swipe</span>
+              <label class="switch">
+                <input type="checkbox" v-model="disableSwipe" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="toggle-container">
+              <span>Add Notes To Bottom</span>
+              <label class="switch">
+                <input type="checkbox" v-model="addNoteBottom" :disabled="sortAlphabetical" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Move Marked Notes To Bottom</span>
+              <label class="switch">
+                <input type="checkbox" v-model="moveCompletedBottom" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Double Tap Delete To Delete</span>
+              <label class="switch">
+                <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Enter key inserts newline</span>
+              <label class="switch">
+                <input type="checkbox" v-model="enterNewLine" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div style="text-align:center;padding-top:15px;">Effects</div>
+
+            <div class="toggle-container">
+              <span>UI Sounds</span>
+              <label class="switch">
+                <input type="checkbox" v-model="uiSounds" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Button ripples</span>
+              <label class="switch">
+                <input type="checkbox" v-model="buttonRipples" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Celebration mode</span>
+              <label class="switch">
+                <input type="checkbox" v-model="celebrationMode" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div style="text-align:center;padding-top:15px;">Functionality</div>
+            <div class="toggle-container">
+              <span>Disable Screenshots</span>
+              <label class="switch">
+                <input type="checkbox" v-model="disableScreenshots" @change="toggleScreenshots">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Enable Quick Note from statusbar</span>
+              <label class="switch">
+                <input type="checkbox" v-model="notificationEnabled" @change="toggleNotification">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div style="margin-top: 8px;">
+              <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
+              <input type="text" style="margin-top: 2px;" v-model="inboxTabName" @change="updateInboxTab">
+            </div>
+            <div class="toggle-container">
+              <span>Calendar Tab</span>
+              <label class="switch">
+                <input type="checkbox" v-model="calendarEnabled" @change="toggleCalendarEnabled">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div style="margin-top: 8px;" v-if="calendarEnabled">
+              <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Calendar Tab Name:</label>
+              <input type="text" style="margin-top: 2px;" :value="calendarTabName" @input="renameCalendarTab($event.target.value)">
+            </div>
+          </div>
+        </div>
+
+        <div class="box">
+          <span class="box-title">Box 4: Instructions</span>
+          <div class="about-text">
+            - Use /tabName to add a new tab. √s is sort, √e is enter, √r on widget is refresh, √m is for menu<br/>
+            - Long press from your launcher homescreen to add Karui widgets. <br/>
+            - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
+            - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
+            - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
+            - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram.
+          </div>
+        </div>
+
+        <div class="box">
+          <span class="box-title">Box 5: Data & Recycle Bin</span>
+          <div class="grid-2">
+            <button class="btn-subtle" @click="exportDataCall">Export JSON</button>
+            <button class="btn-subtle" @click="triggerImport">Import JSON</button>
+            <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
+            <button class="btn-subtle" @click="triggerImportMD">Import MD (BETA)</button>
+            <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
+            <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
+          </div>
+
+          <div class="section-divider">
+            <div class="grid-2">
+              <button class="btn-subtle" @click="setSyncFile">Set Sync (Beta)</button>
+              <button @click="manualSync" style="font-size:calc(12px * var(--ui-scale));">Sync Now</button>
+            </div>
+            <div id="sync-path-display" style="background: var(--surface); border: 1px dashed var(--border); padding: 8px; font-size: calc(12px * var(--ui-scale)); height: 45px; overflow-y: auto; word-break: break-all; color: var(--gray);">
+              {{ syncFilePath || 'No sync target set.' }}
+            </div>
+          </div>
+
+          <h1 style="margin-top: 15px; font-size: calc(20px * var(--ui-scale));">Recycle Bin</h1>
+          <div id="trash-list">
+            <div v-for="(n, idx) in recycleBin" :key="idx" class="note-item" style="padding: 8px 0;">
+              <span style="flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; padding-right: 8px;">{{ n.text }}</span>
+              <span class="text-muted" style="padding: 0 5px; flex-shrink: 0; cursor: pointer;" @click="restoreNote(idx)">√r</span>
+            </div>
+          </div>
+          <button style="background: var(--bg); color: var(--text); border: 2px solid var(--border); margin-top: 15px;" @click="clearTrash">Clear Recycle Bin</button>
+        </div>
+
+        <div id="box-6" class="box">
+          <span class="box-title">Box 6: Quotes</span>
+          <p>{{ quoteText }}</p> <br/> -
+          <small>{{ quoteAuthor }}</small>
         </div>
       </div>
     </div>
-  </div>
 
+    <div id="fab-btn" v-if="showFab && currentScreen === 'home' && !modalVisible" @click="handleFabClick">&gt;_</div>
 
-  <div v-if="calendarEnabled" class="screen" id="calendar-screen" @scroll="handleScroll">
-    <div class="box">
-      <span class="box-title" id="calendar-title" style="cursor: pointer;">Box 7: Calendar</span>
-      <div id="calendar-container"></div>
+    <div id="context-menu" class="menu" :style="contextMenuStyle">
+      <div class="menu-title">{{ contextTab }}</div>
+      <button v-if="canMoveTabLeft" @click="moveTab(-1)">Move Left</button>
+      <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
+      <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
+      <button @click="deleteTabClick">Delete</button>
+      <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
+      <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
     </div>
-  </div>
 
-
-
-  
-
-  <div class="screen" id="settings-screen" @scroll="handleScroll">
-    <div class="box">
-      <span class="box-title">Box 3: Visuals & Usage</span>
-      <p style="padding-bottom: 5px;">Themes</p>
-      <div class="grid-btns" id="theme-btns">
-        <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
-          {{ t.label }}
-        </button>
-      </div>
-
-      <p style="padding-top: 10px;padding-bottom:5px;">Fonts</p>
-      <div class="grid-btns">
-        <button v-for="f in defaultFonts" :key="f.val" class="theme-btn" :class="{ active: currentFont === f.val }" @click="setFont(f.val)">
-          {{ f.name }}
-        </button>
-          <button v-for="cf in customFonts" :key="cf.name" class="theme-btn" :class="{ active: currentFont === cf.name }" @click="setFont(cf.name)" @touchstart="startFontHold(cf.name)" @touchend="cancelFontHold" @mousedown="startFontHold(cf.name)" @mouseup="cancelFontHold" @mouseleave="cancelFontHold">          <span style="overflow:hidden; text-overflow:ellipsis;">{{ cf.label.toUpperCase() }}</span>
-          <span v-if="currentFont !== cf.name" style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 14px; padding: 0 4px; cursor: pointer;" @click.stop="deleteCustomFont(cf.name)">&times;</span>
-        </button>
-        <button class="theme-btn" style="border-style: dashed;" @click="triggerFontUpload">+ CUSTOM</button>
-      </div>
-      <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" style="display:none" @change="loadCustomFont">
-      <br/>
-      <div class="ui-size-ctrl">
-        <button v-for="size in uiSizes" :key="size.scale" :class="{ active: Math.abs(uiScale - size.scale) < 0.05 }" @click="setUiSize(size.scale)">
-          {{ size.label }}
-        </button>
-      </div>
-
-      <div class="section-divider">
-        <div style="text-align:center;padding-top:15px;">Customization</div>
-
-        <div class="toggle-container">
-          <span>Floating Quick Input Button</span>
-          <label class="switch">
-            <input type="checkbox" v-model="showFab" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Keep keyboard when switching tabs</span>
-          <label class="switch">
-            <input type="checkbox" v-model="keepKeyboard" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Disable Screen Swipe</span>
-          <label class="switch">
-            <input type="checkbox" v-model="disableSwipe" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-container">
-          <span>Add Notes To Bottom</span>
-          <label class="switch">
-            <input type="checkbox" v-model="addNoteBottom" :disabled="sortAlphabetical" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Move Marked Notes To Bottom</span>
-          <label class="switch">
-            <input type="checkbox" v-model="moveCompletedBottom" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Double Tap Delete To Delete</span>
-          <label class="switch">
-            <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-<div style="text-align:center;padding-top:15px;">Effects</div>
-
-        <div class="toggle-container">
-          <span>UI Sounds</span>
-          <label class="switch">
-            <input type="checkbox" v-model="uiSounds" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Button ripples</span>
-          <label class="switch">
-            <input type="checkbox" v-model="buttonRipples" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Celebration mode</span>
-          <label class="switch">
-            <input type="checkbox" v-model="celebrationMode" @change="saveData">
-            <span class="slider"></span>
-          </label>
-        </div>
-<div style="text-align:center;padding-top:15px;">Functionality</div>
-        <div class="toggle-container">
-          <span>Disable Screenshots</span>
-          <label class="switch">
-            <input type="checkbox" v-model="disableScreenshots" @change="toggleScreenshots">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-container">
-          <span>Enable Quick Note from statusbar</span>
-          <label class="switch">
-            <input type="checkbox" v-model="notificationEnabled" @change="toggleNotification">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div style="margin-top: 8px;">
-          <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Tab Name for statusbar and copy intent notes:</label>
-          <input type="text" style="margin-top: 2px;" v-model="inboxTabName" @change="updateInboxTab">
-        </div>
-        <div class="toggle-container">
-      <span>Calendar Tab</span>
-      <label class="switch">
-        <input type="checkbox" v-model="calendarEnabled" @change="toggleCalendarEnabled">
-        <span class="slider"></span>
-      </label>
+    <div id="note-dropdown" class="menu" :style="noteMenuStyle">
+      <button @click="actionCopyNote">Copy</button>
+      <button @click="actionEditNote">Edit</button>
+      <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
+      <button @click="actionDeleteNote">Delete</button>
     </div>
-<div style="margin-top: 8px;" v-if="calendarEnabled">
-  <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Calendar Tab Name:</label>
-  <input type="text" style="margin-top: 2px;" :value="calendarTabName" @input="renameCalendarTab($event.target.value)">
-</div>
+
+    <div id="modal-overlay" v-if="modalVisible">
+      <div class="modal-box">
+        <div style="font-weight: bold;">{{ modalTitle }}</div>
+        <textarea id="modal-input" v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
+        <div style="display: flex; gap: 10px;">
+          <button @click="closeModal(true)">Save</button>
+          <button @click="closeModal(false)">Cancel</button>
+        </div>
       </div>
     </div>
 
-    <div class="box">
-      <span class="box-title">Box 4: Instructions</span>
-      <div class="about-text">
-        - Use /tabName to add a new tab. √s is sort, √e is enter, √r on widget is refresh, √m is for menu<br/>
-        - Long press from your launcher homescreen to add Karui widgets. <br/>
-        - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
-        - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
-        - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
-        - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram.
-      </div>
-    </div>
+    <div id="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
 
-    <div class="box">
-      <span class="box-title">Box 5: Data & Recycle Bin</span>
-      <div class="grid-2">
-        <button class="btn-subtle" @click="exportDataCall">Export JSON</button>
-        <button class="btn-subtle" @click="triggerImport">Import JSON</button>
-        <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
-        <button class="btn-subtle" @click="triggerImportMD">Import MD (BETA)</button>
-        <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
-        <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
-      </div>
+    <script type="module" src="index.js"></script>
 
-      <div class="section-divider">
-        <div class="grid-2">
-          <button class="btn-subtle" @click="setSyncFile">Set Sync (Beta)</button>
-          <button @click="manualSync" style="font-size:calc(12px * var(--ui-scale));">Sync Now</button>
-        </div>
-        <div id="sync-path-display" style="background: var(--surface); border: 1px dashed var(--border); padding: 8px; font-size: calc(12px * var(--ui-scale)); height: 45px; overflow-y: auto; word-break: break-all; color: var(--gray);">
-          {{ syncFilePath || 'No sync target set.' }}
-        </div>
-      </div>
-
-      <h1 style="margin-top: 15px; font-size: calc(20px * var(--ui-scale));">Recycle Bin</h1>
-      <div id="trash-list">
-        <div v-for="(n, idx) in recycleBin" :key="idx" class="note-item" style="padding: 8px 0;">
-          <span style="flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; padding-right: 8px;">{{ n.text }}</span>
-          <span class="text-muted" style="padding: 0 5px; flex-shrink: 0; cursor: pointer;" @click="restoreNote(idx)">√r</span>
-        </div>
-      </div>
-      <button style="background: var(--bg); color: var(--text); border: 2px solid var(--border); margin-top: 15px;" @click="clearTrash">Clear Recycle Bin</button>
-    </div>
-
-    <div id="box-6" class="box">
-      <span class="box-title">Box 6: Quotes</span>
-      <p>{{ quoteText }}</p> <br/> -
-      <small>{{ quoteAuthor }}</small>
-    </div>
-  </div>
-</div>
-
-<div id="fab-btn" v-if="showFab && currentScreen === 'home' && !modalVisible" @mousedown.prevent="handleFabClick" @touchstart.prevent="handleFabClick">&gt;_</div>
-
-<div id="context-menu" class="menu" :style="contextMenuStyle">
-  <div class="menu-title">{{ contextTab }}</div>
-  <button v-if="canMoveTabLeft" @click="moveTab(-1)">Move Left</button>
-  <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
-  <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
-  <button @click="deleteTabClick">Delete</button>
-  <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
-  <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
-</div>
-
-<div id="note-dropdown" class="menu" :style="noteMenuStyle">
-  <button @click="actionCopyNote">Copy</button>
-  <button @click="actionEditNote">Edit</button>
-  <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
-  <button @click="actionDeleteNote">Delete</button>
-</div>
-
-<div id="modal-overlay" v-if="modalVisible">
-  <div class="modal-box">
-    <div style="font-weight: bold;">{{ modalTitle }}</div>
-    <textarea id="modal-input" v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
-    <div style="display: flex; gap: 10px;">
-      <button @click="closeModal(true)">Save</button>
-      <button @click="closeModal(false)">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<div id="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
-
-<script type="module" src="index.js"></script>
-
-<script>
-
-  /*
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((registration) => {
-          console.log('SW registered:', registration.scope);
-        })
-        .catch((error) => {
-          console.error('SW registration failed:', error);
-        });
-    });
-  }
-
-  */
-
-</script>
-
-</body>
+  </body>
 </html>

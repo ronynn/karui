@@ -1,0 +1,4 @@
+- Fixed: Floating Action Button behavior
+- Fixed: Toast Position
+- Code organisation improvements
+- New: Toggle for using enter as newline
