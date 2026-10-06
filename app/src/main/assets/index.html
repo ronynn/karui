@@ -79,7 +79,7 @@
     .about-text code { color: var(--accent); }
     #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
     .modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y:auto;}
-    #toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    #toast { position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     .has-ripple { position: relative; overflow: hidden; }
     .ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
@@ -181,6 +181,8 @@
       </div>
 
       <div class="section-divider">
+        <div style="text-align:center;padding-top:15px;">Customization</div>
+
         <div class="toggle-container">
           <span>Floating Quick Input Button</span>
           <label class="switch">
@@ -224,6 +226,7 @@
             <span class="slider"></span>
           </label>
         </div>
+<div style="text-align:center;padding-top:15px;">Effects</div>
 
         <div class="toggle-container">
           <span>UI Sounds</span>
@@ -246,7 +249,7 @@
             <span class="slider"></span>
           </label>
         </div>
-
+<div style="text-align:center;padding-top:15px;">Functionality</div>
         <div class="toggle-container">
           <span>Disable Screenshots</span>
           <label class="switch">
