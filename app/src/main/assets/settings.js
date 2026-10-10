@@ -3,7 +3,7 @@ import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 // --- pure DOM appliers ---
 export function applyTheme(theme)
 {
-  document.body.setAttribute('data-theme', theme)
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 export function applyFont(font)

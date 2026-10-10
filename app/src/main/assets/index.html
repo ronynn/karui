@@ -6,7 +6,22 @@
     <title>Karui</title>
     <script src="quotes.js"></script>
     <script src="confetti.browser.min.js"></script>
-
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('theme') || 'gruvbox';
+      document.documentElement.setAttribute('data-theme', theme);
+      var font = localStorage.getItem('font');
+      if (font) {
+        document.documentElement.style.fontFamily = font.startsWith('CustomFont_')
+          ? "'" + font + "', system-ui, sans-serif"
+          : font;
+      }
+      var scale = localStorage.getItem('uiScale');
+      if (scale) document.documentElement.style.setProperty('--ui-scale', scale);
+    } catch (e) {}
+  })();
+</script>
     <link rel="stylesheet" href="style.css">
   </head>
 
@@ -222,14 +237,14 @@
             <button class="btn-subtle" @click="exportDataCall">Export JSON</button>
             <button class="btn-subtle" @click="triggerImport">Import JSON</button>
             <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
-            <button class="btn-subtle" @click="triggerImportMD">Import MD (BETA)</button>
+            <button class="btn-subtle" @click="triggerImportMD">Import MD</button>
             <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
             <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
           </div>
 
           <div class="section-divider">
             <div class="grid-2">
-              <button class="btn-subtle" @click="setSyncFile">Set Sync (Beta)</button>
+              <button class="btn-subtle" @click="setSyncFile">Set Sync</button>
               <button @click="manualSync" style="font-size:calc(12px * var(--ui-scale));">Sync Now</button>
             </div>
             <div id="sync-path-display" style="background: var(--surface); border: 1px dashed var(--border); padding: 8px; font-size: calc(12px * var(--ui-scale)); height: 45px; overflow-y: auto; word-break: break-all; color: var(--gray);">
