@@ -2,7 +2,7 @@ import { playSound, tryRunGame } from './extras.js'
 
 const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+(.+)$/i
 const FUTURE_BUFFER = 3
-const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s/
+const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 
 export function createNotesModule()
 {
@@ -113,6 +113,12 @@ export function createNotesModule()
       return { token: m[1].toLowerCase(), body: m[2] }
     },
 
+    // Strips a leading "YYYY-MM-DD " from text (used to keep the base body clean).
+    stripDatePrefix(text)
+    {
+      return (text || '').replace(DATE_PREFIX_RE, '')
+    },
+
     computeNextDate(fromDate, token)
     {
       const d = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate())
@@ -147,7 +153,6 @@ export function createNotesModule()
       {
         const map = { mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6, su: 0 }
         const target = map[wd[1]]
-        // move to the NEXT occurrence of that weekday (strictly after `from`)
         do { d.setDate(d.getDate() + 1) } while (d.getDay() !== target)
         return d
       }
@@ -177,13 +182,15 @@ export function createNotesModule()
       return `${y}-${m}-${day}`
     },
 
-    // Accepts an optional anchor in "YYYY-MM-DD" form. Defaults to today.
     buildRecurrenceGroup(text, token, category, anchorDateStr)
     {
       const now = Date.now()
       const groupId = now
       const cat = category || this.activeCategory
       const created = []
+
+      // Base body without any date prefix; the visible date is re-attached per occurrence.
+      const cleanText = this.stripDatePrefix(text)
 
       let cursor
       if (anchorDateStr)
@@ -197,9 +204,17 @@ export function createNotesModule()
         cursor = new Date(t.getFullYear(), t.getMonth(), t.getDate())
       }
 
+      const firstDateStr = this.toDateStr(cursor)
       created.push({
-        id: now, text, completed: false, category: cat, pinned: false,
-        updatedAt: now, groupId, scheduledDate: this.toDateStr(cursor), recurrence: token
+        id: now,
+        text: `${firstDateStr} ${cleanText}`,
+        completed: false,
+        category: cat,
+        pinned: false,
+        updatedAt: now,
+        groupId,
+        scheduledDate: firstDateStr,
+        recurrence: token
       })
 
       for (let i = 0; i < FUTURE_BUFFER; i++)
@@ -207,9 +222,17 @@ export function createNotesModule()
         const next = this.computeNextDate(cursor, token)
         if (!next) break
         cursor = next
+        const nextStr = this.toDateStr(cursor)
         created.push({
-          id: now + i + 1, text, completed: false, category: cat, pinned: false,
-          updatedAt: now, groupId, scheduledDate: this.toDateStr(cursor), recurrence: token
+          id: now + i + 1,
+          text: `${nextStr} ${cleanText}`,
+          completed: false,
+          category: cat,
+          pinned: false,
+          updatedAt: now,
+          groupId,
+          scheduledDate: nextStr,
+          recurrence: token
         })
       }
       return created
@@ -233,21 +256,30 @@ export function createNotesModule()
       const nextStr = this.toDateStr(next)
       if (groupNotes.some(n => n.scheduledDate === nextStr)) return
 
+      // Strip whatever date the current note had so we don't double-prefix.
+      const cleanText = this.stripDatePrefix(note.text)
+
       const now = Date.now()
       const newNote = {
-        id: now, text: note.text, completed: false, category: note.category, pinned: false,
-        updatedAt: now, groupId: note.groupId, scheduledDate: nextStr, recurrence: note.recurrence
+        id: now,
+        text: `${nextStr} ${cleanText}`,
+        completed: false,
+        category: note.category,
+        pinned: false,
+        updatedAt: now,
+        groupId: note.groupId,
+        scheduledDate: nextStr,
+        recurrence: note.recurrence
       }
       if (this.addNoteBottom) this.notes.push(newNote)
       else this.notes.unshift(newNote)
     },
 
     // --- UNIVERSAL NOTE ADDER ---
-    //   rawText       : user text
+    //   rawText       : what the user typed
     //   category      : target tab
     //   anchorDateStr : "YYYY-MM-DD" — used as the starting day for recurring
     //                   notes and as the date prefix for one-off calendar notes.
-    //                   If null, today is used.
     addNote(rawText, category, anchorDateStr)
     {
       const v = (rawText || '').trim()
@@ -268,7 +300,6 @@ export function createNotesModule()
       const rec = this.parseRecurrence(v)
       if (rec)
       {
-        // Anchor the group on the caller's date (calendar click), else today.
         const group = this.buildRecurrenceGroup(v, rec.token, cat, anchorDateStr || null)
         if (group.length > 0)
         {
@@ -325,7 +356,6 @@ export function createNotesModule()
     {
       const v = this.noteInput.trim()
       if (!v) return
-      // From the home input, anchor is today.
       this.addNote(v, this.activeCategory, null)
       this.noteInput = ''
       this.saveData()

@@ -407,7 +407,7 @@ public class MainActivity extends Activity
     if (mWebView != null && isPageLoaded)
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
-      // Also push the very latest calendar events so tomorrow's alarm sees up-to-date data.
+      // Push the very latest calendar events so tomorrow's alarm sees up-to-date data.
       mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
@@ -790,12 +790,15 @@ public class MainActivity extends Activity
       }
 
       // ---------------------------------------------------------------
-      //  Calendar-event bridge (NEW)
+      //  Calendar-event bridge
       // ---------------------------------------------------------------
 
       /**
-       * Called by JS on every saveData() with the full event list.
-       * Format: [ { "date": "2026-10-10", "text": "Dentist", "id": 123, "completed": false }, ... ]
+       * Called by JS when the event list changes (JS dedupes before calling,
+       * so this no longer fires on every keystroke).
+       *
+       * Triggers a *silent* in-place update. The receiver will NOT re-alert
+       * and will NOT fire at all if today's notification hasn't been shown yet.
        */
       @JavascriptInterface
       public void updateCalendarEvents(String json)
@@ -806,8 +809,6 @@ public class MainActivity extends Activity
           .putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json)
           .apply();
 
-        // If the daily notification is currently enabled, refresh today's notice
-        // with the new data (e.g. user edited/deleted an event mid-day).
         SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
         if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
         {
@@ -817,15 +818,24 @@ public class MainActivity extends Activity
         }
       }
 
+      /**
+       * Enables / disables the daily reminder.
+       *
+       * Only the *first* time the user flips this from off → on do we
+       * force an immediate notification. Subsequent calls with `true`
+       * (e.g. from init() on app start) only ensure the alarm is scheduled.
+       */
       @JavascriptInterface
       public void setCalendarNotificationsEnabled(final boolean enabled)
       {
-        getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE)
-          .edit()
-          .putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled)
-          .apply();
+        SharedPreferences prefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+        boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
+        prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
 
-        runOnUiThread(() -> {
+        final boolean justEnabled = enabled && !wasEnabled;
+
+        runOnUiThread(() ->
+        {
           if (enabled)
           {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -838,10 +848,12 @@ public class MainActivity extends Activity
             }
             CalendarNotificationReceiver.scheduleNext(MainActivity.this);
 
-            // Show today's events right away so the user gets instant feedback.
-            Intent refresh = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
-            refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
-            sendBroadcast(refresh);
+            if (justEnabled)
+            {
+              // No action → receiver treats this as a normal (alerting) fire.
+              Intent show = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
+              sendBroadcast(show);
+            }
           }
           else
           {

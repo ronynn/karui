@@ -1,5 +1,4 @@
-- Fixed: Floating Action Button behavior
-- Fixed: Toast Position
-- Loading speedups, Code organisation improvements
-- Game improvements
+- Fixed: Floating Action Button behavior, Toast Position
+- Loading speedups, game perf and code improvements
 - New: Toggle for using enter as newline
+- New: Recurring notes and reminders

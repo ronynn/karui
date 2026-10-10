@@ -80,15 +80,18 @@ export function initCalendar(appStore)
   }
 
   function parseNoteDateAndText(note)
+{
+  if (note.scheduledDate)
   {
-    if (note.scheduledDate)
-    {
-      return { date: note.scheduledDate, text: note.text, note: note, isRecurring: true }
-    }
-    let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/)
-    if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
-    return { date: null, text: note.text, note: note, isRecurring: false }
+    // Recurring notes carry their own date prefix in the visible text.
+    // Strip it here — the calendar context already shows the date.
+    const displayText = note.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
+    return { date: note.scheduledDate, text: displayText, note: note, isRecurring: true }
   }
+  let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/)
+  if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
+  return { date: null, text: note.text, note: note, isRecurring: false }
+}
 
   function createModal()
   {

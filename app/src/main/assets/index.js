@@ -63,8 +63,9 @@ const appStore = reactive(mergeModules(
     touchEndY: 0,
     scrollTicking: false,
 
-    // --- calendar notifications (NEW) ---
+    // --- calendar notifications ---
     calendarNotificationsEnabled: false,
+    _lastSyncedCalendarJson: '',   // dedupe key so we don't spam the bridge
 
     // --- computed shell ---
     get screenOrder()
@@ -158,7 +159,9 @@ const appStore = reactive(mergeModules(
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
-      // --- Push initial calendar events + re-arm daily alarm (NEW) ---
+      // Push the initial event list (deduped), then let Android re-arm
+      // if the toggle was already on. If it was already on, this call is
+      // a no-op on the Java side (no re-notify).
       this.syncCalendarEventsToAndroid()
       if (this.calendarNotificationsEnabled &&
           window.Android &&
@@ -216,7 +219,7 @@ const appStore = reactive(mergeModules(
         this.exportMarkdownSilent()
       }
 
-      // --- Keep Android's calendar-events cache fresh (NEW) ---
+      // Deduped internally — safe to call on every saveData().
       this.syncCalendarEventsToAndroid()
     },
 
@@ -341,7 +344,7 @@ const appStore = reactive(mergeModules(
       clearTimeout(this.tabTouchTimer)
     },
 
-    // --- FAB: single event source, always focus (no blur-on-repeat) ---
+    // --- FAB ---
     handleFabClick(e)
     {
       if (e && typeof e.preventDefault === 'function')
@@ -540,22 +543,33 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // --- Calendar Notifications (NEW) ---
+    // -----------------------------------------------------------------
+    //  Calendar Notifications
+    // -----------------------------------------------------------------
 
     /**
      * Collects every event from the calendar tab and pushes it to Android.
-     * Handles both "classic" events (date embedded in note text) and
-     * recurring notes (which carry their own scheduledDate property).
+     *
+     * Handles both:
+     *   - Classic events: text starts with "YYYY-MM-DD "
+     *   - Recurring notes: carry their own scheduledDate property
+     *
+     * Dedupes against the last successfully-synced JSON so we don't hit
+     * the bridge (and therefore don't trigger a REFRESH broadcast) on
+     * every unrelated saveData() call.
      */
     syncCalendarEventsToAndroid()
     {
       if (!window.Android || typeof window.Android.updateCalendarEvents !== 'function') return
 
-      // If the calendar is disabled, clear any cached events so the alarm
-      // won't keep showing stale notifications.
+      // Calendar off → clear the cache once and bail.
       if (!this.calendarEnabled)
       {
-        try { window.Android.updateCalendarEvents('[]') } catch (e) {}
+        if (this._lastSyncedCalendarJson !== '[]')
+        {
+          this._lastSyncedCalendarJson = '[]'
+          try { window.Android.updateCalendarEvents('[]') } catch (e) {}
+        }
         return
       }
 
@@ -567,7 +581,7 @@ const appStore = reactive(mergeModules(
       {
         if (!n || n.category !== cat || !n.text) return
 
-        // Style 1 — classic calendar event: "YYYY-MM-DD <text>"
+        // Classic calendar event: "YYYY-MM-DD <text>"
         const m = n.text.match(dateRe)
         if (m)
         {
@@ -580,26 +594,34 @@ const appStore = reactive(mergeModules(
           return
         }
 
-        // Style 2 — recurring note with a scheduledDate property
+        // Recurring note with scheduledDate — the visible text already
+        // carries the date prefix; strip it for the notification body.
         if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
         {
           events.push({
             date: n.scheduledDate,
-            text: n.text.trim(),
+            text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
             id: n.id,
             completed: !!n.completed
           })
         }
       })
 
-      try { window.Android.updateCalendarEvents(JSON.stringify(events)) } catch (e) {}
+      const json = JSON.stringify(events)
+
+      // Nothing changed → skip the bridge entirely. This is what stops
+      // the notification from re-firing on every unrelated edit.
+      if (json === this._lastSyncedCalendarJson) return
+      this._lastSyncedCalendarJson = json
+
+      try { window.Android.updateCalendarEvents(json) } catch (e) {}
     },
 
     toggleCalendarNotifications()
     {
       localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
 
-      // Push the latest event list first, then arm/disarm the alarm.
+      // Make sure Android has the freshest event list before we arm.
       this.syncCalendarEventsToAndroid()
 
       if (window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')

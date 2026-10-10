@@ -24,54 +24,63 @@ import java.util.Locale;
 
 public class CalendarNotificationReceiver extends BroadcastReceiver
 {
-  public static final String CHANNEL_ID       = "calendar_events_channel";
-  public static final int    NOTIFICATION_ID  = 100;
-  public static final String PREFS            = "calendar_prefs";
-  public static final String KEY_EVENTS_JSON  = "events_json";
-  public static final String KEY_ENABLED      = "calendar_notifications_enabled";
-  public static final int    ALARM_REQUEST_ID = 200;
+  public static final String CHANNEL_ID        = "calendar_events_channel";
+  public static final int    NOTIFICATION_ID   = 100;
+  public static final String PREFS             = "calendar_prefs";
+  public static final String KEY_EVENTS_JSON   = "events_json";
+  public static final String KEY_ENABLED       = "calendar_notifications_enabled";
+  public static final String KEY_LAST_NOTIFIED = "last_notified_date";
+  public static final int    ALARM_REQUEST_ID  = 200;
 
-public static final String ACTION_REFRESH = "io.github.ronynn.karui.REFRESH_CALENDAR";
+  /** Sent by MainActivity whenever the cached event list changes.
+   *  Triggers a *silent* in-place update only. Never pops a fresh alert. */
+  public static final String ACTION_REFRESH = "io.github.ronynn.karui.REFRESH_CALENDAR";
 
-@Override
-public void onReceive(Context context, Intent intent)
-{
-  SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-  if (prefs.getBoolean(KEY_ENABLED, false))
+  @Override
+  public void onReceive(Context context, Intent intent)
   {
-    showTodaysEvents(context, prefs);
-  }
-  // Skip rescheduling when we're only refreshing today's notification.
-  String action = intent != null ? intent.getAction() : null;
-  if (!ACTION_REFRESH.equals(action))
-  {
-    scheduleNext(context);
-  }
-}
+    SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    if (!prefs.getBoolean(KEY_ENABLED, false)) return;
 
-  // ---------------------------------------------------------------
-  //  Show today's events (skips silently if channel has been muted)
-  // ---------------------------------------------------------------
-  private void showTodaysEvents(Context context, SharedPreferences prefs)
+    String action = intent != null ? intent.getAction() : null;
+    boolean isRefresh = ACTION_REFRESH.equals(action);
+
+    if (isRefresh)
+    {
+      // Silent path — update in place, but ONLY if we've already shown
+      // today's notification. Prevents every app edit from re-firing it.
+      showTodaysEvents(context, prefs, true);
+    }
+    else
+    {
+      // Alarm (or explicit "show now") — full notification with alert.
+      showTodaysEvents(context, prefs, false);
+      scheduleNext(context);
+    }
+  }
+
+  private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)
   {
     NotificationManager manager =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return;
 
-    // If the user long-pressed the notification and disabled the channel,
-    // importance becomes IMPORTANCE_NONE — respect that.
+    // Respect user's long-press → disable of the channel.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       NotificationChannel ch = manager.getNotificationChannel(CHANNEL_ID);
-      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE)
-      {
-        return;
-      }
+      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
     }
 
-    String json     = prefs.getString(KEY_EVENTS_JSON, "[]");
     String todayStr = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+    String lastNotified = prefs.getString(KEY_LAST_NOTIFIED, "");
+    boolean alreadyShownToday = todayStr.equals(lastNotified);
 
+    // *** THE FIX *** — silent refreshes are no-ops until the alarm
+    // (or user enabling the toggle) has shown today's notification at least once.
+    if (silent && !alreadyShownToday) return;
+
+    String json = prefs.getString(KEY_EVENTS_JSON, "[]");
     List<String> todays = new ArrayList<>();
     try
     {
@@ -87,32 +96,35 @@ public void onReceive(Context context, Intent intent)
     }
     catch (Exception ignored) {}
 
-    if (todays.isEmpty()) return;
-
-    // -----------------------------------------------------------
-    //  Create the channel (idempotent — safe to call every time)
-    // -----------------------------------------------------------
+    // Create / ensure the channel exists.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       NotificationChannel channel = new NotificationChannel(
           CHANNEL_ID,
           "Calendar Events",
           NotificationManager.IMPORTANCE_DEFAULT);
-      channel.setDescription(
-          "Daily reminder of today's calendar events. " +
-          "Long-press the notification to mute or disable.");
+      channel.setDescription("Daily reminder of today's calendar events. " +
+                             "Long-press the notification to mute or disable.");
       manager.createNotificationChannel(channel);
     }
 
-    // -----------------------------------------------------------
-    //  Content
-    // -----------------------------------------------------------
+    // Nothing today — clean up if a silent refresh is just pruning an
+    // outdated notification. On the alarm path, just mark the day as checked.
+    if (todays.isEmpty())
+    {
+      manager.cancel(NOTIFICATION_ID);
+      if (!silent) prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
+      return;
+    }
+
+    // Open-app intent
     Intent openApp = new Intent(context, MainActivity.class);
     openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
     PendingIntent pi = PendingIntent.getActivity(context, 0, openApp, piFlags);
 
+    // Title / body
     String title, bigText;
     if (todays.size() == 1)
     {
@@ -136,9 +148,6 @@ public void onReceive(Context context, Intent intent)
       bigText = sb.toString();
     }
 
-    // -----------------------------------------------------------
-    //  Build the notification
-    // -----------------------------------------------------------
     Notification.Builder b;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
@@ -162,7 +171,8 @@ public void onReceive(Context context, Intent intent)
      .setContentText(todays.size() == 1 ? bigText : todays.get(0))
      .setStyle(new Notification.BigTextStyle().bigText(bigText))
      .setContentIntent(pi)
-     .setAutoCancel(true);
+     .setAutoCancel(true)
+     .setOnlyAlertOnce(true);   // <- silent updates when the notification is already visible
 
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
     {
@@ -170,10 +180,17 @@ public void onReceive(Context context, Intent intent)
     }
 
     manager.notify(NOTIFICATION_ID, b.build());
+
+    // Only the alarm / explicit-show paths mark the day as "notified".
+    // Silent refreshes never write this, so they stay idempotent.
+    if (!silent)
+    {
+      prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
+    }
   }
 
   // ---------------------------------------------------------------
-  //  Scheduling
+  //  Scheduling (unchanged behaviour)
   // ---------------------------------------------------------------
   public static void scheduleNext(Context context)
   {
@@ -185,7 +202,6 @@ public void onReceive(Context context, Intent intent)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
     PendingIntent pi = PendingIntent.getBroadcast(context, ALARM_REQUEST_ID, i, flags);
 
-    // Fire at 00:05 — today if it hasn't passed, otherwise tomorrow.
     Calendar target = Calendar.getInstance();
     target.set(Calendar.HOUR_OF_DAY, 0);
     target.set(Calendar.MINUTE, 5);
@@ -214,7 +230,6 @@ public void onReceive(Context context, Intent intent)
     }
     catch (SecurityException se)
     {
-      // SCHEDULE_EXACT_ALARM not granted (Android 12+ default)
       am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
     }
   }
@@ -222,16 +237,18 @@ public void onReceive(Context context, Intent intent)
   public static void cancel(Context context)
   {
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-    if (am == null) return;
+    if (am != null)
+    {
+      Intent i = new Intent(context, CalendarNotificationReceiver.class);
+      int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+      PendingIntent pi = PendingIntent.getBroadcast(context, ALARM_REQUEST_ID, i, flags);
+      am.cancel(pi);
+      pi.cancel();
+    }
 
-    Intent i = new Intent(context, CalendarNotificationReceiver.class);
-    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
-    PendingIntent pi = PendingIntent.getBroadcast(context, ALARM_REQUEST_ID, i, flags);
-    am.cancel(pi);
-    pi.cancel();
-
-    NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nm != null) nm.cancel(NOTIFICATION_ID);
   }
 }
