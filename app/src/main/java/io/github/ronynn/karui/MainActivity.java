@@ -183,6 +183,13 @@ public class MainActivity extends Activity
     {
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
+
+    // Re-arm the daily calendar notification alarm if the user previously enabled it.
+    SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+    if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+    {
+      CalendarNotificationReceiver.scheduleNext(this);
+    }
   }
 
   // Section: Notification Handling
@@ -400,6 +407,8 @@ public class MainActivity extends Activity
     if (mWebView != null && isPageLoaded)
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
+      // Also push the very latest calendar events so tomorrow's alarm sees up-to-date data.
+      mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
 
@@ -506,7 +515,7 @@ public class MainActivity extends Activity
         Uri uri = data.getData();
         try
           {
-            int takeFlags = data.getFlags() 
+            int takeFlags = data.getFlags()
               & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             getContentResolver().takePersistableUriPermission(uri, takeFlags);
 
@@ -539,7 +548,7 @@ public class MainActivity extends Activity
             else if (pendingFileData != null && !pendingFileData.isEmpty())
             {
               // File is empty: write the initial app content into it
-              OutputStream outputStream = getContentResolver().openInputStream(uri) != null ? 
+              OutputStream outputStream = getContentResolver().openInputStream(uri) != null ?
                 getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
               if (outputStream != null)
               {
@@ -624,6 +633,9 @@ public class MainActivity extends Activity
 
   public class WebAppInterface
     {
+      // ---------------------------------------------------------------
+      //  Quick-note bridge (existing)
+      // ---------------------------------------------------------------
       @JavascriptInterface
       public void setupSyncFile(String defaultFileName, String currentContent)
       {
@@ -773,6 +785,67 @@ public class MainActivity extends Activity
           else
           {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+          }
+        });
+      }
+
+      // ---------------------------------------------------------------
+      //  Calendar-event bridge (NEW)
+      // ---------------------------------------------------------------
+
+      /**
+       * Called by JS on every saveData() with the full event list.
+       * Format: [ { "date": "2026-10-10", "text": "Dentist", "id": 123, "completed": false }, ... ]
+       */
+      @JavascriptInterface
+      public void updateCalendarEvents(String json)
+      {
+        if (json == null) json = "[]";
+        getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE)
+          .edit()
+          .putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json)
+          .apply();
+
+        // If the daily notification is currently enabled, refresh today's notice
+        // with the new data (e.g. user edited/deleted an event mid-day).
+        SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+        if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+        {
+          Intent refresh = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
+          refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
+          sendBroadcast(refresh);
+        }
+      }
+
+      @JavascriptInterface
+      public void setCalendarNotificationsEnabled(final boolean enabled)
+      {
+        getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE)
+          .edit()
+          .putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled)
+          .apply();
+
+        runOnUiThread(() -> {
+          if (enabled)
+          {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                   != PackageManager.PERMISSION_GRANTED)
+            {
+              requestPermissions(
+                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                NOTIFICATION_PERMISSION_REQUEST);
+            }
+            CalendarNotificationReceiver.scheduleNext(MainActivity.this);
+
+            // Show today's events right away so the user gets instant feedback.
+            Intent refresh = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
+            refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
+            sendBroadcast(refresh);
+          }
+          else
+          {
+            CalendarNotificationReceiver.cancel(MainActivity.this);
           }
         });
       }

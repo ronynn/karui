@@ -63,6 +63,9 @@ const appStore = reactive(mergeModules(
     touchEndY: 0,
     scrollTicking: false,
 
+    // --- calendar notifications (NEW) ---
+    calendarNotificationsEnabled: false,
+
     // --- computed shell ---
     get screenOrder()
     {
@@ -105,6 +108,7 @@ const appStore = reactive(mergeModules(
 
       this.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
       this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calkarui'
+      this.calendarNotificationsEnabled = localStorage.getItem('calendarNotificationsEnabled') === 'true'
 
       if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
       {
@@ -154,6 +158,15 @@ const appStore = reactive(mergeModules(
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
+      // --- Push initial calendar events + re-arm daily alarm (NEW) ---
+      this.syncCalendarEventsToAndroid()
+      if (this.calendarNotificationsEnabled &&
+          window.Android &&
+          typeof window.Android.setCalendarNotificationsEnabled === 'function')
+      {
+        window.Android.setCalendarNotificationsEnabled(true)
+      }
+
       if (this.calendarEnabled)
       {
         setTimeout(() =>
@@ -191,6 +204,7 @@ const appStore = reactive(mergeModules(
 
       localStorage.setItem('calendarEnabled', this.calendarEnabled)
       localStorage.setItem('calendarTabName', this.calendarTabName)
+      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
 
       if (this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
       {
@@ -201,6 +215,9 @@ const appStore = reactive(mergeModules(
       {
         this.exportMarkdownSilent()
       }
+
+      // --- Keep Android's calendar-events cache fresh (NEW) ---
+      this.syncCalendarEventsToAndroid()
     },
 
     autoExpandTextarea(el)
@@ -520,6 +537,81 @@ const appStore = reactive(mergeModules(
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(this.syncFilePath, mdStr)
+      }
+    },
+
+    // --- Calendar Notifications (NEW) ---
+
+    /**
+     * Collects every event from the calendar tab and pushes it to Android.
+     * Handles both "classic" events (date embedded in note text) and
+     * recurring notes (which carry their own scheduledDate property).
+     */
+    syncCalendarEventsToAndroid()
+    {
+      if (!window.Android || typeof window.Android.updateCalendarEvents !== 'function') return
+
+      // If the calendar is disabled, clear any cached events so the alarm
+      // won't keep showing stale notifications.
+      if (!this.calendarEnabled)
+      {
+        try { window.Android.updateCalendarEvents('[]') } catch (e) {}
+        return
+      }
+
+      const cat = this.calendarTabName || 'Calkarui'
+      const dateRe = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/
+      const events = []
+
+      this.notes.forEach(n =>
+      {
+        if (!n || n.category !== cat || !n.text) return
+
+        // Style 1 — classic calendar event: "YYYY-MM-DD <text>"
+        const m = n.text.match(dateRe)
+        if (m)
+        {
+          events.push({
+            date: m[1],
+            text: m[2].trim(),
+            id: n.id,
+            completed: !!n.completed
+          })
+          return
+        }
+
+        // Style 2 — recurring note with a scheduledDate property
+        if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
+        {
+          events.push({
+            date: n.scheduledDate,
+            text: n.text.trim(),
+            id: n.id,
+            completed: !!n.completed
+          })
+        }
+      })
+
+      try { window.Android.updateCalendarEvents(JSON.stringify(events)) } catch (e) {}
+    },
+
+    toggleCalendarNotifications()
+    {
+      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
+
+      // Push the latest event list first, then arm/disarm the alarm.
+      this.syncCalendarEventsToAndroid()
+
+      if (window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
+      {
+        window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled)
+        this.showToast(this.calendarNotificationsEnabled
+          ? 'Daily calendar reminder enabled'
+          : 'Daily calendar reminder disabled')
+      }
+      else if (this.calendarNotificationsEnabled)
+      {
+        this.showToast('Calendar notifications only work in the Android app')
       }
     }
   }
