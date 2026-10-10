@@ -15,13 +15,19 @@ export function initCalendar(appStore)
 .calendar-day.selected { background: var(--accent); color: var(--accent-txt); }
 .event-dots { display: flex; justify-content: center; gap: 0.15rem; margin-top: 0.2rem; min-height: 0.6rem; }
 .event-dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--accent); }
-.event-count { font-size: 0.6rem; line-height: 1; color: var(--accent); margin-top: 0.2rem; }
+.event-dot.recurring { border-radius: 0; transform: rotate(45deg); background: var(--border); }
 .monthly-events { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
 .monthly-events h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
 .monthly-event-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
 .monthly-event-item.completed { opacity: 0.55; text-decoration: line-through; }
 .monthly-event-date { font-weight: bold; color: var(--accent); white-space: nowrap; font-size: 0.75rem; }
 .monthly-event-text { flex: 1; font-size: 0.875rem; cursor: pointer; }
+.recurring-today { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
+.recurring-today h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
+.recurring-today-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+.recurring-today-item.completed { opacity: 0.55; text-decoration: line-through; }
+.recurring-today-text { flex: 1; font-size: 0.875rem; cursor: pointer; }
+.recurring-today-empty { color: var(--gray); font-size: 0.875rem; padding: 0.375rem 0; }
 .calendar-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
 .calendar-modal.active { display: flex; }
 .calendar-modal-content { background: var(--bg); border: 1px solid var(--border); padding: 1rem; width: 90%; max-width: 400px; max-height: 80%; overflow-y: auto; box-sizing: border-box; }
@@ -54,6 +60,12 @@ export function initCalendar(appStore)
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
+  function todayStr()
+  {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   function escapeHtml(str)
   {
     const div = document.createElement('div')
@@ -69,18 +81,18 @@ export function initCalendar(appStore)
 
   function parseNoteDateAndText(note)
   {
-    let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/)
-    if (match)
+    if (note.scheduledDate)
     {
-      return { date: match[1], text: match[2], note: note }
+      return { date: note.scheduledDate, text: note.text, note: note, isRecurring: true }
     }
-    return { date: null, text: note.text, note: note }
+    let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/)
+    if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
+    return { date: null, text: note.text, note: note, isRecurring: false }
   }
 
   function createModal()
   {
     if (document.getElementById('calendar-modal')) return
-
     const modal = document.createElement('div')
     modal.className = 'calendar-modal'
     modal.id = 'calendar-modal'
@@ -94,12 +106,8 @@ export function initCalendar(appStore)
       </div>
     `
     document.body.appendChild(modal)
-
     modal.querySelector('#modal-close').addEventListener('click', closeModal)
-    modal.addEventListener('click', (e) =>
-    {
-      if (e.target === modal) closeModal()
-    })
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal() })
   }
 
   function openModal(dateStr)
@@ -108,7 +116,6 @@ export function initCalendar(appStore)
     const modal = document.getElementById('calendar-modal')
     const title = document.getElementById('modal-date-title')
     const body = document.getElementById('modal-body')
-
     title.textContent = `Events for ${dateStr}`
     showEventList(dateStr, body)
     modal.classList.add('active')
@@ -150,11 +157,7 @@ export function initCalendar(appStore)
       {
         let id = parseInt(e.target.dataset.id, 10)
         let note = appStore.notes.find(n => n.id === id)
-        if (note)
-        {
-          appStore.toggleNote(note, e)
-          showEventList(dateStr, body)
-        }
+        if (note) { appStore.toggleNote(note, e); showEventList(dateStr, body) }
       })
     })
 
@@ -168,17 +171,14 @@ export function initCalendar(appStore)
       })
     })
 
-    document.getElementById('add-event-btn').addEventListener('click', () =>
-    {
-      showAddEventForm(dateStr, body)
-    })
+    document.getElementById('add-event-btn').addEventListener('click', () => { showAddEventForm(dateStr, body) })
   }
 
   function showAddEventForm(dateStr, body)
   {
     body.innerHTML = `
       <div class="calendar-add-form">
-        <textarea id="event-text" rows="4" placeholder="Enter event details..."></textarea>
+        <textarea id="event-text" rows="4" placeholder="Enter event details... (prefix with !1w for recurring)"></textarea>
         <div class="calendar-add-form-actions">
           <button id="save-event">Save</button>
           <button id="cancel-event">Cancel</button>
@@ -190,26 +190,14 @@ export function initCalendar(appStore)
       const text = document.getElementById('event-text').value.trim()
       if (text)
       {
-        let now = Date.now()
-        let cat = appStore.calendarTabName || 'Calkarui'
-        let note = {
-          id: now,
-          text: `${dateStr} ${text}`,
-          completed: false,
-          category: cat,
-          pinned: false,
-          updatedAt: now
-        }
-        if (appStore.addNoteBottom) appStore.notes.push(note)
-        else appStore.notes.unshift(note)
+        // addNote handles both recurring (!…) and normal events.
+        // For normal events the clicked date is used as the prefix.
+        appStore.addNote(text, appStore.calendarTabName, dateStr)
         appStore.saveData()
         closeModal()
       }
     })
-    document.getElementById('cancel-event').addEventListener('click', () =>
-    {
-      showEventList(dateStr, body)
-    })
+    document.getElementById('cancel-event').addEventListener('click', () => { showEventList(dateStr, body) })
   }
 
   function renderCalendar()
@@ -225,6 +213,7 @@ export function initCalendar(appStore)
 
     const calNotes = getCalendarNotes()
     const eventsCount = {}
+    const recurringCount = {}
     const monthlyEvents = []
 
     for (let d = 1; d <= daysInMonth; d++)
@@ -232,17 +221,15 @@ export function initCalendar(appStore)
       const dateStr = toDateString(year, month, d)
       const dayNotes = calNotes.map(parseNoteDateAndText).filter(item => item.date === dateStr)
       eventsCount[dateStr] = dayNotes.length
-      dayNotes.forEach(item =>
-      {
-        monthlyEvents.push(item)
-      })
+      recurringCount[dateStr] = dayNotes.filter(x => x.isRecurring).length
+      // Only one-off events belong in the "Events this month" list.
+      dayNotes.forEach(item => { if (!item.isRecurring) monthlyEvents.push(item) })
     }
 
     monthlyEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
     const monthNames = ["January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ]
+      "July", "August", "September", "October", "November", "December"]
 
     const headerHtml = `
       <div class="calendar-header">
@@ -262,32 +249,21 @@ export function initCalendar(appStore)
     const weekdaysHtml = weekDays.map(w => `<div class="calendar-weekday">${w}</div>`).join('')
 
     let dayCells = ''
-    for (let i = 0; i < startWeekday; i++)
-    {
-      dayCells += `<div class="calendar-day other-month"></div>`
-    }
+    for (let i = 0; i < startWeekday; i++) dayCells += `<div class="calendar-day other-month"></div>`
     for (let d = 1; d <= daysInMonth; d++)
     {
       const dateStr = toDateString(year, month, d)
-      const todayStr = new Date().toISOString().slice(0, 10)
-      const isToday = dateStr === todayStr
+      const todayS = todayStr()
+      const isToday = dateStr === todayS
       const isSelected = dateStr === selectedDateStr
-      const eventCount = eventsCount[dateStr] || 0
-      
+      const recurring = recurringCount[dateStr] || 0
+      const oneOff = (eventsCount[dateStr] || 0) - recurring
+
       let dotsHtml = ''
-      if (eventCount > 0)
+      if (recurring > 0) dotsHtml += `<span class="event-dot recurring"></span>`
+      if (oneOff > 0)
       {
-        if (eventCount <= 3)
-        {
-          for (let i = 0; i < eventCount; i++)
-          {
-            dotsHtml += `<span class="event-dot"></span>`
-          }
-        }
-        else
-        {
-          dotsHtml = `<span class="event-count">3+</span>`
-        }
+        for (let i = 0; i < Math.min(oneOff, 3); i++) dotsHtml += `<span class="event-dot"></span>`
       }
 
       dayCells += `
@@ -299,13 +275,7 @@ export function initCalendar(appStore)
     }
     const totalCells = startWeekday + daysInMonth
     const remainder = totalCells % 7
-    if (remainder !== 0)
-    {
-      for (let i = 0; i < 7 - remainder; i++)
-      {
-        dayCells += `<div class="calendar-day other-month"></div>`
-      }
-    }
+    if (remainder !== 0) for (let i = 0; i < 7 - remainder; i++) dayCells += `<div class="calendar-day other-month"></div>`
 
     const monthlyEventsHtml = monthlyEvents.length > 0
       ? monthlyEvents.map(item => `
@@ -316,8 +286,23 @@ export function initCalendar(appStore)
         `).join('')
       : '<div class="monthly-event-item"><span class="monthly-event-text">No events this month</span></div>'
 
-    container.innerHTML = headerHtml + `<div class="calendar-grid">${weekdaysHtml}${dayCells}</div>` +
-      `<div class="monthly-events"><h4>Events this month</h4>${monthlyEventsHtml}</div>`
+    const todayS = todayStr()
+    const recurringToday = calNotes
+      .map(parseNoteDateAndText)
+      .filter(item => item.isRecurring && item.date === todayS)
+
+    const recurringTodayHtml = recurringToday.length > 0
+      ? recurringToday.map(item => `
+          <div class="recurring-today-item ${item.note.completed ? 'completed' : ''}">
+            <span class="recurring-today-text" data-id="${item.note.id}">${escapeHtml(item.text)}</span>
+          </div>
+        `).join('')
+      : '<div class="recurring-today-empty">Nothing due today</div>'
+
+    container.innerHTML = headerHtml +
+      `<div class="calendar-grid">${weekdaysHtml}${dayCells}</div>` +
+      `<div class="monthly-events"><h4>Events this month</h4>${monthlyEventsHtml}</div>` +
+      `<div class="recurring-today"><h4>Recurring today</h4>${recurringTodayHtml}</div>`
     container.appendChild(hiddenInput)
 
     container.querySelector('.cal-prev').addEventListener('click', () =>
@@ -367,11 +352,17 @@ export function initCalendar(appStore)
       {
         let id = parseInt(e.target.dataset.id, 10)
         let note = appStore.notes.find(n => n.id === id)
-        if (note)
-        {
-          appStore.toggleNote(note, e)
-          renderCalendar()
-        }
+        if (note) { appStore.toggleNote(note, e); renderCalendar() }
+      })
+    })
+
+    container.querySelectorAll('.recurring-today-text[data-id]').forEach(el =>
+    {
+      el.addEventListener('click', (e) =>
+      {
+        let id = parseInt(e.target.dataset.id, 10)
+        let note = appStore.notes.find(n => n.id === id)
+        if (note) { appStore.toggleNote(note, e); renderCalendar() }
       })
     })
   }

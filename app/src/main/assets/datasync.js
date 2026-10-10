@@ -7,21 +7,25 @@ export function generateMarkdownString(noteCategories, notes, categoryMeta = {})
     let catId = categoryMeta[cat]?.id || (Date.now() + idx)
     let catUpdated = categoryMeta[cat]?.updatedAt || Date.now()
     mdStr += `## ${cat} <!-- cat_id:${catId} u:${catUpdated} -->\n`
-    
+
     let catNotes = notes.filter(n => n.category === cat)
     catNotes.forEach(n =>
     {
       let mark = n.completed ? 'x' : ' '
       let pin = n.pinned ? ' pinned:true' : ''
       let updated = n.updatedAt || Date.now()
+
+      // Recurring metadata is emitted ONLY when present, keeping clean notes clean.
+      let extra = ''
+      if (n.groupId) extra += ` gid:${n.groupId}`
+      if (n.scheduledDate) extra += ` sd:${n.scheduledDate}`
+      if (n.recurrence) extra += ` rec:${n.recurrence}`
+
       let rawText = (n.text || '').replace(/^(?:- \[[ xX]\]\s*)+/, '')
       let sanitizedText = rawText.replace(/\r?\n/g, '\\n')
-      mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin} -->\n`
+      mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin}${extra} -->\n`
     })
-    if (idx < noteCategories.length - 1)
-    {
-      mdStr += '\n'
-    }
+    if (idx < noteCategories.length - 1) mdStr += '\n'
   })
   return mdStr
 }
@@ -68,19 +72,22 @@ export function parseMarkdownAndMerge(text, appStore)
         let noteId = null
         let pinned = false
         let updatedAt = Date.now()
+        let groupId = null
+        let scheduledDate = null
+        let recurrence = null
 
-        let metaMatch = content.match(/<!--\s*id:(\d+)(?:\s+u:(\d+))?(?:\s+pinned:(true|false))?\s*-->/)
+        // extended meta: id, u, pinned, gid, sd, rec
+        let metaMatch = content.match(
+          /<!--\s*id:(\d+)(?:\s+u:(\d+))?(?:\s+pinned:(true|false))?(?:\s+gid:(\d+))?(?:\s+sd:(\d{4}-\d{2}-\d{2}))?(?:\s+rec:([a-z0-9-]+))?\s*-->/i
+        )
         if (metaMatch)
         {
           noteId = parseInt(metaMatch[1], 10)
-          if (metaMatch[2])
-          {
-            updatedAt = parseInt(metaMatch[2], 10)
-          }
-          if (metaMatch[3])
-          {
-            pinned = metaMatch[3] === 'true'
-          }
+          if (metaMatch[2]) updatedAt = parseInt(metaMatch[2], 10)
+          if (metaMatch[3]) pinned = metaMatch[3] === 'true'
+          if (metaMatch[4]) groupId = parseInt(metaMatch[4], 10)
+          if (metaMatch[5]) scheduledDate = metaMatch[5]
+          if (metaMatch[6]) recurrence = metaMatch[6].toLowerCase()
           content = content.replace(/<!--\s*id:\d+.*-->/, '').trim()
         }
 
@@ -96,17 +103,24 @@ export function parseMarkdownAndMerge(text, appStore)
             {
               pinned = existing.pinned
               updatedAt = existing.updatedAt || Date.now()
+              if (existing.groupId) groupId = existing.groupId
+              if (existing.scheduledDate) scheduledDate = existing.scheduledDate
+              if (existing.recurrence) recurrence = existing.recurrence
             }
           }
 
-          importedNotes.push({
+          let note = {
             id: noteId,
             text: content,
             completed: completed,
             category: currentCat,
             pinned: pinned,
             updatedAt: updatedAt
-          })
+          }
+          if (groupId) note.groupId = groupId
+          if (scheduledDate) note.scheduledDate = scheduledDate
+          if (recurrence) note.recurrence = recurrence
+          importedNotes.push(note)
         }
       }
     })
@@ -118,41 +132,25 @@ export function parseMarkdownAndMerge(text, appStore)
     }
 
     let noteMap = new Map()
-    appStore.notes.forEach(n =>
-    {
-      noteMap.set(n.id, n)
-    })
+    appStore.notes.forEach(n => { noteMap.set(n.id, n) })
 
     importedNotes.forEach(imp =>
     {
       if (noteMap.has(imp.id))
       {
         let existing = noteMap.get(imp.id)
-        if ((imp.updatedAt || 0) >= (existing.updatedAt || 0))
-        {
-          noteMap.set(imp.id, imp)
-        }
+        if ((imp.updatedAt || 0) >= (existing.updatedAt || 0)) noteMap.set(imp.id, imp)
       }
-      else
-      {
-        noteMap.set(imp.id, imp)
-      }
+      else noteMap.set(imp.id, imp)
     })
 
     appStore.notes = Array.from(noteMap.values())
 
-    if (!appStore.categoryMeta)
-    {
-      appStore.categoryMeta = {}
-    }
+    if (!appStore.categoryMeta) appStore.categoryMeta = {}
 
     importedCategories.forEach(catObj =>
     {
-      if (!appStore.noteCategories.includes(catObj.name))
-      {
-        appStore.noteCategories.push(catObj.name)
-      }
-
+      if (!appStore.noteCategories.includes(catObj.name)) appStore.noteCategories.push(catObj.name)
       let existingMeta = appStore.categoryMeta[catObj.name]
       if (!existingMeta || (catObj.updatedAt >= (existingMeta.updatedAt || 0)))
       {
@@ -201,10 +199,7 @@ export function importJsonFile(file, appStore)
     {
       let parsed = JSON.parse(ev.target.result)
       let items = []
-      if (Array.isArray(parsed))
-      {
-        items = parsed
-      }
+      if (Array.isArray(parsed)) items = parsed
       else if (parsed && Array.isArray(parsed.notes))
       {
         items = parsed.notes
@@ -212,10 +207,7 @@ export function importJsonFile(file, appStore)
         {
           parsed.noteCategories.forEach(c =>
           {
-            if (typeof c === 'string' && !appStore.noteCategories.includes(c))
-            {
-              appStore.noteCategories.push(c)
-            }
+            if (typeof c === 'string' && !appStore.noteCategories.includes(c)) appStore.noteCategories.push(c)
           })
         }
       }
@@ -227,14 +219,8 @@ export function importJsonFile(file, appStore)
 
       let validNotes = items.map(item =>
       {
-        if (typeof item === 'string')
-        {
-          return { text: item }
-        }
-        if (item && typeof item.text === 'string')
-        {
-          return item
-        }
+        if (typeof item === 'string') return { text: item }
+        if (item && typeof item.text === 'string') return item
         return null
       }).filter(Boolean)
 
@@ -278,10 +264,7 @@ export function importMarkdownFile(file, appStore)
 {
   if (!file) return
   const r = new FileReader()
-  r.onload = ev =>
-  {
-    parseMarkdownAndMerge(ev.target.result, appStore)
-  }
+  r.onload = ev => { parseMarkdownAndMerge(ev.target.result, appStore) }
   r.readAsText(file)
 }
 
@@ -325,20 +308,14 @@ export function setupNativeHooks(appStore)
     appStore.showToast('Sync connected!')
   }
 
-  window.importMarkdownFromAndroid = (mdText) =>
-  {
-    parseMarkdownAndMerge(mdText, appStore)
-  }
+  window.importMarkdownFromAndroid = (mdText) => { parseMarkdownAndMerge(mdText, appStore) }
 
   window.addEventListener('beforeunload', () =>
   {
     if (appStore.syncFilePath)
     {
       let now = Date.now()
-      appStore.notes.forEach(n =>
-      {
-        if (!n.updatedAt) n.updatedAt = now
-      })
+      appStore.notes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
       let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes, appStore.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
