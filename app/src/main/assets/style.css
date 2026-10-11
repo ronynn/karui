@@ -23,6 +23,7 @@ a { color: gray; }
 
 [data-theme="sakura"] { --bg: #fdf2f4; --surface: #f7e2e7; --border: #b3446c; --text: #2b1e24; --accent: #b3446c; --accent-txt: #ffffff; --gray: #b99aa3; }
 
+[data-theme="sol-dark"] { --bg: #002b36; --surface: #073642; --border: #2aa198; --text: #eee8d5; --accent: #b58900; --accent-txt: #002b36; --gray: #586e75; }
 
 
 
@@ -73,7 +74,7 @@ button { background: var(--accent); color: var(--accent-txt); cursor: pointer; b
 button:active { filter: brightness(0.8); }
 .input-actions-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 8px; flex-wrap: wrap; }
 .box1-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-.icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; text-transform:lowercase;}
+.icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; --text-transform:lowercase;}
 .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
 .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
 .toggle-container:last-of-type { border-bottom: none; }

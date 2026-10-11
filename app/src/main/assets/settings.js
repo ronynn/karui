@@ -43,10 +43,11 @@ export function createSettingsModule()
       { key: 'gruvbox', label: 'GRUVBOX' },
       { key: 'amoled', label: 'AMOLED' },
 
-      { key: 'monokai', label: 'MONOKAI' },
+      { key: 'sol-dark', label: 'SOL-DARK' },
       { key: 'catppuccin', label: 'CATPPUCCIN' },
       { key: 'catppuccin-frappe', label: 'FRAPPE' },
       { key: 'nord', label: 'NORD' },
+
 
       { key: 'tokyo-night', label: 'TOKYO' },
 
