@@ -18,15 +18,15 @@ export function initCalendar(appStore)
 .event-dot.recurring { border-radius: 0; transform: rotate(45deg); background: var(--border); }
 .monthly-events { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
 .monthly-events h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
-.monthly-event-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+.monthly-event-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap; }
 .monthly-event-item.completed { opacity: 0.55; text-decoration: line-through; }
-.monthly-event-date { font-weight: bold; color: var(--accent); white-space: nowrap; font-size: 0.75rem; }
-.monthly-event-text { flex: 1; font-size: 0.875rem; cursor: pointer; }
+.monthly-event-date { font-weight: bold; color: var(--accent); white-space: nowrap; font-size: 0.75rem; flex-shrink: 0; }
+.monthly-event-text { flex: 1; min-width: 0; font-size: 0.875rem; cursor: pointer; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .recurring-today { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
 .recurring-today h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
-.recurring-today-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+.recurring-today-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap; }
 .recurring-today-item.completed { opacity: 0.55; text-decoration: line-through; }
-.recurring-today-text { flex: 1; font-size: 0.875rem; cursor: pointer; }
+.recurring-today-text { flex: 1; min-width: 0; font-size: 0.875rem; cursor: pointer; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .recurring-today-empty { color: var(--gray); font-size: 0.875rem; padding: 0.375rem 0; }
 .calendar-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
 .calendar-modal.active { display: flex; }
@@ -35,8 +35,10 @@ export function initCalendar(appStore)
 .calendar-modal-header h3 { font-size: 1rem; margin: 0; }
 .calendar-modal-close { cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 0 0.5rem; background: none; border: none; color: var(--text); width: auto; }
 .calendar-event-list { list-style: none; margin: 0 0 1rem 0; padding: 0; }
-.calendar-event-list li { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); }
+.calendar-event-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
 .calendar-event-list li:last-child { border-bottom: none; }
+.calendar-event-list li .cal-toggle { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+.calendar-event-list li .cal-del { flex-shrink: 0; }
 .calendar-add-btn { width: 100%; padding: 0.5rem; background: var(--accent); color: var(--accent-txt); border: none; font-weight: bold; cursor: pointer; box-sizing: border-box; }
 .calendar-add-form textarea { width: 100%; min-height: 3rem; resize: vertical; max-height: 12rem; padding: 0.5rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); font-size: 0.875rem; box-sizing: border-box; }
 .calendar-add-form-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
@@ -80,18 +82,17 @@ export function initCalendar(appStore)
   }
 
   function parseNoteDateAndText(note)
-{
-  if (note.scheduledDate)
   {
-    // Recurring notes carry their own date prefix in the visible text.
-    // Strip it here — the calendar context already shows the date.
-    const displayText = note.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
-    return { date: note.scheduledDate, text: displayText, note: note, isRecurring: true }
+    if (note.scheduledDate)
+    {
+      const displayText = note.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
+      return { date: note.scheduledDate, text: displayText, note: note, isRecurring: true }
+    }
+    // [\s\S] matches newlines too, so multiline notes work.
+    let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*([\s\S]*)$/)
+    if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
+    return { date: null, text: note.text, note: note, isRecurring: false }
   }
-  let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/)
-  if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
-  return { date: null, text: note.text, note: note, isRecurring: false }
-}
 
   function createModal()
   {
@@ -141,9 +142,9 @@ export function initCalendar(appStore)
     let itemsHtml = dayEvents.map(item =>
     {
       let strike = item.note.completed ? 'line-through' : 'none'
-      return `<li style="display:flex; justify-content:space-between; align-items:center;">
+      return `<li style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
         <span style="text-decoration:${strike}; cursor:pointer;" data-id="${item.note.id}" class="cal-toggle">${escapeHtml(item.text)}</span>
-        <span style="cursor:pointer; color:var(--gray);" data-id="${item.note.id}" class="cal-del">√d</span>
+        <span style="cursor:pointer; color:var(--gray); flex-shrink:0;" data-id="${item.note.id}" class="cal-del">√d</span>
       </li>`
     }).join('')
 
@@ -193,8 +194,6 @@ export function initCalendar(appStore)
       const text = document.getElementById('event-text').value.trim()
       if (text)
       {
-        // addNote handles both recurring (!…) and normal events.
-        // For normal events the clicked date is used as the prefix.
         appStore.addNote(text, appStore.calendarTabName, dateStr)
         appStore.saveData()
         closeModal()
@@ -225,7 +224,6 @@ export function initCalendar(appStore)
       const dayNotes = calNotes.map(parseNoteDateAndText).filter(item => item.date === dateStr)
       eventsCount[dateStr] = dayNotes.length
       recurringCount[dateStr] = dayNotes.filter(x => x.isRecurring).length
-      // Only one-off events belong in the "Events this month" list.
       dayNotes.forEach(item => { if (!item.isRecurring) monthlyEvents.push(item) })
     }
 

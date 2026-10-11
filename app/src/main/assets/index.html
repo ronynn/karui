@@ -223,7 +223,7 @@
             </div>
             <div style="margin-top: 8px;" v-if="calendarEnabled">
               <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Calendar Tab Name:</label>
-              <input type="text" style="margin-top: 2px;" :value="calendarTabName" @input="renameCalendarTab($event.target.value)">
+              <input type="text" style="margin-top: 2px;" :value="calendarTabName" @change="renameCalendarTab($event.target.value)">
             </div>
           </div>
         </div>
@@ -231,7 +231,7 @@
         <div class="box">
           <span class="box-title">Box 4: Instructions</span>
           <div class="about-text">
-            - Use /tabName to add a new tab. √s is sort, √e is enter, √r on widget is refresh, √m is for menu<br/>
+            - Use /tabName to add a new tab. s is sort, e is enter, r on widget is refresh, m is for menu<br/>
             - Long press from your launcher homescreen to add Karui widgets. <br/>
             - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
@@ -241,6 +241,7 @@
             !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 
             Deleting one occurrence deletes the whole series (and restoring brings it back whole).
             Completing an occurrence automatically queues the next one. <br/>
+            - To Pin a note to status bar, add it as a journal/calendar entry for today<br/>
             - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram where we talk about foss apps, design and productivity.
           </div>
         </div>

@@ -111,6 +111,9 @@ const appStore = reactive(mergeModules(
       this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calkarui'
       this.calendarNotificationsEnabled = localStorage.getItem('calendarNotificationsEnabled') === 'true'
 
+
+      this.noteCategories = [...new Set(this.noteCategories)]
+      
       if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
       {
         this.noteCategories.push(this.calendarTabName)
@@ -543,9 +546,7 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // -----------------------------------------------------------------
     //  Calendar Notifications
-    // -----------------------------------------------------------------
 
     /**
      * Collects every event from the calendar tab and pushes it to Android.

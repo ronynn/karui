@@ -21,16 +21,19 @@ All versions of the app are completely reproducible, just fork the source code f
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Screenshot 1" width="45%">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Screenshot 2" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" alt="Screenshot 2" width="45%">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" alt="Screenshot 3" width="45%">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Screenshot 4" width="45%">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" alt="Screenshot 5" width="45%">
+    <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="Screenshot 6" width="45%">
+
 </div>
 
 
 ## Use it for
 
-- Daily quick notetaking, tracking habits
+- Daily quick notetaking and mood journalling
+- Set reminders and use Karui like a habit tracker(BETA)
 - Tasks list with percentage remaining metrics
 - Taking notes from status bar or other app without switching to Karui or leaving opened app
 - Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok
@@ -101,7 +104,9 @@ Karui is being developed under the GPLv3 License.
 - [x] Develop widgets (e.g., Java fetching notes from the .md file that gets synced)
 - [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
 - [x] Integrate app data piping to Obsidian or a new notes app
-- [ ] Incorporate a QR library to generate QR codes from notes and read them using the system camera, facilitating easy note sharing between devices. (qr too limited)
+- [ ] Incorporate a QR library to generate QR codes from notes (specifically tabs) and read them using the system camera, facilitating easy note sharing between devices.
+- [ ] Using some library to send and receive notes as frequencies of sound, as a gimmick
+- [ ] Enable time for setting reminders 
 
 
 

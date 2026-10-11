@@ -572,32 +572,42 @@ export function createNotesModule()
     },
 
     renameTabInternal(oldName, newName)
-    {
-      if (!oldName || !newName || oldName === newName) return
-      let trimmed = newName.trim()
-      if (!trimmed) return
+{
+  if (!oldName || !newName || oldName === newName) return
+  let trimmed = newName.trim()
+  if (!trimmed) return
 
-      let idx = this.noteCategories.indexOf(oldName)
-      if (idx !== -1) this.noteCategories.splice(idx, 1, trimmed)
-      else if (!this.noteCategories.includes(trimmed)) this.noteCategories.push(trimmed)
+  // Remove any existing occurrence of the new name first, so we never end
+  // up with two tabs called the same thing.
+  this.noteCategories = this.noteCategories.filter(x => x !== trimmed)
 
-      if (this.calendarTabName === oldName) this.calendarTabName = trimmed
+  let idx = this.noteCategories.indexOf(oldName)
+  if (idx !== -1)
+  {
+    this.noteCategories.splice(idx, 1, trimmed)
+  }
+  else if (!this.noteCategories.includes(trimmed))
+  {
+    this.noteCategories.push(trimmed)
+  }
 
-      let now = Date.now()
-      if (!this.categoryMeta) this.categoryMeta = {}
-      let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
-      meta.updatedAt = now
-      this.categoryMeta[trimmed] = meta
-      if (oldName !== trimmed) delete this.categoryMeta[oldName]
+  if (this.calendarTabName === oldName) this.calendarTabName = trimmed
 
-      this.notes.forEach(n =>
-      {
-        if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
-      })
+  let now = Date.now()
+  if (!this.categoryMeta) this.categoryMeta = {}
+  let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
+  meta.updatedAt = now
+  this.categoryMeta[trimmed] = meta
+  if (oldName !== trimmed) delete this.categoryMeta[oldName]
 
-      if (this.activeCategory === oldName) this.activeCategory = trimmed
-      this._dirtyNotes = true
-    },
+  this.notes.forEach(n =>
+  {
+    if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
+  })
+
+  if (this.activeCategory === oldName) this.activeCategory = trimmed
+  this._dirtyNotes = true
+},
 
     deleteTabClick()
     {
