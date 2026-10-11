@@ -113,7 +113,7 @@ const appStore = reactive(mergeModules(
 
 
       this.noteCategories = [...new Set(this.noteCategories)]
-      
+
       if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
       {
         this.noteCategories.push(this.calendarTabName)
@@ -121,24 +121,24 @@ const appStore = reactive(mergeModules(
 
       let now = Date.now()
       this.noteCategories.forEach((cat, idx) =>
-      {
-        if (!this.categoryMeta[cat])
         {
-          this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
-        }
-      })
+          if (!this.categoryMeta[cat])
+          {
+            this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+          }
+        })
 
       this.notes.forEach((n, idx) =>
-      {
-        if (!n.id)
         {
-          n.id = now + idx
-        }
-        if (!n.updatedAt)
-        {
-          n.updatedAt = now
-        }
-      })
+          if (!n.id)
+          {
+            n.id = now + idx
+          }
+          if (!n.updatedAt)
+          {
+            n.updatedAt = now
+          }
+        })
 
       this.customFonts = await initFontSystem()
 
@@ -176,9 +176,9 @@ const appStore = reactive(mergeModules(
       if (this.calendarEnabled)
       {
         setTimeout(() =>
-        {
-          this.calendarRef = initCalendar(this)
-        }, 50)
+          {
+            this.calendarRef = initCalendar(this)
+          }, 50)
       }
     },
 
@@ -314,15 +314,15 @@ const appStore = reactive(mergeModules(
       {
         let scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
-        {
-          let scrolled = scrollTop > 10
-          if (this.isScrolled !== scrolled)
           {
-            this.isScrolled = scrolled
-          }
-          this.closeAllMenus()
-          this.scrollTicking = false
-        })
+            let scrolled = scrollTop > 10
+            if (this.isScrolled !== scrolled)
+            {
+              this.isScrolled = scrolled
+            }
+            this.closeAllMenus()
+            this.scrollTicking = false
+          })
         this.scrollTicking = true
       }
     },
@@ -332,9 +332,9 @@ const appStore = reactive(mergeModules(
     {
       clearTimeout(this.tabTouchTimer)
       this.tabTouchTimer = setTimeout(() =>
-      {
-        this.openContextMenu(e, tab)
-      }, 500)
+        {
+          this.openContextMenu(e, tab)
+        }, 500)
     },
 
     handleTabTouchEnd()
@@ -385,17 +385,17 @@ const appStore = reactive(mergeModules(
       this.modalCb = cb
       this.modalVisible = true
       nextTick(() =>
-      {
-        let el = document.getElementById('modal-input')
-        if (el)
         {
-          autoExpandTextarea(el)
-          if (this.keepKeyboard)
+          let el = document.getElementById('modal-input')
+          if (el)
           {
-            el.focus()
+            autoExpandTextarea(el)
+            if (this.keepKeyboard)
+            {
+              el.focus()
+            }
           }
-        }
-      })
+        })
     },
 
     closeModal(saveAction)
@@ -413,9 +413,9 @@ const appStore = reactive(mergeModules(
       this.toastVisible = true
       clearTimeout(this.toastTimer)
       this.toastTimer = setTimeout(() =>
-      {
-        this.toastVisible = false
-      }, 2000)
+        {
+          this.toastVisible = false
+        }, 2000)
     },
 
     handleGlobalClick(e)
@@ -499,14 +499,14 @@ const appStore = reactive(mergeModules(
       else
       {
         this.openPrompt('Sync File Path', this.syncFilePath, val =>
-        {
-          if (val !== null)
           {
-            this.syncFilePath = val
-            this.saveData()
-            this.showToast('Sync target saved')
-          }
-        })
+            if (val !== null)
+            {
+              this.syncFilePath = val
+              this.saveData()
+              this.showToast('Sync target saved')
+            }
+          })
       }
     },
 
@@ -533,12 +533,12 @@ const appStore = reactive(mergeModules(
       }
       let now = Date.now()
       this.notes.forEach(n =>
-      {
-        if (!n.updatedAt)
         {
-          n.updatedAt = now
-        }
-      })
+          if (!n.updatedAt)
+          {
+            n.updatedAt = now
+          }
+        })
       let mdStr = generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
@@ -579,34 +579,34 @@ const appStore = reactive(mergeModules(
       const events = []
 
       this.notes.forEach(n =>
-      {
-        if (!n || n.category !== cat || !n.text) return
-
-        // Classic calendar event: "YYYY-MM-DD <text>"
-        const m = n.text.match(dateRe)
-        if (m)
         {
-          events.push({
-            date: m[1],
-            text: m[2].trim(),
-            id: n.id,
-            completed: !!n.completed
-          })
-          return
-        }
+          if (!n || n.category !== cat || !n.text) return
 
-        // Recurring note with scheduledDate — the visible text already
-        // carries the date prefix; strip it for the notification body.
-        if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
-        {
-          events.push({
-            date: n.scheduledDate,
-            text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
-            id: n.id,
-            completed: !!n.completed
-          })
-        }
-      })
+          // Classic calendar event: "YYYY-MM-DD <text>"
+          const m = n.text.match(dateRe)
+          if (m)
+          {
+            events.push({
+              date: m[1],
+              text: m[2].trim(),
+              id: n.id,
+              completed: !!n.completed
+            })
+            return
+          }
+
+          // Recurring note with scheduledDate — the visible text already
+          // carries the date prefix; strip it for the notification body.
+          if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
+          {
+            events.push({
+              date: n.scheduledDate,
+              text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
+              id: n.id,
+              completed: !!n.completed
+            })
+          }
+        })
 
       const json = JSON.stringify(events)
 
@@ -622,6 +622,17 @@ const appStore = reactive(mergeModules(
     {
       localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
 
+      // Daily reminders ride on the same notification service as quick-note,
+      // so mirror the toggle to keep them in sync.
+      if (this.calendarNotificationsEnabled && !this.notificationEnabled)
+      {
+        this.notificationEnabled = true
+        if (window.Android && typeof window.Android.toggleNotification === 'function')
+        {
+          window.Android.toggleNotification(true)
+        }
+      }
+
       // Make sure Android has the freshest event list before we arm.
       this.syncCalendarEventsToAndroid()
 
@@ -629,8 +640,8 @@ const appStore = reactive(mergeModules(
       {
         window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled)
         this.showToast(this.calendarNotificationsEnabled
-          ? 'Daily calendar reminder enabled'
-          : 'Daily calendar reminder disabled')
+                       ? 'Daily calendar reminder enabled'
+                       : 'Daily calendar reminder disabled')
       }
       else if (this.calendarNotificationsEnabled)
       {

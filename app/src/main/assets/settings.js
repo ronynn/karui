@@ -41,17 +41,23 @@ export function createSettingsModule()
 
     themes: [
       { key: 'gruvbox', label: 'GRUVBOX' },
-      { key: 'dracula', label: 'DRACULA' },
-      { key: 'monokai', label: 'MONOKAI' },
-      { key: 'nord', label: 'NORD' },
-      { key: 'purple', label: 'PURPLE' },
       { key: 'amoled', label: 'AMOLED' },
-      { key: 'cupcake', label: 'CUPCAKE' },
+
+      { key: 'monokai', label: 'MONOKAI' },
       { key: 'catppuccin', label: 'CATPPUCCIN' },
       { key: 'catppuccin-frappe', label: 'FRAPPE' },
+      { key: 'nord', label: 'NORD' },
+
+      { key: 'tokyo-night', label: 'TOKYO' },
+
       { key: 'everforest', label: 'EVERFOREST' },
       { key: 'everforest-light', label: 'EV-LIGHT' },
-      { key: 'tokyo-night', label: 'TOKYO' }
+      { key: 'sakura', label: 'SAKURA' },
+
+      { key: 'purple', label: 'PURPLE' },
+
+      { key: 'paper', label: 'PAPER' }
+
     ],
 
     defaultFonts: [
@@ -108,12 +114,12 @@ export function createSettingsModule()
       }
       this.saveData()
       setTimeout(() =>
-      {
-        if (this.calendarEnabled && !this.calendarRef)
         {
-          this.calendarRef = initCalendar(this)
-        }
-      }, 50)
+          if (this.calendarEnabled && !this.calendarRef)
+          {
+            this.calendarRef = initCalendar(this)
+          }
+        }, 50)
     },
 
     renameCalendarTab(newName)

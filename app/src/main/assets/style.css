@@ -3,23 +3,62 @@
 a { color: gray; }
 
 :root { --bg: #282828; --surface: #3c3836; --border: #d79921; --text: #ebdbb2; --accent: #fabd2f; --accent-txt: #282828; --gray: #928374; --ui-scale: 1; }
-[data-theme="dracula"] { --bg: #282a36; --surface: #44475a; --border: #ff79c6; --text: #f8f8f2; --accent: #bd93f9; --accent-txt: #282a36; --gray: #6272a4; }
-[data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #a6e22e; --accent-txt: #272822; --gray: #e6db74; }
-[data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #d8dee9; --accent: #81a1c1; --accent-txt: #2e3440; --gray: #4c566a; }
 [data-theme="purple"] { --bg: #ffffff; --surface: #f5f5f5; --border: #8e24aa; --text: #333333; --accent: #8e24aa; --accent-txt: #ffffff; --gray: #888888; }
 [data-theme="amoled"] { --bg: #000000; --surface: #121212; --border: #ffffff; --text: #ffffff; --accent: #ffffff; --accent-txt: #000000; --gray: #888888; }
-[data-theme="cupcake"] { --bg: #faf7f5; --surface: #efeae6; --border: #ffb6c1; --text: #2e282a; --accent: #ffb6c1; --accent-txt: #2e282a; --gray: #b0a8a6; }
 [data-theme="catppuccin"] { --bg: #1e1e2e; --surface: #313244; --border: #cba6f7; --text: #cdd6f4; --accent: #cba6f7; --accent-txt: #11111b; --gray: #6c7086; }
 [data-theme="catppuccin-frappe"] { --bg: #303446; --surface: #414559; --border: #ca9ee6; --text: #c6d0f5; --accent: #ca9ee6; --accent-txt: #232634; --gray: #737994; }
 [data-theme="everforest"] { --bg: #2d353b; --surface: #3d484d; --border: #a7c080; --text: #d3c6aa; --accent: #a7c080; --accent-txt: #232a2e; --gray: #859289; }
 [data-theme="everforest-light"] { --bg: #fdf6e3; --surface: #eee8d5; --border: #859900; --text: #586e75; --accent: #859900; --accent-txt: #fdf6e3; --gray: #93a1a1; }
 [data-theme="tokyo-night"] { --bg: #1a1b26; --surface: #24283c; --border: #7aa2f7; --text: #a9b1d6; --accent: #7aa2f7; --accent-txt: #1d202f; --gray: #565f89; }
+
+/* Brighter frost accent, whiter text, more visible gray */
+[data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #eceff4; --accent: #88c0d0; --accent-txt: #2e3440; --gray: #616e88; }
+
+[data-theme="paper"] { --bg: #f2ede3; --surface: #e6dfd1; --border: #8a7a5c; --text: #2b2b28; --accent: #b04a3a; --accent-txt: #f2ede3; --gray: #a49a86; }
+/* Orange accent pops harder against the pink border than green did */
+[data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #fd971f; --accent-txt: #272822; --gray: #a6e22e; }
+
+/* Real pink accent, white text on it, visible border — no more pastel-on-pastel */
+[data-theme="cupcake"] { --bg: #fff5f7; --surface: #ffe4e9; --border: #e91e63; --text: #2e282a; --accent: #e91e63; --accent-txt: #ffffff; --gray: #d47a8e; }
+
+[data-theme="sakura"] { --bg: #fdf2f4; --surface: #f7e2e7; --border: #b3446c; --text: #2b1e24; --accent: #b3446c; --accent-txt: #ffffff; --gray: #b99aa3; }
+
+
+
+
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); padding-top:12px;}
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(16px); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: all 0.25s ease-out; padding-top: 24px; margin-bottom:44px;}
 #app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.25s ease-out; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 18px; line-height: 1; overflow: hidden; transform: translateY(0); }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 10px; transform: translateY(-20px); pointer-events: none; }
-.pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow: hidden; }
+
+.pivot-container {
+  display: flex;
+  gap: calc(30px * var(--ui-scale));
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  /* bleed to the header edges so cut-off items don't look clipped */
+  margin: 0 calc(-20px * var(--ui-scale));
+  padding-left: calc(20px * var(--ui-scale));
+  padding-right: calc(20px * var(--ui-scale));
+}
+.pivot-container::-webkit-scrollbar { display: none; }
+
+.pivot-item {
+  font-size: calc(26px * var(--ui-scale));
+  font-weight: 300;
+  opacity: 0.35;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding-bottom: 4px;
+  text-transform: lowercase;
+  flex-shrink: 0;          /* <-- critical, or items squash instead of scroll */
+  white-space: nowrap;     /* <-- also critical at large ui-scale */
+}
+
 .pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; transition: all 0.2s ease; padding-bottom: 4px; text-transform: lowercase; }
 .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1); }
