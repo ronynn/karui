@@ -75,9 +75,10 @@ All versions of the app are completely reproducible, just fork the source code f
 - ![Youtube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white) : Click and Watch this short [Youtube Demo](https://www.youtube.com/shorts/QCDx0tuOL2g)
  on using karui and about it's development.
 
-## No Cloud Integration
+## Features that won't be added
 
-- This app is designed to operate entirely locally, with no cloud storage involved. The app doesn't asks for internet permissions and cannot connect to the internet. Further updates won't add internet permissions either, by design.
+- No Cloud Integration: This app is designed to operate entirely locally, with no cloud storage involved. The app doesn't asks for internet permissions and cannot connect to the internet. Further updates won't add internet permissions either, by design.
+- I'm curious to test a branch and build a syncing system where you can have two karui apps open in a local network, and they can detect each other and sync each note to each other without conflicts, but that will need internet permissions and so this will never be added to the main branch
 
 
 ## Latest Releases for Download
@@ -104,7 +105,8 @@ Karui is being developed under the GPLv3 License.
 - [x] Develop widgets (e.g., Java fetching notes from the .md file that gets synced)
 - [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
 - [x] Integrate app data piping to Obsidian or a new notes app
-- [ ] Incorporate a QR library to generate QR codes from notes (specifically tabs) and read them using the system camera, facilitating easy note sharing between devices.
+- [x] Incorporate a QR library to generate QR codes from notes (specifically tabs)
+- [ ] Read them using the system camera, facilitating easy note sharing between devices. (lengthy, also will need camera permissions that some users might not be comfortable with)
 - [ ] Using some library to send and receive notes as frequencies of sound, as a gimmick
 - [ ] Enable time for setting reminders 
 
@@ -127,9 +129,9 @@ This app has been primarily made on my phone with Acode editor with alpine linux
 - Github Issues are still the fastest way to get in touch.
 
 
-
+<!-- 
 ![Visualization of this repo](./diagram.svg)
-
+-->
 
 If you like the app, don't forget to leave a star ⭐ here on github and let me know your suggestions!
 
