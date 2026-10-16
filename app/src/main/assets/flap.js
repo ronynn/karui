@@ -1,4 +1,3 @@
-// flap.js — Flappy Bird clone, merged + optimized ES module.
 import {
   createGameOverlay,
   getGameTheme,
@@ -6,7 +5,6 @@ import {
   triggerConfetti
 } from './extras.js'
 
-// ---- constants ----
 const CANVAS_W = 360
 const CANVAS_H = 476
 const GROUND_H = 24
@@ -26,17 +24,15 @@ const BIRD_H = 22
 const BIRD_GRAVITY = 0.38
 const BIRD_LIFT = -7.5
 
-// Rotation profile (classic flappy feel).
-const ROT_UP = -0.5        // nose up when rising
-const ROT_DOWN = 1.2       // nose dive when falling
-const ROT_VEL_SCALE = 12   // how strongly vy maps to rotation
-const ROT_LERP = 0.15      // smoothing per frame
+const ROT_UP = -0.5
+const ROT_DOWN = 1.2
+const ROT_VEL_SCALE = 12
+const ROT_LERP = 0.15
 
 const PULSE_DECAY_MS = 120
 const SHAKE_FRAMES = 12
 const FLASH_FRAMES = 5
 
-// ---- module session ----
 let session = null
 
 export function startFlapGame()
@@ -62,37 +58,54 @@ export function startFlapGame()
   canvas.width = CANVAS_W
   canvas.height = CANVAS_H
   Object.assign(canvas.style, {
-    width: '94%',
-    maxHeight: '72vh',
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface,
     willChange: 'transform',
     transform: 'translateZ(0)',
     display: 'block',
-    touchAction: 'manipulation'
+    touchAction: 'manipulation',
+    aspectRatio: `${CANVAS_W} / ${CANVAS_H}`
   })
   overlay.contentHost.appendChild(canvas)
+
+  function applyCanvasSize()
+  {
+    if (overlay.isLandscape())
+    {
+      canvas.style.width = 'auto'
+      canvas.style.height = '100%'
+      canvas.style.maxHeight = 'calc(100vh - 24px)'
+      canvas.style.maxWidth = '100%'
+    }
+    else
+    {
+      canvas.style.width = '94%'
+      canvas.style.height = 'auto'
+      canvas.style.maxHeight = '72vh'
+      canvas.style.maxWidth = ''
+    }
+  }
+  applyCanvasSize()
+  window.addEventListener('resize', applyCanvasSize)
+  window.addEventListener('orientationchange', applyCanvasSize)
 
   const ctx = canvas.getContext('2d', { alpha: false })
   ctx.imageSmoothingEnabled = false
 
   const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
 
-  // Pipe pool.
   const pipes = []
   for (let i = 0; i < MAX_PIPES; i++)
   {
     pipes.push({ active: false, x: 0, top: 0, bottom: 0, passed: false })
   }
 
-  // Particle pool.
   const particles = []
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
     particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0 })
   }
 
-  // Precomputed pipe heights.
   const heights = new Float32Array(TRACK_SIZE)
   const minH = 40
   const maxH = CANVAS_H - GROUND_H - PIPE_GAP - 40
@@ -120,7 +133,8 @@ export function startFlapGame()
     shakeFrames: 0,
     flashFrames: 0,
     lastFrame: 0,
-    rafId: null
+    rafId: null,
+    applyCanvasSize
   }
 
   resetFlapGame()
@@ -149,6 +163,8 @@ export function stopFlapGame()
     cancelAnimationFrame(session.rafId)
   }
   window.removeEventListener('keydown', handleKey)
+  window.removeEventListener('resize', session.applyCanvasSize)
+  window.removeEventListener('orientationchange', session.applyCanvasSize)
   session.overlay.remove()
   session = null
 }
@@ -302,18 +318,14 @@ function update(dt)
     return
   }
 
-  // Bird physics.
   s.bird.vy += BIRD_GRAVITY * dt
   s.bird.y += s.bird.vy * dt
 
-  // Rotation follows velocity, clamped, smoothed.
   const targetRot = Math.max(ROT_UP, Math.min(ROT_DOWN, s.bird.vy / ROT_VEL_SCALE))
   s.bird.rot += (targetRot - s.bird.rot) * Math.min(1, ROT_LERP * dt)
 
-  // Pulse decay.
   s.bird.pulse *= Math.exp(-(16.67 * dt) / PULSE_DECAY_MS)
 
-  // Spawn timer.
   s.spawnAccumulator += 16.67 * dt
   if (s.spawnAccumulator >= PIPE_SPAWN_MS)
   {
@@ -321,7 +333,6 @@ function update(dt)
     spawnPipe()
   }
 
-  // Pipes.
   for (let i = 0; i < MAX_PIPES; i++)
   {
     const p = s.pipes[i]
@@ -352,7 +363,6 @@ function update(dt)
       }
     }
 
-    // AABB collision, accounting for cap overhang on the x-axis.
     const bTop = s.bird.y
     const bBottom = s.bird.y + BIRD_H
     const bRight = BIRD_X + BIRD_W
@@ -373,7 +383,6 @@ function update(dt)
     }
   }
 
-  // Particles.
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
     const p = s.particles[i]
@@ -390,7 +399,6 @@ function update(dt)
     }
   }
 
-  // World bounds.
   if (s.bird.y + BIRD_H >= CANVAS_H - GROUND_H || s.bird.y <= 0)
   {
     triggerGameOver()
@@ -436,7 +444,6 @@ function draw()
 
   ctx.save()
 
-  // Shake.
   if (s.shakeFrames > 0)
   {
     const amp = (s.shakeFrames / SHAKE_FRAMES) * 8
@@ -446,11 +453,9 @@ function draw()
     )
   }
 
-  // Sky (oversized so shake doesn't expose edges).
   ctx.fillStyle = theme.surface
   ctx.fillRect(-12, -12, CANVAS_W + 24, CANVAS_H + 24)
 
-  // Pipes: body in border color, caps in accent color at the gap ends.
   for (let i = 0; i < MAX_PIPES; i++)
   {
     const p = s.pipes[i]
@@ -461,7 +466,6 @@ function draw()
 
     const bottomY = CANVAS_H - GROUND_H - p.bottom
 
-    // Top pipe body + cap.
     ctx.fillStyle = theme.border
     ctx.fillRect(p.x, 0, PIPE_W, p.top)
     ctx.fillStyle = theme.accent
@@ -472,7 +476,6 @@ function draw()
       PIPE_CAP_H
     )
 
-    // Bottom pipe body + cap.
     ctx.fillStyle = theme.border
     ctx.fillRect(p.x, bottomY, PIPE_W, p.bottom)
     ctx.fillStyle = theme.accent
@@ -484,13 +487,11 @@ function draw()
     )
   }
 
-  // Ground.
   ctx.fillStyle = theme.gray
   ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, GROUND_H)
   ctx.fillStyle = theme.accent
   ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, 4)
 
-  // Particles.
   ctx.fillStyle = theme.accent
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
@@ -501,7 +502,6 @@ function draw()
     }
   }
 
-  // Bird, rotated + squash pulse.
   const pulse = s.bird.pulse
   const w = BIRD_W * (1 + pulse * 0.15)
   const h = BIRD_H * (1 - pulse * 0.15)
@@ -510,11 +510,9 @@ function draw()
   ctx.translate(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H / 2)
   ctx.rotate(s.bird.rot)
 
-  // Body (centered on origin after translate).
   ctx.fillStyle = theme.accent
   ctx.fillRect(-w / 2, -h / 2, w, h)
 
-  // Eye.
   ctx.fillStyle = theme.accentTxt
   ctx.fillRect(w / 2 - 6, -h / 2 + 4, 4, 4)
 
@@ -522,7 +520,6 @@ function draw()
 
   ctx.restore()
 
-  // HUD (not affected by shake).
   ctx.fillStyle = theme.text
   ctx.font = 'bold 16px monospace'
   ctx.textAlign = 'left'

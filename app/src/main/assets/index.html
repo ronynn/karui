@@ -293,6 +293,7 @@
       <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
       <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
       <button @click="deleteTabClick">Delete</button>
+      <button @click="showTabQr">Make QR</button>
       <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
       <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
     </div>
@@ -311,6 +312,28 @@
         <div style="display: flex; gap: 10px;">
           <button @click="closeModal(true)">Save</button>
           <button @click="closeModal(false)">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+        <div id="qr-modal-overlay" v-if="qrModalVisible">
+      <div class="qr-modal-box">
+        <div class="qr-modal-title">{{ qrTabName }}</div>
+
+        <div v-if="qrBusy" class="qr-modal-busy">Generating…</div>
+        <img v-else-if="qrCurrentImage" :src="qrCurrentImage" class="qr-image" alt="QR" />
+
+        <div class="qr-modal-status" v-if="qrFrames.length > 1">
+          Frame {{ qrFrameIdx + 1 }} / {{ qrFrames.length }}
+        </div>
+        <div class="qr-modal-hint">
+          Scan with your camera or another QR app
+        </div>
+
+        <div class="qr-modal-buttons">
+          <button @click="qrPrevFrame" :disabled="qrBusy || qrFrameIdx === 0">Prev</button>
+          <button @click="qrNextFrame" :disabled="qrBusy || qrFrameIdx >= qrFrames.length - 1">Next</button>
+          <button @click="qrClose">Close</button>
         </div>
       </div>
     </div>

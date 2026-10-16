@@ -1,4 +1,3 @@
-// snake.js — rewritten as an ES module, with bounce physics on the body.
 import {
   createGameOverlay,
   getGameTheme,
@@ -6,15 +5,13 @@ import {
   triggerConfetti
 } from './extras.js'
 
-// --- Constants ---
 const GRID = 16
 const TILES = 20
-const TICK_RATE = 110           // ms per grid step
+const TICK_RATE = 110
 const BOARD_PX = GRID * TILES
-const HEAD_POP_MS = 150         // decay time constant for head "pop" on eat
-const SHAKE_TIME = 0.18         // seconds
+const HEAD_POP_MS = 150
+const SHAKE_TIME = 0.18
 
-// --- Easing / math helpers ---
 function easeOutBack(t)
 {
   const c1 = 1.70158
@@ -44,10 +41,8 @@ function roundRect(ctx, x, y, w, h, r)
   ctx.closePath()
 }
 
-// --- Module-level session ---
 let session = null
 
-// --- Lifecycle ---
 export function startSnakeGame()
 {
   if (session)
@@ -74,8 +69,7 @@ export function startSnakeGame()
   canvas.width = BOARD_PX
   canvas.height = BOARD_PX
   Object.assign(canvas.style, {
-    width: '100%',
-    maxWidth: 'min(380px, 58vh)',
+    display: 'block',
     aspectRatio: '1 / 1',
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface
@@ -83,8 +77,30 @@ export function startSnakeGame()
   overlay.contentHost.appendChild(canvas)
   const ctx = canvas.getContext('2d')
 
-  const controls = buildControls()
-  overlay.contentHost.appendChild(controls)
+  const portraitControls = buildPortraitControls()
+  overlay.contentHost.appendChild(portraitControls)
+
+  const landscapeControls = buildLandscapeControls()
+  overlay.leftSlot.appendChild(landscapeControls)
+
+  function applyCanvasSize()
+  {
+    if (overlay.isLandscape())
+    {
+      canvas.style.width = 'auto'
+      canvas.style.height = '100%'
+      canvas.style.maxHeight = 'calc(100vh - 24px)'
+      canvas.style.maxWidth = '100%'
+    }
+    else
+    {
+      canvas.style.width = '100%'
+      canvas.style.height = 'auto'
+      canvas.style.maxHeight = ''
+      canvas.style.maxWidth = 'min(380px, 58vh)'
+    }
+  }
+  applyCanvasSize()
 
   session = {
     overlay,
@@ -104,12 +120,16 @@ export function startSnakeGame()
     lastFrame: 0,
     rafId: null,
     shakeTime: 0,
-    shakeMag: 3
+    shakeMag: 3,
+    applyCanvasSize
   }
 
   resetSnakeGame()
 
   window.addEventListener('keydown', handleInput)
+  window.addEventListener('resize', applyCanvasSize)
+  window.addEventListener('orientationchange', applyCanvasSize)
+
   canvas.addEventListener('click', () =>
   {
     if (session && session.gameOver)
@@ -141,6 +161,8 @@ export function stopSnakeGame()
     cancelAnimationFrame(session.rafId)
   }
   window.removeEventListener('keydown', handleInput)
+  window.removeEventListener('resize', session.applyCanvasSize)
+  window.removeEventListener('orientationchange', session.applyCanvasSize)
   session.overlay.remove()
   session = null
 }
@@ -200,10 +222,18 @@ function spawnFood()
   session.foodPulse = 1
 }
 
-// --- Controls ---
-function buildControls()
+function setDir(dx, dy)
+{
+  if (!session || session.gameOver) return
+  if (dx !== 0 && session.dir.x !== 0) return
+  if (dy !== 0 && session.dir.y !== 0) return
+  session.nextDir = { x: dx, y: dy }
+}
+
+function buildPortraitControls()
 {
   const host = document.createElement('div')
+  host.className = 'portrait-only'
   Object.assign(host.style, {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
@@ -232,27 +262,56 @@ function buildControls()
     return b
   }
 
-  host.appendChild(mk('W', '1 / 2 / 2 / 3', () =>
-  {
-    if (session && session.dir.y === 0) session.nextDir = { x: 0, y: -1 }
-  }))
-  host.appendChild(mk('A', '2 / 1 / 3 / 2', () =>
-  {
-    if (session && session.dir.x === 0) session.nextDir = { x: -1, y: 0 }
-  }))
-  host.appendChild(mk('S', '2 / 2 / 3 / 3', () =>
-  {
-    if (session && session.dir.y === 0) session.nextDir = { x: 0, y: 1 }
-  }))
-  host.appendChild(mk('D', '2 / 3 / 3 / 4', () =>
-  {
-    if (session && session.dir.x === 0) session.nextDir = { x: 1, y: 0 }
-  }))
+  host.appendChild(mk('W', '1 / 2 / 2 / 3', () => setDir(0, -1)))
+  host.appendChild(mk('A', '2 / 1 / 3 / 2', () => setDir(-1, 0)))
+  host.appendChild(mk('S', '2 / 2 / 3 / 3', () => setDir(0, 1)))
+  host.appendChild(mk('D', '2 / 3 / 3 / 4', () => setDir(1, 0)))
 
   return host
 }
 
-// --- Input ---
+function buildLandscapeControls()
+{
+  const host = document.createElement('div')
+  Object.assign(host.style, {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 56px)',
+    gridTemplateRows: 'repeat(2, 56px)',
+    gap: '6px'
+  })
+
+  const mk = (label, col, row, fn) =>
+  {
+    const b = document.createElement('button')
+    b.innerText = label
+    Object.assign(b.style, {
+      gridColumn: `${col} / ${col + 1}`,
+      gridRow: `${row} / ${row + 1}`,
+      padding: '0',
+      fontSize: '22px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      userSelect: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    })
+    b.onclick = (e) =>
+    {
+      e.preventDefault()
+      fn()
+    }
+    return b
+  }
+
+  host.appendChild(mk('W', 2, 1, () => setDir(0, -1)))
+  host.appendChild(mk('A', 1, 2, () => setDir(-1, 0)))
+  host.appendChild(mk('S', 2, 2, () => setDir(0, 1)))
+  host.appendChild(mk('D', 3, 2, () => setDir(1, 0)))
+
+  return host
+}
+
 function handleInput(e)
 {
   if (!session || session.gameOver)
@@ -278,7 +337,6 @@ function handleInput(e)
   }
 }
 
-// --- Tick: one grid step ---
 function tick()
 {
   const s = session
@@ -292,7 +350,6 @@ function tick()
   const nx = (oldHead.x + s.dir.x + TILES) % TILES
   const ny = (oldHead.y + s.dir.y + TILES) % TILES
 
-  // Collision: check body excluding head and tail (tail vacates this step).
   for (let i = 1; i < s.snake.length - 1; i++)
   {
     if (s.snake[i].x === nx && s.snake[i].y === ny)
@@ -302,7 +359,6 @@ function tick()
     }
   }
 
-  // Snapshot previous positions for the interpolation.
   for (let i = 0; i < s.snake.length; i++)
   {
     s.snake[i].px = s.snake[i].x
@@ -313,7 +369,6 @@ function tick()
 
   if (eating)
   {
-    // Grow: push a duplicate tail before shifting.
     const tail = s.snake[s.snake.length - 1]
     s.snake.push({ x: tail.x, y: tail.y, px: tail.x, py: tail.y })
 
@@ -339,14 +394,12 @@ function tick()
     }
   }
 
-  // Shift body backward so each segment inherits the position in front of it.
   for (let i = s.snake.length - 1; i >= 1; i--)
   {
     s.snake[i].x = s.snake[i - 1].x
     s.snake[i].y = s.snake[i - 1].y
   }
 
-  // New head position.
   s.snake[0].x = nx
   s.snake[0].y = ny
 }
@@ -371,7 +424,6 @@ function triggerGameOver()
   }
 }
 
-// --- Main loop ---
 function loop(now)
 {
   if (!session)
@@ -396,7 +448,6 @@ function loop(now)
     }
   }
 
-  // Pulse / shake decay
   const decay = Math.exp(-delta / HEAD_POP_MS)
   s.headEatPulse *= decay
   s.foodPulse *= decay
@@ -409,7 +460,6 @@ function loop(now)
   s.rafId = requestAnimationFrame(loop)
 }
 
-// --- Render ---
 function draw()
 {
   const s = session
@@ -424,7 +474,6 @@ function draw()
 
   ctx.save()
 
-  // Screen shake on eat / game over
   if (s.shakeTime > 0)
   {
     const amp = s.shakeMag * (s.shakeTime / SHAKE_TIME)
@@ -434,15 +483,12 @@ function draw()
     )
   }
 
-  // Background (oversized so shake never exposes edges)
   ctx.fillStyle = theme.surface
   ctx.fillRect(-12, -12, W + 24, H + 24)
 
-  // Progress within the current tick
   const t = s.gameOver ? 1 : Math.min(1, s.accumulatedTime / TICK_RATE)
   const eased = easeOutBack(t)
 
-  // --- Food (pop-in pulse) ---
   const foodScale = 1 + s.foodPulse * 0.45
   const fx = s.food.x * GRID + GRID / 2
   const fy = s.food.y * GRID + GRID / 2
@@ -452,14 +498,12 @@ function draw()
   ctx.arc(fx, fy, fr, 0, Math.PI * 2)
   ctx.fill()
 
-  // --- Snake: tail first so head renders on top ---
   const len = s.snake.length
   for (let i = len - 1; i >= 0; i--)
   {
     const seg = s.snake[i]
     const isHead = i === 0
 
-    // Only interpolate when the segment moved 1 tile (skip wraps)
     const movedX = Math.abs(seg.x - seg.px)
     const movedY = Math.abs(seg.y - seg.py)
     let rx = seg.x
@@ -470,7 +514,6 @@ function draw()
       ry = lerp(seg.py, seg.y, eased)
     }
 
-    // Bounce: head scales up briefly when eating.
     const scale = isHead ? 1 + s.headEatPulse * 0.35 : 1
     const size = (GRID - 2) * scale
     const px = rx * GRID + (GRID - size) / 2
@@ -483,7 +526,6 @@ function draw()
 
   ctx.restore()
 
-  // --- HUD (unaffected by shake) ---
   ctx.fillStyle = theme.text
   ctx.font = 'bold 16px monospace'
   ctx.textAlign = 'left'

@@ -6,6 +6,7 @@ import { playSound, createRipple } from './extras.js'
 import { initCalendar } from './calendar.js'
 import { createNotesModule } from './notes.js'
 import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './settings.js'
+import { buildTabPayload, chunkPayload, renderQrToDataUrl, frameToScanString } from './qr.js'
 
 // --- VANILLA DOM HELPER ---
 export function autoExpandTextarea(el)
@@ -66,6 +67,14 @@ const appStore = reactive(mergeModules(
     // --- calendar notifications ---
     calendarNotificationsEnabled: false,
     _lastSyncedCalendarJson: '',   // dedupe key so we don't spam the bridge
+
+    // --- QR share ---
+    qrModalVisible: false,
+    qrTabName: '',
+    qrFrames: [],
+    qrFrameIdx: 0,
+    qrCurrentImage: '',
+    qrBusy: false,
 
     // --- computed shell ---
     get screenOrder()
@@ -433,6 +442,95 @@ const appStore = reactive(mergeModules(
       {
         this.closeAllMenus()
       }
+    },
+
+    // --- QR share (per tab) ---
+    async showTabQr()
+    {
+      const tab = this.contextTab
+      this.closeAllMenus()
+      if (!tab)
+      {
+        return
+      }
+
+      this.qrTabName = tab
+      this.qrFrames = []
+      this.qrFrameIdx = 0
+      this.qrCurrentImage = ''
+      this.qrBusy = true
+      this.qrModalVisible = true
+
+      try
+      {
+        const payload = buildTabPayload(tab, this.notes, this.categoryMeta)
+        this.qrFrames = chunkPayload(payload)
+        await this.renderQrFrame(0)
+      }
+      catch (e)
+      {
+        this.qrModalVisible = false
+        this.showToast('QR generation failed')
+      }
+      finally
+      {
+        this.qrBusy = false
+      }
+    },
+
+    async renderQrFrame(idx)
+    {
+      const frame = this.qrFrames[idx]
+      if (!frame)
+      {
+        return
+      }
+      this.qrCurrentImage = await renderQrToDataUrl(frameToScanString(frame))
+    },
+
+    async qrPrevFrame()
+    {
+      if (this.qrBusy || this.qrFrameIdx <= 0)
+      {
+        return
+      }
+      this.qrBusy = true
+      this.qrFrameIdx--
+      try
+      {
+        await this.renderQrFrame(this.qrFrameIdx)
+      }
+      finally
+      {
+        this.qrBusy = false
+      }
+    },
+
+    async qrNextFrame()
+    {
+      if (this.qrBusy || this.qrFrameIdx >= this.qrFrames.length - 1)
+      {
+        return
+      }
+      this.qrBusy = true
+      this.qrFrameIdx++
+      try
+      {
+        await this.renderQrFrame(this.qrFrameIdx)
+      }
+      finally
+      {
+        this.qrBusy = false
+      }
+    },
+
+    qrClose()
+    {
+      this.qrModalVisible = false
+      this.qrFrames = []
+      this.qrFrameIdx = 0
+      this.qrCurrentImage = ''
+      this.qrBusy = false
     },
 
     // --- data export / import / sync ---

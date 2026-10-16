@@ -1,4 +1,3 @@
-// lander.js — Lunar Lander, merged + optimized ES module.
 import {
   createGameOverlay,
   getGameTheme,
@@ -7,7 +6,6 @@ import {
   triggerConfetti
 } from './extras.js'
 
-// ---- constants ----
 const CANVAS_W = 376
 const CANVAS_H = 400
 
@@ -38,7 +36,6 @@ const LANDING_SETTLE_SPEED = 0.1
 
 const MAX_THRUST_PARTICLES = 30
 
-// ---- module session + thrust loop ----
 let session = null
 let thrustSource = null
 let thrustGain = null
@@ -66,23 +63,45 @@ export function startLanderGame()
   canvas.width = CANVAS_W
   canvas.height = CANVAS_H
   Object.assign(canvas.style, {
-    width: '100%',
-    maxWidth: '380px',
-    maxHeight: '52vh',
+    display: 'block',
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface,
-    display: 'block',
-    touchAction: 'manipulation'
+    touchAction: 'manipulation',
+    aspectRatio: `${CANVAS_W} / ${CANVAS_H}`
   })
   overlay.contentHost.appendChild(canvas)
   const ctx = canvas.getContext('2d', { alpha: false })
 
-  const controls = buildControls()
-  overlay.contentHost.appendChild(controls)
+  const portraitControls = buildPortraitControls()
+  overlay.contentHost.appendChild(portraitControls)
+
+  const landscapeRot = buildLandscapeRotControls()
+  overlay.leftSlot.appendChild(landscapeRot)
+
+  const landscapeThrust = buildLandscapeThrustButton()
+  overlay.rightSlot.appendChild(landscapeThrust)
+
+  function applyCanvasSize()
+  {
+    if (overlay.isLandscape())
+    {
+      canvas.style.width = 'auto'
+      canvas.style.height = '100%'
+      canvas.style.maxHeight = 'calc(100vh - 20px)'
+      canvas.style.maxWidth = '100%'
+    }
+    else
+    {
+      canvas.style.width = '100%'
+      canvas.style.height = 'auto'
+      canvas.style.maxHeight = '52vh'
+      canvas.style.maxWidth = '380px'
+    }
+  }
+  applyCanvasSize()
 
   const highScore = parseInt(localStorage.getItem('lander_highscore') || '0', 10)
 
-  // Thrust particle pool.
   const thrustParticles = []
   for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
   {
@@ -107,7 +126,8 @@ export function startLanderGame()
     settled: false,
     thrustParticles,
     lastFrame: 0,
-    rafId: null
+    rafId: null,
+    applyCanvasSize
   }
 
   resetLanderLevel(true)
@@ -125,6 +145,8 @@ export function startLanderGame()
 
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
+  window.addEventListener('resize', applyCanvasSize)
+  window.addEventListener('orientationchange', applyCanvasSize)
 
   session.lastFrame = performance.now()
   session.rafId = requestAnimationFrame(loop)
@@ -143,14 +165,39 @@ export function stopLanderGame()
   }
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('resize', session.applyCanvasSize)
+  window.removeEventListener('orientationchange', session.applyCanvasSize)
   session.overlay.remove()
   session = null
 }
 
-// ---- controls ----
-function buildControls()
+function makeHoldBtn(label, width, fontSize, onDown, onUp)
+{
+  const b = document.createElement('button')
+  b.innerText = label
+  Object.assign(b.style, {
+    padding: '14px',
+    fontSize: fontSize || '18px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    userSelect: 'none',
+    width: width,
+    touchAction: 'none'
+  })
+  const down = (e) => { e.preventDefault(); if (onDown) onDown() }
+  const up = (e) => { e.preventDefault(); if (onUp) onUp() }
+  b.addEventListener('touchstart', down, { passive: false })
+  b.addEventListener('touchend', up, { passive: false })
+  b.addEventListener('mousedown', down)
+  b.addEventListener('mouseup', up)
+  b.addEventListener('mouseleave', up)
+  return b
+}
+
+function buildPortraitControls()
 {
   const host = document.createElement('div')
+  host.className = 'portrait-only'
   Object.assign(host.style, {
     display: 'flex',
     justifyContent: 'space-between',
@@ -163,41 +210,18 @@ function buildControls()
   const rotRow = document.createElement('div')
   Object.assign(rotRow.style, { display: 'flex', gap: '8px' })
 
-  const makeHoldBtn = (label, width, onDown, onUp) =>
-  {
-    const b = document.createElement('button')
-    b.innerText = label
-    Object.assign(b.style, {
-      padding: '14px',
-      fontSize: '18px',
-      fontWeight: 'bold',
-      cursor: 'pointer',
-      userSelect: 'none',
-      width: width,
-      touchAction: 'none'
-    })
-    const down = (e) => { e.preventDefault(); if (onDown) onDown() }
-    const up = (e) => { e.preventDefault(); if (onUp) onUp() }
-    b.addEventListener('touchstart', down, { passive: false })
-    b.addEventListener('touchend', up, { passive: false })
-    b.addEventListener('mousedown', down)
-    b.addEventListener('mouseup', up)
-    b.addEventListener('mouseleave', up)
-    return b
-  }
-
-  const leftBtn = makeHoldBtn('L', '55px',
+  const leftBtn = makeHoldBtn('L', '55px', '18px',
     () => { if (session) session.keys.left = true },
     () => { if (session) session.keys.left = false })
 
-  const rightBtn = makeHoldBtn('R', '55px',
+  const rightBtn = makeHoldBtn('R', '55px', '18px',
     () => { if (session) session.keys.right = true },
     () => { if (session) session.keys.right = false })
 
   rotRow.appendChild(leftBtn)
   rotRow.appendChild(rightBtn)
 
-  const thrustBtn = makeHoldBtn('THRUST', '180px',
+  const thrustBtn = makeHoldBtn('THRUST', '180px', '18px',
     () =>
     {
       const s = session
@@ -227,6 +251,64 @@ function buildControls()
   host.appendChild(rotRow)
   host.appendChild(thrustBtn)
   return host
+}
+
+function buildLandscapeRotControls()
+{
+  const host = document.createElement('div')
+  Object.assign(host.style, {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: '8px',
+    alignItems: 'center'
+  })
+
+  const leftBtn = makeHoldBtn('L', '56px', '20px',
+    () => { if (session) session.keys.left = true },
+    () => { if (session) session.keys.left = false })
+
+  const rightBtn = makeHoldBtn('R', '56px', '20px',
+    () => { if (session) session.keys.right = true },
+    () => { if (session) session.keys.right = false })
+
+  host.appendChild(leftBtn)
+  host.appendChild(rightBtn)
+  return host
+}
+
+function buildLandscapeThrustButton()
+{
+  const thrustBtn = makeHoldBtn('THRUST', '96px', '16px',
+    () =>
+    {
+      const s = session
+      if (!s)
+      {
+        return
+      }
+      if (s.gameOver || s.settled)
+      {
+        triggerContinueOrRestart()
+      }
+      else
+      {
+        s.keys.thrust = true
+        startThrustSound()
+      }
+    },
+    () =>
+    {
+      if (session)
+      {
+        session.keys.thrust = false
+      }
+      stopThrustSound()
+    })
+
+  thrustBtn.style.height = '70px'
+  thrustBtn.style.padding = '0'
+  thrustBtn.style.marginTop = '18px'
+  return thrustBtn
 }
 
 function handleKeyDown(e)
@@ -289,7 +371,6 @@ function handleKeyUp(e)
   }
 }
 
-// ---- thrust loop sound (own loop, shared audio context) ----
 function startThrustSound()
 {
   const ctx = getGameAudioContext()
@@ -350,7 +431,6 @@ function stopThrustSound()
   }, 60)
 }
 
-// ---- level generation ----
 function generatePlatforms()
 {
   const s = session
@@ -443,7 +523,6 @@ function triggerContinueOrRestart()
   resetLanderLevel(false)
 }
 
-// ---- physics ----
 function spawnThrustParticle(x, y, angle)
 {
   const s = session
@@ -523,7 +602,6 @@ function update(dt)
 
   const speed = Math.hypot(rocket.vx, rocket.vy)
 
-  // Settling animation after a successful landing.
   if (s.landed && !s.settled)
   {
     rocket.angle += (0 - rocket.angle) * LANDING_SETTLE_RATE * dt
@@ -546,7 +624,6 @@ function update(dt)
     return
   }
 
-  // Rotation.
   if (s.keys.left)
   {
     rocket.angle -= ROTATION_SPEED * dt
@@ -556,10 +633,8 @@ function update(dt)
     rocket.angle += ROTATION_SPEED * dt
   }
 
-  // Gravity.
   rocket.vy += GRAVITY * dt
 
-  // Thrust.
   if (s.keys.thrust && s.fuel > 0)
   {
     rocket.vx += Math.sin(rocket.angle) * THRUST_FORCE * dt
@@ -579,17 +654,14 @@ function update(dt)
     }
   }
 
-  // Clamp extreme velocities.
   if (rocket.vx > MAX_DRIFT_SPEED) rocket.vx = MAX_DRIFT_SPEED
   if (rocket.vx < -MAX_DRIFT_SPEED) rocket.vx = -MAX_DRIFT_SPEED
   if (rocket.vy > MAX_DRIFT_SPEED) rocket.vy = MAX_DRIFT_SPEED
   if (rocket.vy < -MAX_DRIFT_SPEED) rocket.vy = -MAX_DRIFT_SPEED
 
-  // Integrate.
   rocket.x += rocket.vx * dt
   rocket.y += rocket.vy * dt
 
-  // Update particles.
   for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
   {
     const p = s.thrustParticles[i]
@@ -606,7 +678,6 @@ function update(dt)
     }
   }
 
-  // Platform collision — start platform.
   if (
     rocket.x >= sp.x - 5 &&
     rocket.x <= sp.x + sp.width + 5 &&
@@ -624,7 +695,6 @@ function update(dt)
     rocket.vx *= Math.pow(0.9, dt)
   }
 
-  // Platform collision — target platform.
   if (
     rocket.x >= tp.x - 5 &&
     rocket.x <= tp.x + tp.width + 5 &&
@@ -647,7 +717,6 @@ function update(dt)
     return
   }
 
-  // World bounds.
   if (
     rocket.x < 0 ||
     rocket.x > CANVAS_W ||
@@ -675,7 +744,6 @@ function loop(now)
   s.rafId = requestAnimationFrame(loop)
 }
 
-// ---- rendering ----
 function draw()
 {
   const s = session
@@ -690,7 +758,6 @@ function draw()
   ctx.fillStyle = theme.surface
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
 
-  // Starfield (deterministic dots).
   ctx.fillStyle = theme.gray
   for (let i = 0; i < 22; i++)
   {
@@ -699,11 +766,9 @@ function draw()
     ctx.fillRect(sx, sy, 1, 1)
   }
 
-  // Start platform (gray) — where you launch from.
   ctx.fillStyle = theme.gray
   ctx.fillRect(s.startPlatform.x, s.startPlatform.y, s.startPlatform.width, PLATFORM_HEIGHT)
 
-  // Target platform (accent) — where you want to land.
   ctx.fillStyle = theme.accent
   ctx.fillRect(s.targetPlatform.x, s.targetPlatform.y, s.targetPlatform.width, PLATFORM_HEIGHT)
   ctx.fillStyle = theme.accentTxt
@@ -712,7 +777,6 @@ function draw()
     ctx.fillRect(s.targetPlatform.x + s.targetPlatform.width / 2 - 12 + i * 10, s.targetPlatform.y + 2, 4, 2)
   }
 
-  // Thrust particles.
   for (let i = 0; i < MAX_THRUST_PARTICLES; i++)
   {
     const p = s.thrustParticles[i]
@@ -726,7 +790,6 @@ function draw()
     ctx.fill()
   }
 
-  // Rocket.
   ctx.save()
   ctx.translate(rocket.x, rocket.y)
   ctx.rotate(rocket.angle)
@@ -757,7 +820,6 @@ function draw()
 
   ctx.restore()
 
-  // HUD.
   ctx.fillStyle = theme.text
   ctx.font = 'bold 16px monospace'
   ctx.textAlign = 'left'
@@ -765,7 +827,6 @@ function draw()
   ctx.textAlign = 'right'
   ctx.fillText(`HI ${s.highScore}`, CANVAS_W - 12, 26)
 
-  // Fuel / tilt / speed readouts.
   const barW = 70
   const barH = 6
   const sx = 12
