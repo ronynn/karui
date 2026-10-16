@@ -1,0 +1,1 @@
+esbuild src/*.js src/*.css   --minify   --outbase=src   --outdir=app/src/main/assets   --log-level=info

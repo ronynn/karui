@@ -1,0 +1,326 @@
+// --- SECTION: DATA SYNCHRONISATION & FILE I/O HANDLERS ---
+export function generateMarkdownString(noteCategories, notes, categoryMeta = {})
+{
+  let mdStr = ''
+  noteCategories.forEach((cat, idx) =>
+  {
+    let catId = categoryMeta[cat]?.id || (Date.now() + idx)
+    let catUpdated = categoryMeta[cat]?.updatedAt || Date.now()
+    mdStr += `## ${cat} <!-- cat_id:${catId} u:${catUpdated} -->\n`
+
+    let catNotes = notes.filter(n => n.category === cat)
+    catNotes.forEach(n =>
+    {
+      let mark = n.completed ? 'x' : ' '
+      let pin = n.pinned ? ' pinned:true' : ''
+      let updated = n.updatedAt || Date.now()
+
+      // Recurring metadata is emitted ONLY when present, keeping clean notes clean.
+      let extra = ''
+      if (n.groupId) extra += ` gid:${n.groupId}`
+      if (n.scheduledDate) extra += ` sd:${n.scheduledDate}`
+      if (n.recurrence) extra += ` rec:${n.recurrence}`
+
+      let rawText = (n.text || '').replace(/^(?:- \[[ xX]\]\s*)+/, '')
+      let sanitizedText = rawText.replace(/\r?\n/g, '\\n')
+      mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin}${extra} -->\n`
+    })
+    if (idx < noteCategories.length - 1) mdStr += '\n'
+  })
+  return mdStr
+}
+
+export function parseMarkdownAndMerge(text, appStore)
+{
+  try
+  {
+    if (!text || typeof text !== 'string')
+    {
+      appStore.showToast('Format Error!')
+      return
+    }
+
+    let cleanText = text.replace(/\r/g, '')
+    let lines = cleanText.split('\n')
+    let currentCat = 'Main'
+    let importedNotes = []
+    let importedCategories = []
+
+    lines.forEach(line =>
+    {
+      let trimmed = line.trim()
+      if (trimmed.startsWith('## '))
+      {
+        let catMatch = trimmed.match(/^##\s+(.*?)(?:\s+<!--\s*cat_id:(\d+)\s+u:(\d+)\s*-->)?$/)
+        if (catMatch)
+        {
+          currentCat = catMatch[1].replace(/<!--.*?-->/g, '').trim()
+          let catId = catMatch[2] ? parseInt(catMatch[2], 10) : null
+          let catUpdated = catMatch[3] ? parseInt(catMatch[3], 10) : Date.now()
+          importedCategories.push({ id: catId, name: currentCat, updatedAt: catUpdated })
+        }
+        else
+        {
+          currentCat = trimmed.replace(/^##\s+/, '').replace(/<!--.*?-->/g, '').trim()
+          importedCategories.push({ id: null, name: currentCat, updatedAt: Date.now() })
+        }
+      }
+      else if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]'))
+      {
+        let completed = trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]')
+        let content = trimmed.replace(/^(?:- \[[ xX]\]\s*)+/, '').trim()
+        let noteId = null
+        let pinned = false
+        let updatedAt = Date.now()
+        let groupId = null
+        let scheduledDate = null
+        let recurrence = null
+
+        // extended meta: id, u, pinned, gid, sd, rec
+        let metaMatch = content.match(
+          /<!--\s*id:(\d+)(?:\s+u:(\d+))?(?:\s+pinned:(true|false))?(?:\s+gid:(\d+))?(?:\s+sd:(\d{4}-\d{2}-\d{2}))?(?:\s+rec:([a-z0-9-]+))?\s*-->/i
+        )
+        if (metaMatch)
+        {
+          noteId = parseInt(metaMatch[1], 10)
+          if (metaMatch[2]) updatedAt = parseInt(metaMatch[2], 10)
+          if (metaMatch[3]) pinned = metaMatch[3] === 'true'
+          if (metaMatch[4]) groupId = parseInt(metaMatch[4], 10)
+          if (metaMatch[5]) scheduledDate = metaMatch[5]
+          if (metaMatch[6]) recurrence = metaMatch[6].toLowerCase()
+          content = content.replace(/<!--\s*id:\d+.*-->/, '').trim()
+        }
+
+        content = content.replace(/\\n/g, '\n')
+
+        if (content)
+        {
+          if (!noteId || isNaN(noteId))
+          {
+            let existing = appStore.notes.find(x => x.text === content && x.category === currentCat)
+            noteId = existing ? existing.id : (Date.now() + Math.floor(Math.random() * 100000))
+            if (existing)
+            {
+              pinned = existing.pinned
+              updatedAt = existing.updatedAt || Date.now()
+              if (existing.groupId) groupId = existing.groupId
+              if (existing.scheduledDate) scheduledDate = existing.scheduledDate
+              if (existing.recurrence) recurrence = existing.recurrence
+            }
+          }
+
+          let note = {
+            id: noteId,
+            text: content,
+            completed: completed,
+            category: currentCat,
+            pinned: pinned,
+            updatedAt: updatedAt
+          }
+          if (groupId) note.groupId = groupId
+          if (scheduledDate) note.scheduledDate = scheduledDate
+          if (recurrence) note.recurrence = recurrence
+          importedNotes.push(note)
+        }
+      }
+    })
+
+    if (importedNotes.length === 0 && importedCategories.length === 0)
+    {
+      appStore.showToast('Format Error!')
+      return
+    }
+
+    let noteMap = new Map()
+    appStore.notes.forEach(n => { noteMap.set(n.id, n) })
+
+    importedNotes.forEach(imp =>
+    {
+      if (noteMap.has(imp.id))
+      {
+        let existing = noteMap.get(imp.id)
+        if ((imp.updatedAt || 0) >= (existing.updatedAt || 0)) noteMap.set(imp.id, imp)
+      }
+      else noteMap.set(imp.id, imp)
+    })
+
+    appStore.notes = Array.from(noteMap.values())
+
+    if (!appStore.categoryMeta) appStore.categoryMeta = {}
+
+    importedCategories.forEach(catObj =>
+    {
+      if (!appStore.noteCategories.includes(catObj.name)) appStore.noteCategories.push(catObj.name)
+      let existingMeta = appStore.categoryMeta[catObj.name]
+      if (!existingMeta || (catObj.updatedAt >= (existingMeta.updatedAt || 0)))
+      {
+        appStore.categoryMeta[catObj.name] = {
+          id: catObj.id || (existingMeta ? existingMeta.id : Date.now()),
+          updatedAt: catObj.updatedAt
+        }
+      }
+    })
+
+    appStore.saveData()
+    appStore.showToast('Synced!')
+  }
+  catch (err)
+  {
+    appStore.showToast('Format Error!')
+  }
+}
+
+export function exportData(notes)
+{
+  let fileData = JSON.stringify(notes)
+  if (window.Android && window.Android.saveFile)
+  {
+    window.Android.saveFile("notes.json", fileData, "application/json")
+  }
+  else
+  {
+    const blob = new Blob([fileData], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = "notes.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+export function importJsonFile(file, appStore)
+{
+  if (!file) return
+  const r = new FileReader()
+  r.onload = ev =>
+  {
+    try
+    {
+      let parsed = JSON.parse(ev.target.result)
+      let items = []
+      if (Array.isArray(parsed)) items = parsed
+      else if (parsed && Array.isArray(parsed.notes))
+      {
+        items = parsed.notes
+        if (Array.isArray(parsed.noteCategories))
+        {
+          parsed.noteCategories.forEach(c =>
+          {
+            if (typeof c === 'string' && !appStore.noteCategories.includes(c)) appStore.noteCategories.push(c)
+          })
+        }
+      }
+      else
+      {
+        appStore.showToast('Format Error!')
+        return
+      }
+
+      let validNotes = items.map(item =>
+      {
+        if (typeof item === 'string') return { text: item }
+        if (item && typeof item.text === 'string') return item
+        return null
+      }).filter(Boolean)
+
+      if (validNotes.length === 0 && items.length > 0)
+      {
+        appStore.showToast('Format Error!')
+        return
+      }
+
+      appStore.mergeNotes(validNotes)
+      appStore.showToast('Synced!')
+    }
+    catch (err)
+    {
+      appStore.showToast('Format Error!')
+    }
+  }
+  r.readAsText(file)
+}
+
+export function exportMarkdown(noteCategories, notes, categoryMeta)
+{
+  let mdStr = generateMarkdownString(noteCategories, notes, categoryMeta)
+  if (window.Android && window.Android.saveFile)
+  {
+    window.Android.saveFile("notes.md", mdStr, "text/markdown")
+  }
+  else
+  {
+    const blob = new Blob([mdStr], { type: "text/markdown" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = "notes.md"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+export function importMarkdownFile(file, appStore)
+{
+  if (!file) return
+  const r = new FileReader()
+  r.onload = ev => { parseMarkdownAndMerge(ev.target.result, appStore) }
+  r.readAsText(file)
+}
+
+export function setupNativeHooks(appStore)
+{
+  window.syncNotesArrayFromAndroid = (jsonInput) =>
+  {
+    try
+    {
+      let items = typeof jsonInput === 'string' ? JSON.parse(jsonInput) : jsonInput
+      if (!Array.isArray(items)) return
+      let now = Date.now()
+      items.forEach((item, idx) =>
+      {
+        if (!item.text) return
+        let tabName = item.tab || 'Inbox'
+        if (!appStore.noteCategories.includes(tabName)) appStore.noteCategories.push(tabName)
+        let note = { id: now + idx, text: item.text, completed: false, category: tabName, updatedAt: now }
+        if (appStore.addNoteBottom) appStore.notes.push(note)
+        else appStore.notes.unshift(note)
+      })
+      appStore.saveData()
+    }
+    catch (e) {}
+  }
+
+  window.syncNoteFromAndroid = (text, tabName) =>
+  {
+    window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
+  }
+
+  window.setAndroidNotes = (jsonString) =>
+  {
+    try { appStore.mergeNotes(JSON.parse(jsonString)) } catch (err) {}
+  }
+
+  window.onSyncFileSelected = (fileUri) =>
+  {
+    appStore.syncFilePath = fileUri
+    appStore.saveData()
+    appStore.showToast('Sync connected!')
+  }
+
+  window.importMarkdownFromAndroid = (mdText) => { parseMarkdownAndMerge(mdText, appStore) }
+
+  window.addEventListener('beforeunload', () =>
+  {
+    if (appStore.syncFilePath)
+    {
+      let now = Date.now()
+      appStore.notes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
+      let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes, appStore.categoryMeta)
+      if (window.Android && window.Android.saveFileSync)
+      {
+        window.Android.saveFileSync(appStore.syncFilePath, mdStr)
+      }
+    }
+  })
+}
