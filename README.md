@@ -33,7 +33,7 @@ All versions of the app are completely reproducible, just fork the source code f
 ## Use it for
 
 - Daily quick notetaking and mood journalling
-- Set reminders and use Karui like a habit tracker(BETA)
+- Set reminders and use Karui like a habit tracker
 - Tasks list with percentage remaining metrics
 - Taking notes from status bar or other app without switching to Karui or leaving opened app
 - Taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok
@@ -42,6 +42,7 @@ All versions of the app are completely reproducible, just fork the source code f
 - Making bucket lists
 - Playing quick mobile games (easter eggs)
 - Use it like a password manager, save your passwords for quick access with copy paste at one place
+- Share notes as QR code, import qr notes on another device using any qr reader of your choice
 
 
 ## Features
