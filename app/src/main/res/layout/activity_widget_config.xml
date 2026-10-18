@@ -1,82 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:orientation="vertical"
-  android:fitsSystemWindows="true"
-  android:padding="24dp">
+  android:fitsSystemWindows="true">
 
-  <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Widget Settings"
-    android:textSize="20sp"
-    android:textStyle="bold"
-    android:paddingBottom="16dp" />
-
-  <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Select Tab"
-    android:textSize="14sp"
-    android:paddingBottom="4dp" />
-
-  <Spinner
-    android:id="@+id/spinner_tabs"
+  <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingBottom="16dp" />
+    android:orientation="vertical"
+    android:padding="24dp">
 
-  <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Transparency"
-    android:textSize="14sp"
-    android:paddingTop="8dp"
-    android:paddingBottom="4dp" />
-
-  <SeekBar
-    android:id="@+id/seekbar_transparency"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:max="100"
-    android:paddingBottom="16dp" />
-
-  <TextView
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="Font Style"
-    android:textSize="14sp"
-    android:paddingTop="8dp"
-    android:paddingBottom="4dp" />
-
-  <RadioGroup
-    android:id="@+id/radiogroup_font"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:paddingBottom="24dp">
-
-    <RadioButton
-      android:id="@+id/radio_font_default"
+    <TextView
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:text="Default"
-      android:checked="true" />
+      android:text="Widget Settings"
+      android:textSize="20sp"
+      android:textStyle="bold"
+      android:paddingBottom="16dp" />
 
-    <RadioButton
-      android:id="@+id/radio_font_mono"
+    <TextView
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginStart="16dp"
-      android:text="Monospace" />
+      android:text="Select Tab"
+      android:textSize="14sp"
+      android:paddingBottom="4dp" />
 
-  </RadioGroup>
+    <Spinner
+      android:id="@+id/spinner_tabs"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:paddingBottom="16dp" />
 
-  <Button
-    android:id="@+id/btn_save_widget_config"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:text="Save" />
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="Transparency"
+      android:textSize="14sp"
+      android:paddingTop="8dp"
+      android:paddingBottom="4dp" />
 
-</LinearLayout>
+    <SeekBar
+      android:id="@+id/seekbar_transparency"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:max="100"
+      android:paddingBottom="16dp" />
+
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="Font Style"
+      android:textSize="14sp"
+      android:paddingTop="8dp"
+      android:paddingBottom="4dp" />
+
+    <Spinner
+      android:id="@+id/spinner_font"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:paddingBottom="24dp" />
+
+    <Button
+      android:id="@+id/btn_save_widget_config"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:text="Save" />
+
+  </LinearLayout>
+</ScrollView>

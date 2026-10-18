@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
-import android.os.Build;
 import android.widget.RemoteViews;
 
 import java.io.BufferedReader;
@@ -27,13 +26,17 @@ public class NotesWidgetProvider extends AppWidgetProvider
   public static final String ACTION_WIDGET_REFRESH = "io.github.ronynn.karui.ACTION_WIDGET_REFRESH";
   public static final String ACTION_WIDGET_SORT = "io.github.ronynn.karui.ACTION_WIDGET_SORT";
 
+  // Consistent dark-grey base for the widget background. The transparency
+  // slider is applied on top of this as an alpha multiplier.
+  private static final int BASE_BACKGROUND_COLOR = 0xFF2C2C2C;
+
   @Override
   public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
   {
     for (int appWidgetId : appWidgetIds)
-      {
-        updateAppWidget(context, appWidgetManager, appWidgetId);
-      }
+    {
+      updateAppWidget(context, appWidgetManager, appWidgetId);
+    }
   }
 
   // --- SECTION: RECEIVER AND ACTIONS ---
@@ -72,18 +75,14 @@ public class NotesWidgetProvider extends AppWidgetProvider
     String tabTitle = widgetPrefs.getString("widget_tab_" + appWidgetId, "Karui Notes");
     int transparencyPct = widgetPrefs.getInt("widget_transparency_" + appWidgetId, 50);
 
-    int baseColor;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-    {
-      baseColor = context.getColor(android.R.color.system_accent1_900);
-    }
-    else
-    {
-      baseColor = Color.parseColor("#1E1E1E");
-    }
-
+    // Fixed dark-grey background instead of system_accent1_900. The transparency
+    // slider modulates the alpha on top of this base colour.
     int alpha = (int) ((1.0f - (transparencyPct / 100.0f)) * 255);
-    int backgroundColor = Color.argb(alpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor));
+    int backgroundColor = Color.argb(
+      alpha,
+      Color.red(BASE_BACKGROUND_COLOR),
+      Color.green(BASE_BACKGROUND_COLOR),
+      Color.blue(BASE_BACKGROUND_COLOR));
 
     Intent serviceIntent = new Intent(context, NotesWidgetService.class);
     serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
@@ -117,7 +116,6 @@ public class NotesWidgetProvider extends AppWidgetProvider
     );
     views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPendingIntent);
 
-    // --- SECTION: PENDING INTENTS ---
     Intent configIntent = new Intent(context, WidgetConfigActivity.class);
     configIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
     configIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -125,6 +123,7 @@ public class NotesWidgetProvider extends AppWidgetProvider
       context, appWidgetId, configIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
     );
     views.setOnClickPendingIntent(R.id.widget_settings_btn, configPendingIntent);
+
     Intent openAppIntent = new Intent(context, MainActivity.class);
     PendingIntent openAppPendingIntent = PendingIntent.getActivity(
       context, 0, openAppIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
@@ -146,72 +145,72 @@ public class NotesWidgetProvider extends AppWidgetProvider
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
+    {
+      Uri uri = Uri.parse(uriStr);
+      InputStream inputStream = context.getContentResolver().openInputStream(uri);
+      if (inputStream == null) return;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      List<String> fileLines = new ArrayList<>();
+      List<String> categoryNotes = new ArrayList<>();
+      String line;
+      String currentCategory = "Main";
+
+      while ((line = reader.readLine()) != null)
       {
-        Uri uri = Uri.parse(uriStr);
-        InputStream inputStream = context.getContentResolver().openInputStream(uri);
-        if (inputStream == null) return;
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        List<String> fileLines = new ArrayList<>();
-        List<String> categoryNotes = new ArrayList<>();
-        String line;
-        String currentCategory = "Main";
-        int categoryStartIndex = -1;
-
-        while ((line = reader.readLine()) != null)
+        String trimmed = line.trim();
+        if (trimmed.startsWith("## "))
+        {
+          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
           {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("## "))
-            {
-              if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
-              {
-                Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-                fileLines.addAll(categoryNotes);
-                categoryNotes.clear();
-              }
-              currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
-              fileLines.add(line);
-            }
-            else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
-            {
-              categoryNotes.add(line);
-            }
-            else
-            {
-              if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
-              {
-                Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-                fileLines.addAll(categoryNotes);
-                categoryNotes.clear();
-              }
-              fileLines.add(line);
-            }
+            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+            fileLines.addAll(categoryNotes);
+            categoryNotes.clear();
           }
-
-        if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
-        {
-          Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
-          fileLines.addAll(categoryNotes);
+          currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
+          fileLines.add(line);
         }
-
-        reader.close();
-
-        OutputStream outputStream = context.getContentResolver().openOutputStream(uri, "rwt");
-        if (outputStream != null)
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]"))
+                 && currentCategory.equalsIgnoreCase(targetTab))
         {
-          BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
-          for (int i = 0; i < fileLines.size(); i++)
-            {
-              writer.write(fileLines.get(i));
-              if (i < fileLines.size() - 1) writer.newLine();
-            }
-          writer.flush();
-          writer.close();
+          categoryNotes.add(line);
+        }
+        else
+        {
+          if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
+          {
+            Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+            fileLines.addAll(categoryNotes);
+            categoryNotes.clear();
+          }
+          fileLines.add(line);
         }
       }
-    catch (Exception e)
+
+      if (currentCategory.equalsIgnoreCase(targetTab) && !categoryNotes.isEmpty())
       {
-        e.printStackTrace();
+        Collections.sort(categoryNotes, String.CASE_INSENSITIVE_ORDER);
+        fileLines.addAll(categoryNotes);
       }
+
+      reader.close();
+
+      OutputStream outputStream = context.getContentResolver().openOutputStream(uri, "rwt");
+      if (outputStream != null)
+      {
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+        for (int i = 0; i < fileLines.size(); i++)
+        {
+          writer.write(fileLines.get(i));
+          if (i < fileLines.size() - 1) writer.newLine();
+        }
+        writer.flush();
+        writer.close();
+      }
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
   }
 }

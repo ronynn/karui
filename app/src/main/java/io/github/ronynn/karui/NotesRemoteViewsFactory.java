@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.StrikethroughSpan;
+import android.text.style.TypefaceSpan;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
@@ -25,6 +26,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   private final Context mContext;
   private final int mAppWidgetId;
   private final List<NoteItem> mNotes = new ArrayList<>();
+  private String mFontFamily = "sans-serif";
 
   public static class NoteItem
   {
@@ -57,11 +59,15 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   public void onDataSetChanged()
   {
     mNotes.clear();
+
+    SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
+    String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Main");
+    mFontFamily = widgetPrefs.getString("widget_font_" + mAppWidgetId, "sans-serif");
+    if ("DEFAULT".equals(mFontFamily)) mFontFamily = "sans-serif";
+    else if ("MONOSPACE".equals(mFontFamily)) mFontFamily = "monospace";
+
     try
     {
-      SharedPreferences widgetPrefs = mContext.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE);
-      String targetTab = widgetPrefs.getString("widget_tab_" + mAppWidgetId, "Main");
-
       SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
       String uriStr = syncPrefs.getString("sync_file_uri", null);
 
@@ -90,8 +96,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
       try
       {
         mContext.getContentResolver().takePersistableUriPermission(
-          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-        );
+          uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
       }
       catch (SecurityException ignored) {}
 
@@ -109,7 +114,8 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
         {
           currentCategory = trimmed.replace("## ", "").replaceAll("<!--.*?-->", "").trim();
         }
-        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]")) && currentCategory.equalsIgnoreCase(targetTab))
+        else if ((trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]"))
+                 && currentCategory.equalsIgnoreCase(targetTab))
         {
           boolean completed = trimmed.startsWith("- [x]") || trimmed.startsWith("- [X]");
           String content = trimmed.substring(5).replaceAll("<!--.*?-->", "").trim();
@@ -186,6 +192,9 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     {
       span.setSpan(new StrikethroughSpan(), 0, span.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
+    // Apply the user-selected system font family. TypefaceSpan is ParcelableSpan,
+    // so it survives the RemoteViews parcel into the launcher process.
+    span.setSpan(new TypefaceSpan(mFontFamily), 0, span.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
     views.setTextViewText(R.id.widget_item_text, span);
 

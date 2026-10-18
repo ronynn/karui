@@ -4,14 +4,14 @@
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:orientation="vertical"
-  android:padding="8dp">
+  android:padding="10dp">
 
   <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingBottom="6dp">
+    android:paddingBottom="8dp">
 
     <TextView
       android:id="@+id/widget_title"
@@ -21,48 +21,59 @@
       android:text="Notes"
       android:textColor="#FFFFFF"
       android:textSize="16sp"
-      android:textStyle="bold" />
+      android:textStyle="bold"
+      android:maxLines="1"
+      android:ellipsize="end" />
 
     <TextView
       android:id="@+id/widget_sort_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginStart="4dp"
-      android:paddingStart="6dp"
-      android:paddingEnd="6dp"
-      android:paddingTop="2dp"
-      android:paddingBottom="2dp"
-      android:text="S"
+      android:layout_marginStart="6dp"
+      android:minWidth="32dp"
+      android:minHeight="32dp"
+      android:gravity="center"
+      android:paddingStart="8dp"
+      android:paddingEnd="8dp"
+      android:paddingTop="4dp"
+      android:paddingBottom="4dp"
+      android:text="⇅"
       android:textColor="#FFFFFF"
-      android:textSize="13sp"
+      android:textSize="14sp"
       android:background="@drawable/widget_button_bg" />
 
     <TextView
       android:id="@+id/widget_refresh_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginStart="4dp"
-      android:paddingStart="6dp"
-      android:paddingEnd="6dp"
-      android:paddingTop="2dp"
-      android:paddingBottom="2dp"
-      android:text="R"
+      android:layout_marginStart="6dp"
+      android:minWidth="32dp"
+      android:minHeight="32dp"
+      android:gravity="center"
+      android:paddingStart="8dp"
+      android:paddingEnd="8dp"
+      android:paddingTop="4dp"
+      android:paddingBottom="4dp"
+      android:text="↻"
       android:textColor="#FFFFFF"
-      android:textSize="13sp"
+      android:textSize="15sp"
       android:background="@drawable/widget_button_bg" />
 
     <TextView
       android:id="@+id/widget_settings_btn"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginStart="4dp"
-      android:paddingStart="6dp"
-      android:paddingEnd="6dp"
-      android:paddingTop="2dp"
-      android:paddingBottom="2dp"
-      android:text="M"
+      android:layout_marginStart="6dp"
+      android:minWidth="32dp"
+      android:minHeight="32dp"
+      android:gravity="center"
+      android:paddingStart="8dp"
+      android:paddingEnd="8dp"
+      android:paddingTop="4dp"
+      android:paddingBottom="4dp"
+      android:text="⚙"
       android:textColor="#FFFFFF"
-      android:textSize="13sp"
+      android:textSize="14sp"
       android:background="@drawable/widget_button_bg" />
 
   </LinearLayout>
@@ -73,7 +84,8 @@
     android:layout_height="0dp"
     android:layout_weight="1"
     android:divider="@null"
-    android:dividerHeight="0dp" />
+    android:dividerHeight="0dp"
+    android:scrollbars="none" />
 
   <TextView
     android:id="@+id/widget_empty_view"
