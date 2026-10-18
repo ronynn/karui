@@ -17,9 +17,14 @@ a { color: gray; }
 [data-theme="sol-dark"] { --bg: #002b36; --surface: #073642; --border: #2aa198; --text: #eee8d5; --accent: #b58900; --accent-txt: #002b36; --gray: #586e75; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); padding-top: 12px; }
-header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: color-mix(in srgb, var(--bg) 45%, transparent); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(16px); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: transform 0.25s ease-out, opacity 0.25s ease-out; padding-top: 24px; margin-bottom: 44px; }
-#app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.25s ease-out; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 18px; line-height: 1; overflow: hidden; transform: translateY(0); }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); padding-top: 14px; }
+header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; 
+         background: var(--bg); 
+/*       background: color-mix(in srgb, var(--bg) 45%, transparent); 
+         backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(16px); 
+       */  
+         padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: transform 0.25s ease-out, opacity 0.25s ease-out; padding-top: 24px; margin-bottom: 44px; }
+#app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.25s ease-out; --opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 18px; line-height: 1; overflow: hidden; transform: translateY(0); }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 10px; transform: translateY(-20px); pointer-events: none; }
 .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; margin: 0 calc(-20px * var(--ui-scale)); padding-left: calc(20px * var(--ui-scale)); padding-right: calc(20px * var(--ui-scale)); }
 .pivot-container::-webkit-scrollbar { display: none; }

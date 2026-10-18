@@ -1,6 +1,8 @@
 Achieved Excellance
 - Fix: Landscape UI for the app UI, note and tab menu, and games
 - Fix: Note Menu always opens inside screen now
+- Changed: Removed blur from top bar to improve performance in older devices
+- Added: Widgets now support custom fonts
 - Added: Expand collapse buttons for long notes so that they dont appear as text bars
 - Added: Time syntax for adding reminders
 - Added: QR share for notes and note tabs, import entire tabs data with a button
