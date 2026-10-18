@@ -62,8 +62,13 @@
           <div id="notes-list">
             <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
               <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
-                <span v-if="n.pinned" class="pin-icon">⊢</span>
-                <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+                <div class="note-content-wrap" :class="{ expanded: _expandedNotes[n.id] }">
+                  <span v-if="n.pinned" class="pin-icon">⊢</span>
+                  <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+                </div>
+                <div v-if="_noteNeedsExpand[n.id]" class="note-expand-bar" :class="{ expanded: _expandedNotes[n.id] }" @click.stop="toggleNoteExpand(n.id)">
+                  {{ _expandedNotes[n.id] ? 'collapse ↑' : 'expand ↓' }}
+                </div>
               </div>
               <span class="note-menu-trigger text-muted" @click.stop="openNoteMenu($event, n.id)">:</span>
             </div>
@@ -323,7 +328,7 @@
       <div class="paste-json-box">
         <div class="paste-json-title">Paste JSON</div>
         <textarea id="paste-json-input" v-model="pasteJsonText" rows="10"
-                  placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
+          placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
         <div class="paste-json-buttons">
           <button @click="importPastedJson">Save</button>
           <button class="btn-subtle" @click="closePasteJson">Cancel</button>

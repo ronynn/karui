@@ -214,3 +214,39 @@ button:active { filter: brightness(0.8); }
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+
+/* --- Note expand/collapse --- */
+.note-content-wrap {
+  max-height: calc(8 * 1.5em);
+  line-height: 1.5;
+  overflow: hidden;
+}
+.note-content-wrap.expanded {
+  max-height: none;
+}
+
+
+
+
+
+
+.note-expand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  margin-top: calc(4px * var(--ui-scale));
+  font-size: calc(14px * var(--ui-scale));
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  border: 0px solid var(--border);
+  background: transparent;
+  --font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.note-expand-bar:active {
+  --background: var(--surface);
+}

@@ -161,6 +161,17 @@ const appStore = reactive(mergeModules(
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
+      // Kick off note overflow measurement (populates expand bars for long notes).
+      this.initNoteOverflowObserver()
+      window.addEventListener('resize', () =>
+      {
+        clearTimeout(this._resizeDebounce)
+        this._resizeDebounce = setTimeout(() =>
+        {
+          if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
+        }, 150)
+      })
+
       // Push the initial event list (deduped), then let Android re-arm
       // if the toggle was already on. If it was already on, this call is
       // a no-op on the Java side (no re-notify).
@@ -223,6 +234,14 @@ const appStore = reactive(mergeModules(
 
       // Deduped internally — safe to call on every saveData().
       this.syncCalendarEventsToAndroid()
+
+      // Re-measure note overflow after layout-affecting changes
+      // (ui scale, font, edit, add/delete). MutationObserver catches
+      // DOM changes; this covers CSS-variable changes it can't see.
+      if (typeof this._measureNoteOverflow === 'function')
+      {
+        requestAnimationFrame(() => this._measureNoteOverflow())
+      }
     },
 
     autoExpandTextarea(el)

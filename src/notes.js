@@ -29,6 +29,13 @@ export function createNotesModule()
     _cacheKey: '',
     _dirtyNotes: true,
 
+    // --- expand/collapse state (in-memory only, resets on hard restart) ---
+    _expandedNotes: {},
+    _noteNeedsExpand: {},
+    _noteOverflowObserver: null,
+    _noteOverflowMeasurePending: false,
+    _resizeDebounce: null,
+
     // --- getters ---
     get displayedNotes()
     {
@@ -102,6 +109,75 @@ export function createNotesModule()
     get noteMenuStyle()
     {
       return { display: this.noteMenuVisible ? 'block' : 'none', left: `${this.noteMenuPos.x}px`, top: `${this.noteMenuPos.y}px` }
+    },
+
+    // --- EXPAND/COLLAPSE ---
+    toggleNoteExpand(id)
+    {
+      // Reassign whole object so petite-vue notifies all dependent notes.
+      const next = { ...this._expandedNotes }
+      if (next[id]) delete next[id]
+      else next[id] = true
+      this._expandedNotes = next
+    },
+
+    _measureNoteOverflow()
+    {
+      const list = document.getElementById('notes-list')
+      if (!list) return
+      const wraps = list.querySelectorAll('.note-content-wrap')
+      if (!wraps.length) return
+
+      // Temporarily clamp expanded wraps so scrollHeight reflects full content.
+      const wasExpanded = []
+      wraps.forEach(el =>
+      {
+        if (el.classList.contains('expanded'))
+        {
+          el.classList.remove('expanded')
+          wasExpanded.push(el)
+        }
+      })
+
+      const newNeedsExpand = {}
+      wraps.forEach(el =>
+      {
+        const item = el.closest('.note-item')
+        if (!item) return
+        const id = item.dataset.id
+        if (!id) return
+        if (el.scrollHeight > el.clientHeight + 1) newNeedsExpand[id] = true
+      })
+
+      wasExpanded.forEach(el => el.classList.add('expanded'))
+
+      // Only assign if the *set* of ids changed — prevents re-render loops.
+      const oldKey = Object.keys(this._noteNeedsExpand).sort().join(',')
+      const newKey = Object.keys(newNeedsExpand).sort().join(',')
+      if (oldKey !== newKey) this._noteNeedsExpand = newNeedsExpand
+    },
+
+    initNoteOverflowObserver()
+    {
+      if (this._noteOverflowObserver) return
+      const list = document.getElementById('notes-list')
+      if (!list) return
+
+      const obs = new MutationObserver(() =>
+      {
+        if (this._noteOverflowMeasurePending) return
+        this._noteOverflowMeasurePending = true
+        requestAnimationFrame(() =>
+        {
+          this._noteOverflowMeasurePending = false
+          this._measureNoteOverflow()
+        })
+      })
+      obs.observe(list, { childList: true, subtree: true, characterData: true })
+      this._noteOverflowObserver = obs
+
+      // Initial pass — DOM may not be layout-stable until the next frame.
+      requestAnimationFrame(() => this._measureNoteOverflow())
     },
 
     // --- RECURRENCE HELPERS ---
@@ -454,7 +530,6 @@ export function createNotesModule()
       let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2)
       let clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : window.innerHeight / 2)
 
-      // Initial guess — corrected after render once real size is known.
       this.noteMenuPos = {
         x: Math.max(12, Math.min(clientX, window.innerWidth - 172)),
         y: Math.max(12, Math.min(clientY, window.innerHeight - 272))
