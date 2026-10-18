@@ -23,6 +23,7 @@
       })();
     </script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="calendar.css">
   </head>
 
   <body v-scope v-cloak @vue:mounted="init">
@@ -61,8 +62,13 @@
           <div id="notes-list">
             <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
               <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
-                <span v-if="n.pinned" class="pin-icon">⊢</span>
-                <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+                <div class="note-content-wrap" :class="{ expanded: _expandedNotes[n.id] }">
+                  <span v-if="n.pinned" class="pin-icon">⊢</span>
+                  <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
+                </div>
+                <div v-if="_noteNeedsExpand[n.id]" class="note-expand-bar" :class="{ expanded: _expandedNotes[n.id] }" @click.stop="toggleNoteExpand(n.id)">
+                  {{ _expandedNotes[n.id] ? 'collapse ↑' : 'expand ↓' }}
+                </div>
               </div>
               <span class="note-menu-trigger text-muted" @click.stop="openNoteMenu($event, n.id)">:</span>
             </div>
@@ -236,6 +242,7 @@
             - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
             - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
+            - Adding time to any reminders is as simple as YYYY-MM-DD_15-00 <br/>
             - Recurring notes (BETA): start a note with !Nx to repeat it.
             !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly. 
             !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 
@@ -253,6 +260,7 @@
             <button class="btn-subtle" @click="triggerImport">Import JSON</button>
             <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
             <button class="btn-subtle" @click="triggerImportMD">Import MD</button>
+            <button class="btn-subtle" @click="openPasteJson">Paste QR (BETA)</button>
             <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
             <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
           </div>
@@ -293,13 +301,14 @@
       <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
       <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
       <button @click="deleteTabClick">Delete</button>
-      <button @click="showTabQr">Make QR</button>
+      <button @click="showTabQr">Show QR</button>
       <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
       <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
     </div>
 
     <div id="note-dropdown" class="menu" :style="noteMenuStyle">
       <button @click="actionCopyNote">Copy</button>
+      <button @click="showNoteQr">Show QR</button>
       <button @click="actionEditNote">Edit</button>
       <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
       <button @click="actionDeleteNote">Delete</button>
@@ -312,6 +321,18 @@
         <div style="display: flex; gap: 10px;">
           <button @click="closeModal(true)">Save</button>
           <button @click="closeModal(false)">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="paste-json-overlay" v-if="pasteJsonVisible">
+      <div class="paste-json-box">
+        <div class="paste-json-title">Paste JSON</div>
+        <textarea id="paste-json-input" v-model="pasteJsonText" rows="10"
+          placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
+        <div class="paste-json-buttons">
+          <button @click="importPastedJson">Save</button>
+          <button class="btn-subtle" @click="closePasteJson">Cancel</button>
         </div>
       </div>
     </div>
