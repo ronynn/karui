@@ -400,9 +400,12 @@ export function createGameOverlay(opts)
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        width: '100%',
-        flex: '1',
-        minHeight: '0'
+        justifyContent: 'center',
+        flex: '0 0 auto',   // resets grow/shrink AND flex-basis (was 0% from portrait)
+        width: 'auto',      // resets width: 100% left over from portrait
+        minWidth: '0',
+        minHeight: '0',
+        height: '100%'
       })
     }
   }
