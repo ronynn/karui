@@ -184,11 +184,13 @@ public class MainActivity extends Activity
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
 
-    // Re-arm the daily calendar notification alarm if the user previously enabled it.
+    // Re-arm the daily calendar notification alarm + per-event reminder alarms
+    // if the user previously enabled notifications.
     SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
     if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
     {
       CalendarNotificationReceiver.scheduleNext(this);
+      CalendarNotificationReceiver.scheduleEventReminders(this); // NEW: also re-arm per-event alarms
     }
   }
 
@@ -847,6 +849,7 @@ public class MainActivity extends Activity
                 NOTIFICATION_PERMISSION_REQUEST);
             }
             CalendarNotificationReceiver.scheduleNext(MainActivity.this);
+            CalendarNotificationReceiver.scheduleEventReminders(MainActivity.this); // NEW: arm per-event alarms
 
             if (justEnabled)
             {
@@ -857,6 +860,8 @@ public class MainActivity extends Activity
           }
           else
           {
+            // cancel() internally calls cancelEventReminders() and clears
+            // both the daily summary and any visible per-event notifications.
             CalendarNotificationReceiver.cancel(MainActivity.this);
           }
         });

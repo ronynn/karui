@@ -23,6 +23,7 @@
       })();
     </script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="calendar.css">
   </head>
 
   <body v-scope v-cloak @vue:mounted="init">
@@ -253,6 +254,7 @@
             <button class="btn-subtle" @click="triggerImport">Import JSON</button>
             <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
             <button class="btn-subtle" @click="triggerImportMD">Import MD</button>
+            <button class="btn-subtle" @click="openPasteJson">Paste QR JSON</button>
             <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
             <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
           </div>
@@ -300,6 +302,7 @@
 
     <div id="note-dropdown" class="menu" :style="noteMenuStyle">
       <button @click="actionCopyNote">Copy</button>
+      <button @click="showNoteQr">Show QR</button>
       <button @click="actionEditNote">Edit</button>
       <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
       <button @click="actionDeleteNote">Delete</button>
@@ -312,6 +315,18 @@
         <div style="display: flex; gap: 10px;">
           <button @click="closeModal(true)">Save</button>
           <button @click="closeModal(false)">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="paste-json-overlay" v-if="pasteJsonVisible">
+      <div class="paste-json-box">
+        <div class="paste-json-title">Paste JSON</div>
+        <textarea id="paste-json-input" v-model="pasteJsonText" rows="10"
+                  placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
+        <div class="paste-json-buttons">
+          <button @click="importPastedJson">Save</button>
+          <button class="btn-subtle" @click="closePasteJson">Cancel</button>
         </div>
       </div>
     </div>

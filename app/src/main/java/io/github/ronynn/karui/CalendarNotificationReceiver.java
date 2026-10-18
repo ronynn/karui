@@ -24,16 +24,18 @@ import java.util.Locale;
 
 public class CalendarNotificationReceiver extends BroadcastReceiver
 {
-  public static final String CHANNEL_ID        = "calendar_events_channel";
-  public static final int    NOTIFICATION_ID   = 100;
-  public static final String PREFS             = "calendar_prefs";
-  public static final String KEY_EVENTS_JSON   = "events_json";
-  public static final String KEY_ENABLED       = "calendar_notifications_enabled";
-  public static final String KEY_LAST_NOTIFIED = "last_notified_date";
-  public static final int    ALARM_REQUEST_ID  = 200;
+  public static final String CHANNEL_ID          = "calendar_events_channel";
+  public static final int    NOTIFICATION_ID     = 100;      // daily summary
+  public static final int    EVENT_NOTIFICATION_BASE = 1000; // per-event reminders
+  public static final String PREFS               = "calendar_prefs";
+  public static final String KEY_EVENTS_JSON     = "events_json";
+  public static final String KEY_ENABLED         = "calendar_notifications_enabled";
+  public static final String KEY_LAST_NOTIFIED   = "last_notified_date";
+  public static final String KEY_SCHEDULED_IDS   = "scheduled_event_ids";
+  public static final int    ALARM_REQUEST_ID    = 200;
 
-  /** Sent by MainActivity whenever the cached event list changes.
-   *  Triggers a *silent* in-place update only. Never pops a fresh alert. */
+  public static final String EXTRA_EVENT_ID      = "event_id";
+
   public static final String ACTION_REFRESH = "io.github.ronynn.karui.REFRESH_CALENDAR";
 
   @Override
@@ -44,28 +46,34 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     String action = intent != null ? intent.getAction() : null;
     boolean isRefresh = ACTION_REFRESH.equals(action);
+    int eventId = intent != null ? intent.getIntExtra(EXTRA_EVENT_ID, -1) : -1;
 
     if (isRefresh)
     {
-      // Silent path — update in place, but ONLY if we've already shown
-      // today's notification. Prevents every app edit from re-firing it.
       showTodaysEvents(context, prefs, true);
+      scheduleEventReminders(context);
+    }
+    else if (eventId >= 0)
+    {
+      showEventNotification(context, eventId);
     }
     else
     {
-      // Alarm (or explicit "show now") — full notification with alert.
       showTodaysEvents(context, prefs, false);
       scheduleNext(context);
+      scheduleEventReminders(context);
     }
   }
 
+  // ------------------------------------------------------------------
+  //  Daily summary
+  // ------------------------------------------------------------------
   private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)
   {
     NotificationManager manager =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return;
 
-    // Respect user's long-press → disable of the channel.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       NotificationChannel ch = manager.getNotificationChannel(CHANNEL_ID);
@@ -76,8 +84,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     String lastNotified = prefs.getString(KEY_LAST_NOTIFIED, "");
     boolean alreadyShownToday = todayStr.equals(lastNotified);
 
-    // *** THE FIX *** — silent refreshes are no-ops until the alarm
-    // (or user enabling the toggle) has shown today's notification at least once.
     if (silent && !alreadyShownToday) return;
 
     String json = prefs.getString(KEY_EVENTS_JSON, "[]");
@@ -89,14 +95,16 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       {
         JSONObject o = arr.getJSONObject(i);
         if (!todayStr.equals(o.optString("date", ""))) continue;
+        if (o.optBoolean("completed", false)) continue;   // NEW: completed events don't appear
         String text = o.optString("text", "").trim();
         if (text.isEmpty()) continue;
-        todays.add(o.optBoolean("completed", false) ? "✓ " + text : text);
+        String time = o.optString("time", "");
+        String prefix = time.isEmpty() ? "" : time + " · ";
+        todays.add(prefix + text);
       }
     }
     catch (Exception ignored) {}
 
-    // Create / ensure the channel exists.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       NotificationChannel channel = new NotificationChannel(
@@ -108,8 +116,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       manager.createNotificationChannel(channel);
     }
 
-    // Nothing today — clean up if a silent refresh is just pruning an
-    // outdated notification. On the alarm path, just mark the day as checked.
     if (todays.isEmpty())
     {
       manager.cancel(NOTIFICATION_ID);
@@ -117,14 +123,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       return;
     }
 
-    // Open-app intent
-    Intent openApp = new Intent(context, MainActivity.class);
-    openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
-    PendingIntent pi = PendingIntent.getActivity(context, 0, openApp, piFlags);
-
-    // Title / body
     String title, bigText;
     if (todays.size() == 1)
     {
@@ -148,6 +146,86 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       bigText = sb.toString();
     }
 
+    Notification.Builder b = buildBaseBuilder(context);
+    b.setContentTitle(title)
+     .setContentText(todays.size() == 1 ? bigText : todays.get(0))
+     .setStyle(new Notification.BigTextStyle().bigText(bigText))
+     .setContentIntent(openAppIntent(context))
+     .setAutoCancel(true)
+     .setOnlyAlertOnce(true);
+
+    manager.notify(NOTIFICATION_ID, b.build());
+
+    if (!silent)
+    {
+      prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  //  Per-event time reminder
+  // ------------------------------------------------------------------
+  private void showEventNotification(Context context, int eventId)
+  {
+    SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    String json = prefs.getString(KEY_EVENTS_JSON, "[]");
+    String todayStr = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+
+    String eventText = null;
+    String eventTime = null;
+    try
+    {
+      JSONArray arr = new JSONArray(json);
+      for (int i = 0; i < arr.length(); i++)
+      {
+        JSONObject o = arr.getJSONObject(i);
+        if (o.optInt("id", 0) != eventId) continue;
+        if (!todayStr.equals(o.optString("date", ""))) continue;
+
+        // NEW: completed events don't fire and any stale notif is cleared.
+        if (o.optBoolean("completed", false))
+        {
+          NotificationManager nmStale =
+              (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+          if (nmStale != null)
+          {
+            nmStale.cancel(EVENT_NOTIFICATION_BASE + (eventId % 100000));
+          }
+          return;
+        }
+
+        eventText = o.optString("text", "").trim();
+        eventTime = o.optString("time", "");
+        break;
+      }
+    }
+    catch (Exception ignored) {}
+
+    if (eventText == null || eventText.isEmpty()) return;
+
+    NotificationManager manager =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (manager == null) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+    {
+      NotificationChannel ch = manager.getNotificationChannel(CHANNEL_ID);
+      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
+    }
+
+    Notification.Builder b = buildBaseBuilder(context);
+    b.setContentTitle(eventTime == null || eventTime.isEmpty() ? "Reminder" : "Reminder · " + eventTime)
+     .setContentText(eventText)
+     .setStyle(new Notification.BigTextStyle().bigText(eventText))
+     .setContentIntent(openAppIntent(context))
+     .setAutoCancel(true);
+
+    int notifId = EVENT_NOTIFICATION_BASE + (eventId % 100000);
+    manager.notify(notifId, b.build());
+  }
+
+  private Notification.Builder buildBaseBuilder(Context context)
+  {
     Notification.Builder b;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
@@ -156,6 +234,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     else
     {
       b = new Notification.Builder(context);
+      b.setPriority(Notification.PRIORITY_DEFAULT);
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
@@ -166,32 +245,21 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     {
       b.setSmallIcon(R.drawable.ic_note);
     }
-
-    b.setContentTitle(title)
-     .setContentText(todays.size() == 1 ? bigText : todays.get(0))
-     .setStyle(new Notification.BigTextStyle().bigText(bigText))
-     .setContentIntent(pi)
-     .setAutoCancel(true)
-     .setOnlyAlertOnce(true);   // <- silent updates when the notification is already visible
-
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
-    {
-      b.setPriority(Notification.PRIORITY_DEFAULT);
-    }
-
-    manager.notify(NOTIFICATION_ID, b.build());
-
-    // Only the alarm / explicit-show paths mark the day as "notified".
-    // Silent refreshes never write this, so they stay idempotent.
-    if (!silent)
-    {
-      prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
-    }
+    return b;
   }
 
-  // ---------------------------------------------------------------
-  //  Scheduling (unchanged behaviour)
-  // ---------------------------------------------------------------
+  private PendingIntent openAppIntent(Context context)
+  {
+    Intent openApp = new Intent(context, MainActivity.class);
+    openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+    return PendingIntent.getActivity(context, 0, openApp, piFlags);
+  }
+
+  // ------------------------------------------------------------------
+  //  Scheduling
+  // ------------------------------------------------------------------
   public static void scheduleNext(Context context)
   {
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -211,8 +279,150 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     {
       target.add(Calendar.DAY_OF_YEAR, 1);
     }
-    long triggerAt = target.getTimeInMillis();
 
+    setExactCompat(am, target.getTimeInMillis(), pi);
+  }
+
+  public static void scheduleEventReminders(Context context)
+  {
+    SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    if (!prefs.getBoolean(KEY_ENABLED, false)) return;
+
+    AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+    if (am == null) return;
+
+    // NEW: cancel any currently-visible notifications for events that
+    // have since been marked completed. Covers the case where the
+    // reminder already fired and the user then ticked it.
+    NotificationManager nmClean =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nmClean != null)
+    {
+      try
+      {
+        JSONArray cur = new JSONArray(prefs.getString(KEY_EVENTS_JSON, "[]"));
+        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+        for (int i = 0; i < cur.length(); i++)
+        {
+          JSONObject o = cur.getJSONObject(i);
+          if (!today.equals(o.optString("date", ""))) continue;
+          if (!o.optBoolean("completed", false)) continue;
+          nmClean.cancel(EVENT_NOTIFICATION_BASE + (o.optInt("id", 0) % 100000));
+        }
+      }
+      catch (Exception ignored) {}
+    }
+
+    // 1) Cancel every previously scheduled event alarm.
+    try
+    {
+      JSONArray prev = new JSONArray(prefs.getString(KEY_SCHEDULED_IDS, "[]"));
+      for (int i = 0; i < prev.length(); i++)
+      {
+        int rid = prev.getInt(i);
+        Intent ci = new Intent(context, CalendarNotificationReceiver.class);
+        int cf = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) cf |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent cpi = PendingIntent.getBroadcast(context, rid, ci, cf);
+        am.cancel(cpi);
+        cpi.cancel();
+      }
+    }
+    catch (Exception ignored) {}
+
+    // 2) Schedule today's events with a time still in the future.
+    String json = prefs.getString(KEY_EVENTS_JSON, "[]");
+    String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+    List<Integer> newIds = new ArrayList<>();
+    long now = System.currentTimeMillis();
+
+    try
+    {
+      JSONArray arr = new JSONArray(json);
+      for (int i = 0; i < arr.length(); i++)
+      {
+        JSONObject o = arr.getJSONObject(i);
+        if (!today.equals(o.optString("date", ""))) continue;
+        if (o.optBoolean("completed", false)) continue;
+        String time = o.optString("time", "");
+        if (time.isEmpty() || !time.contains(":")) continue;
+
+        String[] hm = time.split(":");
+        int h, m;
+        try
+        {
+          h = Integer.parseInt(hm[0]);
+          m = Integer.parseInt(hm[1]);
+        }
+        catch (Exception e) { continue; }
+
+        Calendar target = Calendar.getInstance();
+        target.set(Calendar.HOUR_OF_DAY, h);
+        target.set(Calendar.MINUTE, m);
+        target.set(Calendar.SECOND, 0);
+        target.set(Calendar.MILLISECOND, 0);
+        if (target.getTimeInMillis() <= now) continue;
+
+        int rid = 300 + (o.optInt("id", 0) % 100000);
+        Intent ei = new Intent(context, CalendarNotificationReceiver.class);
+        ei.putExtra(EXTRA_EVENT_ID, o.optInt("id", 0));
+        int ef = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) ef |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent epi = PendingIntent.getBroadcast(context, rid, ei, ef);
+
+        setExactCompat(am, target.getTimeInMillis(), epi);
+        newIds.add(rid);
+      }
+    }
+    catch (Exception ignored) {}
+
+    prefs.edit().putString(KEY_SCHEDULED_IDS, new JSONArray(newIds).toString()).apply();
+  }
+
+  public static void cancelEventReminders(Context context)
+  {
+    SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+    if (am == null) return;
+
+    try
+    {
+      JSONArray prev = new JSONArray(prefs.getString(KEY_SCHEDULED_IDS, "[]"));
+      for (int i = 0; i < prev.length(); i++)
+      {
+        int rid = prev.getInt(i);
+        Intent ci = new Intent(context, CalendarNotificationReceiver.class);
+        int cf = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) cf |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent cpi = PendingIntent.getBroadcast(context, rid, ci, cf);
+        am.cancel(cpi);
+        cpi.cancel();
+      }
+    }
+    catch (Exception ignored) {}
+
+    prefs.edit().putString(KEY_SCHEDULED_IDS, "[]").apply();
+
+    // Clear any visible per-event notifications too.
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm != null)
+    {
+      try
+      {
+        JSONArray arr = new JSONArray(prefs.getString(KEY_EVENTS_JSON, "[]"));
+        for (int i = 0; i < arr.length(); i++)
+        {
+          JSONObject o = arr.getJSONObject(i);
+          nm.cancel(EVENT_NOTIFICATION_BASE + (o.optInt("id", 0) % 100000));
+        }
+      }
+      catch (Exception ignored) {}
+    }
+  }
+
+  private static void setExactCompat(AlarmManager am, long triggerAt, PendingIntent pi)
+  {
     try
     {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
@@ -246,6 +456,8 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       am.cancel(pi);
       pi.cancel();
     }
+
+    cancelEventReminders(context);
 
     NotificationManager nm =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);

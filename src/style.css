@@ -159,3 +159,58 @@ button:active { filter: brightness(0.8); }
 }
 .qr-modal-buttons button { flex: 1; }
 .qr-modal-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+
+/* --- Paste JSON modal --- */
+#paste-json-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.85); z-index: 6000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.paste-json-box {
+  background: var(--bg); border: 2px solid var(--border);
+  padding: 16px; width: 100%; max-width: 480px;
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: 92vh;
+}
+.paste-json-title {
+  font-weight: bold; color: var(--accent);
+  font-size: calc(18px * var(--ui-scale)); text-align: center;
+}
+#paste-json-input {
+  min-height: 200px; max-height: 50vh;
+  font-family: monospace; font-size: calc(12px * var(--ui-scale));
+  resize: vertical;
+}
+.paste-json-buttons { display: flex; gap: 8px; }
+.paste-json-buttons button { flex: 1; }
+
+
+
+
+
+/* Landscape: compact + scrollable menus */
+@media (orientation: landscape) and (max-height: 600px) {
+  .menu {
+    max-height: calc(100vh - 12px);
+    padding: 8px;
+  }
+  .menu button {
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    font-size: calc(13px * var(--ui-scale));
+  }
+  .menu-title {
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    font-size: calc(12px * var(--ui-scale));
+  }
+}
+
+/* Menu safety: never taller than viewport, scrolls if content overflows */
+.menu {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

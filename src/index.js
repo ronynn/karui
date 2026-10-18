@@ -3,10 +3,10 @@ import { setupDragAndDrop } from './dragdrop.js'
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
 import { playSound, createRipple } from './extras.js'
-import { initCalendar } from './calendar.js'
+import { initCalendar, createCalendarModule } from './calendar.js'
 import { createNotesModule } from './notes.js'
 import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './settings.js'
-import { buildTabPayload, chunkPayload, renderQrToDataUrl, frameToScanString } from './qr.js'
+import { createQrModule } from './qr.js'
 
 // --- VANILLA DOM HELPER ---
 export function autoExpandTextarea(el)
@@ -37,6 +37,8 @@ function mergeModules(...mods)
 const appStore = reactive(mergeModules(
   createSettingsModule(),
   createNotesModule(),
+  createQrModule(),
+  createCalendarModule(),
   {
     // --- shell state ---
     currentScreen: 'home',
@@ -63,18 +65,6 @@ const appStore = reactive(mergeModules(
     touchEndX: 0,
     touchEndY: 0,
     scrollTicking: false,
-
-    // --- calendar notifications ---
-    calendarNotificationsEnabled: false,
-    _lastSyncedCalendarJson: '',   // dedupe key so we don't spam the bridge
-
-    // --- QR share ---
-    qrModalVisible: false,
-    qrTabName: '',
-    qrFrames: [],
-    qrFrameIdx: 0,
-    qrCurrentImage: '',
-    qrBusy: false,
 
     // --- computed shell ---
     get screenOrder()
@@ -444,95 +434,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // --- QR share (per tab) ---
-    async showTabQr()
-    {
-      const tab = this.contextTab
-      this.closeAllMenus()
-      if (!tab)
-      {
-        return
-      }
-
-      this.qrTabName = tab
-      this.qrFrames = []
-      this.qrFrameIdx = 0
-      this.qrCurrentImage = ''
-      this.qrBusy = true
-      this.qrModalVisible = true
-
-      try
-      {
-        const payload = buildTabPayload(tab, this.notes, this.categoryMeta)
-        this.qrFrames = chunkPayload(payload)
-        await this.renderQrFrame(0)
-      }
-      catch (e)
-      {
-        this.qrModalVisible = false
-        this.showToast('QR generation failed')
-      }
-      finally
-      {
-        this.qrBusy = false
-      }
-    },
-
-    async renderQrFrame(idx)
-    {
-      const frame = this.qrFrames[idx]
-      if (!frame)
-      {
-        return
-      }
-      this.qrCurrentImage = await renderQrToDataUrl(frameToScanString(frame))
-    },
-
-    async qrPrevFrame()
-    {
-      if (this.qrBusy || this.qrFrameIdx <= 0)
-      {
-        return
-      }
-      this.qrBusy = true
-      this.qrFrameIdx--
-      try
-      {
-        await this.renderQrFrame(this.qrFrameIdx)
-      }
-      finally
-      {
-        this.qrBusy = false
-      }
-    },
-
-    async qrNextFrame()
-    {
-      if (this.qrBusy || this.qrFrameIdx >= this.qrFrames.length - 1)
-      {
-        return
-      }
-      this.qrBusy = true
-      this.qrFrameIdx++
-      try
-      {
-        await this.renderQrFrame(this.qrFrameIdx)
-      }
-      finally
-      {
-        this.qrBusy = false
-      }
-    },
-
-    qrClose()
-    {
-      this.qrModalVisible = false
-      this.qrFrames = []
-      this.qrFrameIdx = 0
-      this.qrCurrentImage = ''
-      this.qrBusy = false
-    },
-
     // --- data export / import / sync ---
     exportDataCall()
     {
@@ -641,109 +542,6 @@ const appStore = reactive(mergeModules(
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(this.syncFilePath, mdStr)
-      }
-    },
-
-    //  Calendar Notifications
-
-    /**
-     * Collects every event from the calendar tab and pushes it to Android.
-     *
-     * Handles both:
-     *   - Classic events: text starts with "YYYY-MM-DD "
-     *   - Recurring notes: carry their own scheduledDate property
-     *
-     * Dedupes against the last successfully-synced JSON so we don't hit
-     * the bridge (and therefore don't trigger a REFRESH broadcast) on
-     * every unrelated saveData() call.
-     */
-    syncCalendarEventsToAndroid()
-    {
-      if (!window.Android || typeof window.Android.updateCalendarEvents !== 'function') return
-
-      // Calendar off → clear the cache once and bail.
-      if (!this.calendarEnabled)
-      {
-        if (this._lastSyncedCalendarJson !== '[]')
-        {
-          this._lastSyncedCalendarJson = '[]'
-          try { window.Android.updateCalendarEvents('[]') } catch (e) {}
-        }
-        return
-      }
-
-      const cat = this.calendarTabName || 'Calkarui'
-      const dateRe = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/
-      const events = []
-
-      this.notes.forEach(n =>
-        {
-          if (!n || n.category !== cat || !n.text) return
-
-          // Classic calendar event: "YYYY-MM-DD <text>"
-          const m = n.text.match(dateRe)
-          if (m)
-          {
-            events.push({
-              date: m[1],
-              text: m[2].trim(),
-              id: n.id,
-              completed: !!n.completed
-            })
-            return
-          }
-
-          // Recurring note with scheduledDate — the visible text already
-          // carries the date prefix; strip it for the notification body.
-          if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
-          {
-            events.push({
-              date: n.scheduledDate,
-              text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
-              id: n.id,
-              completed: !!n.completed
-            })
-          }
-        })
-
-      const json = JSON.stringify(events)
-
-      // Nothing changed → skip the bridge entirely. This is what stops
-      // the notification from re-firing on every unrelated edit.
-      if (json === this._lastSyncedCalendarJson) return
-      this._lastSyncedCalendarJson = json
-
-      try { window.Android.updateCalendarEvents(json) } catch (e) {}
-    },
-
-    toggleCalendarNotifications()
-    {
-      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
-
-      // Daily reminders ride on the same notification service as quick-note,
-      // so mirror the toggle to keep them in sync.
-      if (this.calendarNotificationsEnabled && !this.notificationEnabled)
-      {
-        this.notificationEnabled = true
-        if (window.Android && typeof window.Android.toggleNotification === 'function')
-        {
-          window.Android.toggleNotification(true)
-        }
-      }
-
-      // Make sure Android has the freshest event list before we arm.
-      this.syncCalendarEventsToAndroid()
-
-      if (window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
-      {
-        window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled)
-        this.showToast(this.calendarNotificationsEnabled
-                       ? 'Daily calendar reminder enabled'
-                       : 'Daily calendar reminder disabled')
-      }
-      else if (this.calendarNotificationsEnabled)
-      {
-        this.showToast('Calendar notifications only work in the Android app')
       }
     }
   }

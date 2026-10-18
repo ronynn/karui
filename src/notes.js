@@ -1,6 +1,6 @@
 import { playSound, tryRunGame } from './extras.js'
 
-const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+(.+)$/i
+const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})(?:_(\d{1,2})-(\d{1,2}))?\s+([\s\S]+)$/i
 const FUTURE_BUFFER = 3
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 
@@ -110,10 +110,19 @@ export function createNotesModule()
       if (!text) return null
       const m = text.match(RECURRENCE_RE)
       if (!m) return null
-      return { token: m[1].toLowerCase(), body: m[2] }
+      const out = { token: m[1].toLowerCase(), body: m[4] }
+      if (m[2] && m[3])
+      {
+        const h = parseInt(m[2], 10)
+        const min = parseInt(m[3], 10)
+        if (h >= 0 && h <= 23 && min >= 0 && min <= 59)
+        {
+          out.reminderTime = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0')
+        }
+      }
+      return out
     },
 
-    // Strips a leading "YYYY-MM-DD " from text (used to keep the base body clean).
     stripDatePrefix(text)
     {
       return (text || '').replace(DATE_PREFIX_RE, '')
@@ -182,14 +191,13 @@ export function createNotesModule()
       return `${y}-${m}-${day}`
     },
 
-    buildRecurrenceGroup(text, token, category, anchorDateStr)
+    buildRecurrenceGroup(text, token, category, anchorDateStr, reminderTime)
     {
       const now = Date.now()
       const groupId = now
       const cat = category || this.activeCategory
       const created = []
 
-      // Base body without any date prefix; the visible date is re-attached per occurrence.
       const cleanText = this.stripDatePrefix(text)
 
       let cursor
@@ -205,7 +213,7 @@ export function createNotesModule()
       }
 
       const firstDateStr = this.toDateStr(cursor)
-      created.push({
+      const firstNote = {
         id: now,
         text: `${firstDateStr} ${cleanText}`,
         completed: false,
@@ -215,7 +223,9 @@ export function createNotesModule()
         groupId,
         scheduledDate: firstDateStr,
         recurrence: token
-      })
+      }
+      if (reminderTime) firstNote.reminderTime = reminderTime
+      created.push(firstNote)
 
       for (let i = 0; i < FUTURE_BUFFER; i++)
       {
@@ -223,7 +233,7 @@ export function createNotesModule()
         if (!next) break
         cursor = next
         const nextStr = this.toDateStr(cursor)
-        created.push({
+        const occ = {
           id: now + i + 1,
           text: `${nextStr} ${cleanText}`,
           completed: false,
@@ -233,7 +243,9 @@ export function createNotesModule()
           groupId,
           scheduledDate: nextStr,
           recurrence: token
-        })
+        }
+        if (reminderTime) occ.reminderTime = reminderTime
+        created.push(occ)
       }
       return created
     },
@@ -256,7 +268,6 @@ export function createNotesModule()
       const nextStr = this.toDateStr(next)
       if (groupNotes.some(n => n.scheduledDate === nextStr)) return
 
-      // Strip whatever date the current note had so we don't double-prefix.
       const cleanText = this.stripDatePrefix(note.text)
 
       const now = Date.now()
@@ -271,15 +282,12 @@ export function createNotesModule()
         scheduledDate: nextStr,
         recurrence: note.recurrence
       }
+      if (note.reminderTime) newNote.reminderTime = note.reminderTime
       if (this.addNoteBottom) this.notes.push(newNote)
       else this.notes.unshift(newNote)
     },
 
     // --- UNIVERSAL NOTE ADDER ---
-    //   rawText       : what the user typed
-    //   category      : target tab
-    //   anchorDateStr : "YYYY-MM-DD" — used as the starting day for recurring
-    //                   notes and as the date prefix for one-off calendar notes.
     addNote(rawText, category, anchorDateStr)
     {
       const v = (rawText || '').trim()
@@ -300,7 +308,7 @@ export function createNotesModule()
       const rec = this.parseRecurrence(v)
       if (rec)
       {
-        const group = this.buildRecurrenceGroup(v, rec.token, cat, anchorDateStr || null)
+        const group = this.buildRecurrenceGroup(v, rec.token, cat, anchorDateStr || null, rec.reminderTime || null)
         if (group.length > 0)
         {
           if (this.addNoteBottom) this.notes.push(...group)
@@ -443,14 +451,27 @@ export function createNotesModule()
       this.closeAllMenus()
       this.activeNoteMenuId = id
 
-      let estimatedWidth = 140, estimatedHeight = 180
       let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2)
       let clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : window.innerHeight / 2)
-      let posX = Math.min(clientX, window.innerWidth - estimatedWidth - 12)
-      let posY = Math.min(clientY, window.innerHeight - estimatedHeight - 12)
 
-      this.noteMenuPos = { x: Math.max(12, posX), y: Math.max(12, posY) }
+      // Initial guess — corrected after render once real size is known.
+      this.noteMenuPos = {
+        x: Math.max(12, Math.min(clientX, window.innerWidth - 172)),
+        y: Math.max(12, Math.min(clientY, window.innerHeight - 272))
+      }
       this.noteMenuVisible = true
+
+      setTimeout(() =>
+        {
+          const el = document.getElementById('note-dropdown')
+          if (!el) return
+          const rect = el.getBoundingClientRect()
+          const w = rect.width || 160
+          const h = rect.height || 260
+          const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
+          const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
+          this.noteMenuPos = { x, y }
+        }, 0)
     },
 
     actionDeleteNote()
@@ -572,42 +593,40 @@ export function createNotesModule()
     },
 
     renameTabInternal(oldName, newName)
-{
-  if (!oldName || !newName || oldName === newName) return
-  let trimmed = newName.trim()
-  if (!trimmed) return
+    {
+      if (!oldName || !newName || oldName === newName) return
+      let trimmed = newName.trim()
+      if (!trimmed) return
 
-  // Remove any existing occurrence of the new name first, so we never end
-  // up with two tabs called the same thing.
-  this.noteCategories = this.noteCategories.filter(x => x !== trimmed)
+      this.noteCategories = this.noteCategories.filter(x => x !== trimmed)
 
-  let idx = this.noteCategories.indexOf(oldName)
-  if (idx !== -1)
-  {
-    this.noteCategories.splice(idx, 1, trimmed)
-  }
-  else if (!this.noteCategories.includes(trimmed))
-  {
-    this.noteCategories.push(trimmed)
-  }
+      let idx = this.noteCategories.indexOf(oldName)
+      if (idx !== -1)
+      {
+        this.noteCategories.splice(idx, 1, trimmed)
+      }
+      else if (!this.noteCategories.includes(trimmed))
+      {
+        this.noteCategories.push(trimmed)
+      }
 
-  if (this.calendarTabName === oldName) this.calendarTabName = trimmed
+      if (this.calendarTabName === oldName) this.calendarTabName = trimmed
 
-  let now = Date.now()
-  if (!this.categoryMeta) this.categoryMeta = {}
-  let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
-  meta.updatedAt = now
-  this.categoryMeta[trimmed] = meta
-  if (oldName !== trimmed) delete this.categoryMeta[oldName]
+      let now = Date.now()
+      if (!this.categoryMeta) this.categoryMeta = {}
+      let meta = this.categoryMeta[oldName] || { id: now, updatedAt: now }
+      meta.updatedAt = now
+      this.categoryMeta[trimmed] = meta
+      if (oldName !== trimmed) delete this.categoryMeta[oldName]
 
-  this.notes.forEach(n =>
-  {
-    if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
-  })
+      this.notes.forEach(n =>
+      {
+        if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
+      })
 
-  if (this.activeCategory === oldName) this.activeCategory = trimmed
-  this._dirtyNotes = true
-},
+      if (this.activeCategory === oldName) this.activeCategory = trimmed
+      this._dirtyNotes = true
+    },
 
     deleteTabClick()
     {
@@ -645,8 +664,10 @@ export function createNotesModule()
     // --- import merge ---
     mergeNotes(imported)
     {
-      if (!Array.isArray(imported)) return
+      if (!Array.isArray(imported)) return { added: 0, updated: 0 }
       let now = Date.now()
+      let added = 0
+      let updated = 0
       imported.forEach((n, idx) =>
       {
         if (!n || typeof n.text !== 'string') return
@@ -676,6 +697,8 @@ export function createNotesModule()
             if (n.groupId) existing.groupId = n.groupId
             if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
             if (n.recurrence) existing.recurrence = n.recurrence
+            if (n.reminderTime) existing.reminderTime = n.reminderTime
+            updated++
           }
         }
         else
@@ -688,10 +711,13 @@ export function createNotesModule()
           if (n.groupId) newNote.groupId = n.groupId
           if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
           if (n.recurrence) newNote.recurrence = n.recurrence
+          if (n.reminderTime) newNote.reminderTime = n.reminderTime
           this.notes.push(newNote)
+          added++
         }
       })
       this.saveData()
+      return { added, updated }
     }
   }
 }

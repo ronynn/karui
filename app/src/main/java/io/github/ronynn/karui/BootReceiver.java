@@ -15,6 +15,7 @@ public class BootReceiver extends BroadcastReceiver
     if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
     {
       CalendarNotificationReceiver.scheduleNext(context);
+      CalendarNotificationReceiver.scheduleEventReminders(context); // NEW: re-arm per-event alarms after reboot
     }
   }
 }

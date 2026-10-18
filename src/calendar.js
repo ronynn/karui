@@ -1,59 +1,94 @@
 // --- SECTION: CALENDAR COMPONENT ---
+// --- Calendar notification module (moved out of index.js) ---
+export function createCalendarModule()
+{
+  return {
+    calendarNotificationsEnabled: false,
+    _lastSyncedCalendarJson: '',
+
+    syncCalendarEventsToAndroid()
+    {
+      if (!window.Android || typeof window.Android.updateCalendarEvents !== 'function') return
+
+      if (!this.calendarEnabled)
+      {
+        if (this._lastSyncedCalendarJson !== '[]')
+        {
+          this._lastSyncedCalendarJson = '[]'
+          try { window.Android.updateCalendarEvents('[]') } catch (e) {}
+        }
+        return
+      }
+
+      const cat = this.calendarTabName || 'Calkarui'
+      const dateRe = /^(\d{4}-\d{2}-\d{2})\s+([\s\S]+)$/
+      const events = []
+
+      this.notes.forEach(n =>
+        {
+          if (!n || n.category !== cat || !n.text) return
+
+          const m = n.text.match(dateRe)
+          if (m)
+          {
+            const ev = { date: m[1], text: m[2].trim(), id: n.id, completed: !!n.completed }
+            if (n.reminderTime) ev.time = n.reminderTime
+            events.push(ev)
+            return
+          }
+
+          if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
+          {
+            const ev = {
+              date: n.scheduledDate,
+              text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
+              id: n.id,
+              completed: !!n.completed
+            }
+            if (n.reminderTime) ev.time = n.reminderTime
+            events.push(ev)
+          }
+        })
+
+      const json = JSON.stringify(events)
+      if (json === this._lastSyncedCalendarJson) return
+      this._lastSyncedCalendarJson = json
+
+      try { window.Android.updateCalendarEvents(json) } catch (e) {}
+    },
+
+    toggleCalendarNotifications()
+    {
+      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
+
+      if (this.calendarNotificationsEnabled && !this.notificationEnabled)
+      {
+        this.notificationEnabled = true
+        if (window.Android && typeof window.Android.toggleNotification === 'function')
+        {
+          window.Android.toggleNotification(true)
+        }
+      }
+
+      this.syncCalendarEventsToAndroid()
+
+      if (window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
+      {
+        window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled)
+        this.showToast(this.calendarNotificationsEnabled
+                       ? 'Daily calendar reminder enabled'
+                       : 'Daily calendar reminder disabled')
+      }
+      else if (this.calendarNotificationsEnabled)
+      {
+        this.showToast('Calendar notifications only work in the Android app')
+      }
+    }
+  }
+}
+
 export function initCalendar(appStore)
 {
-  const calendarStyles = `
-.calendar-container { width: 100%; }
-.calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem; width: 100%; }
-.calendar-header .nav-arrow { background: transparent; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; padding: 0.25rem 0.5rem; line-height: 1; flex-shrink: 0; min-width: auto; width: auto; height: auto; }
-.calendar-header .month-btn { flex: 1; background: transparent; border: none; color: var(--text); font-size: 1.2rem; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0.25rem 0; min-width: 0; }
-.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; }
-.calendar-weekday { text-align: center; font-weight: bold; color: var(--gray); font-size: 0.75rem; }
-.calendar-day { text-align: center; height: 3.5rem; overflow: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; border: 1px solid transparent; background: var(--surface); color: var(--text); font-size: 0.875rem; box-sizing: border-box; position: relative; }
-.calendar-day:hover { border-color: var(--border); }
-.calendar-day.other-month { opacity: 0.3; }
-.calendar-day.today { border-color: var(--accent); color: var(--accent); }
-.calendar-day.selected { background: var(--accent); color: var(--accent-txt); }
-.event-dots { display: flex; justify-content: center; gap: 0.15rem; margin-top: 0.2rem; min-height: 0.6rem; }
-.event-dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--accent); }
-.event-dot.recurring { border-radius: 0; transform: rotate(45deg); background: var(--border); }
-.monthly-events { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
-.monthly-events h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
-.monthly-event-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap; }
-.monthly-event-item.completed { opacity: 0.55; text-decoration: line-through; }
-.monthly-event-date { font-weight: bold; color: var(--accent); white-space: nowrap; font-size: 0.75rem; flex-shrink: 0; }
-.monthly-event-text { flex: 1; min-width: 0; font-size: 0.875rem; cursor: pointer; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.recurring-today { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
-.recurring-today h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
-.recurring-today-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap; }
-.recurring-today-item.completed { opacity: 0.55; text-decoration: line-through; }
-.recurring-today-text { flex: 1; min-width: 0; font-size: 0.875rem; cursor: pointer; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.recurring-today-empty { color: var(--gray); font-size: 0.875rem; padding: 0.375rem 0; }
-.calendar-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
-.calendar-modal.active { display: flex; }
-.calendar-modal-content { background: var(--bg); border: 1px solid var(--border); padding: 1rem; width: 90%; max-width: 400px; max-height: 80%; overflow-y: auto; box-sizing: border-box; }
-.calendar-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.calendar-modal-header h3 { font-size: 1rem; margin: 0; }
-.calendar-modal-close { cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 0 0.5rem; background: none; border: none; color: var(--text); width: auto; }
-.calendar-event-list { list-style: none; margin: 0 0 1rem 0; padding: 0; }
-.calendar-event-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
-.calendar-event-list li:last-child { border-bottom: none; }
-.calendar-event-list li .cal-toggle { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
-.calendar-event-list li .cal-del { flex-shrink: 0; }
-.calendar-add-btn { width: 100%; padding: 0.5rem; background: var(--accent); color: var(--accent-txt); border: none; font-weight: bold; cursor: pointer; box-sizing: border-box; }
-.calendar-add-form textarea { width: 100%; min-height: 3rem; resize: vertical; max-height: 12rem; padding: 0.5rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); font-size: 0.875rem; box-sizing: border-box; }
-.calendar-add-form-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-.calendar-add-form-actions button { flex: 1; padding: 0.5rem; background: var(--accent); color: var(--accent-txt); border: none; font-weight: bold; cursor: pointer; box-sizing: border-box; }
-.calendar-add-form-actions button:last-child { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-`
-
-  if (!document.getElementById('calendar-component-styles'))
-  {
-    const styleEl = document.createElement('style')
-    styleEl.id = 'calendar-component-styles'
-    styleEl.textContent = calendarStyles
-    document.head.appendChild(styleEl)
-  }
-
   let currentDate = new Date()
   let selectedDateStr = null
 
