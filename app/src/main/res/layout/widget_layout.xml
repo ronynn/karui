@@ -20,7 +20,7 @@
       android:layout_weight="1"
       android:text="Notes"
       android:textColor="#FFFFFF"
-      android:textSize="16sp"
+      android:textSize="14sp"
       android:textStyle="bold"
       android:maxLines="1"
       android:ellipsize="end" />
@@ -37,11 +37,11 @@
       android:paddingEnd="8dp"
       android:paddingTop="4dp"
       android:paddingBottom="4dp"
-      android:text="⇅"
+      android:text="S" 
       android:textColor="#FFFFFF"
       android:textSize="14sp"
       android:background="@drawable/widget_button_bg" />
-
+<!--
     <TextView
       android:id="@+id/widget_refresh_btn"
       android:layout_width="wrap_content"
@@ -58,7 +58,7 @@
       android:textColor="#FFFFFF"
       android:textSize="15sp"
       android:background="@drawable/widget_button_bg" />
-
+-->
     <TextView
       android:id="@+id/widget_settings_btn"
       android:layout_width="wrap_content"
@@ -71,7 +71,7 @@
       android:paddingEnd="8dp"
       android:paddingTop="4dp"
       android:paddingBottom="4dp"
-      android:text="⚙"
+      android:text="M"
       android:textColor="#FFFFFF"
       android:textSize="14sp"
       android:background="@drawable/widget_button_bg" />

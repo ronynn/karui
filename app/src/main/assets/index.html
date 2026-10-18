@@ -155,17 +155,24 @@
                 <span class="slider"></span>
               </label>
             </div>
-            <div class="toggle-container">
+  <!--          <div class="toggle-container">
               <span>Double Tap Delete To Delete</span>
               <label class="switch">
                 <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
                 <span class="slider"></span>
               </label>
-            </div>
+            </div> -->
             <div class="toggle-container">
               <span>Enter key inserts newline</span>
               <label class="switch">
                 <input type="checkbox" v-model="enterNewLine" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Disable Screenshots</span>
+              <label class="switch">
+                <input type="checkbox" v-model="disableScreenshots" @change="toggleScreenshots">
                 <span class="slider"></span>
               </label>
             </div>
@@ -193,13 +200,7 @@
               </label>
             </div>
             <div style="text-align:center;padding-top:15px;">Functionality</div>
-            <div class="toggle-container">
-              <span>Disable Screenshots</span>
-              <label class="switch">
-                <input type="checkbox" v-model="disableScreenshots" @change="toggleScreenshots">
-                <span class="slider"></span>
-              </label>
-            </div>
+            
             <div class="toggle-container">
               <span>Enable Quick Note from statusbar</span>
               <label class="switch">
@@ -237,7 +238,7 @@
         <div class="box">
           <span class="box-title">Box 4: Instructions</span>
           <div class="about-text">
-            - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu.<br/>
+            - Use /tabName to add a new tab. S is sort, E is enter, on widget M is for menu.<br/>
             - Long press from your launcher homescreen to add Karui widgets. <br/>
             - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
@@ -371,5 +372,6 @@
         });
       }
     </script>
+    
   </body>
 </html>
