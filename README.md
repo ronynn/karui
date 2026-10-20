@@ -4,7 +4,7 @@
   <img src="fastlane/metadata/android/en-US/images/icon.png" alt="App Icon" width="45%">
 </div>
 
-An open source, privacy focussed, 90kB aesthetic todo list Google Tasks alternative to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
+An open source, privacy focussed, 140kB aesthetic todo list Google Tasks alternative to quickly jot down things to do. Inspired by the system-24 theme and the Windows Mobile design system, this app's design is evolving into being even more eye-catching.
 
 This app never connects to the internet, you can setup sync to use Karui on other devices or alongside other markdown/text editors as the synced file is a markdown file. To use the widgets, first setup sync as the widget simply reads and writes to the markdown file, thus being energy efficient. 
 

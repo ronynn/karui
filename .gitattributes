@@ -3,3 +3,5 @@
 
 # Ignore the archive folder for language stats
 archive/** linguist-detectable=false
+
+*.js linguist-language=Vue
