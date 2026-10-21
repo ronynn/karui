@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, user-scalable=no">
     <title>Karui</title>
-    <script src="quotes.js"></script>
-    <script src="confetti.browser.min.js"></script>
+    <link rel="modulepreload" href="petite-vue.es.js">
+    <link rel="modulepreload" href="index.js">
+    <script src="quotes.js" defer></script>
     <script>
       (function() {
         try {
@@ -247,8 +248,7 @@
             !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly. 
             !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 
             Deleting one occurrence deletes the whole series (and restoring brings it back whole).
-            Completing an occurrence automatically queues the next fourth one. <br/>
-            - Adding time goes like !1d_15-00 <br/>
+            Completing an occurrence automatically queues the next fourth one. Adding time goes like !1d_15-00 <br/>
             - To pin a note to status bar, add it as a journal/calendar entry for today.<br/>
             - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram where we talk about foss apps, design and productivity.
           </div>
@@ -261,6 +261,7 @@
             <button class="btn-subtle" @click="triggerImport">Import JSON</button>
             <button class="btn-subtle" @click="exportMarkdownCall">Export MD</button>
             <button class="btn-subtle" @click="triggerImportMD">Import MD</button>
+            <button class="btn-subtle" @click="exportCleanMarkdownCall">Export Clean MD</button>
             <button class="btn-subtle" @click="openPasteJson">Paste QR (BETA)</button>
             <input type="file" id="import-json-input" accept=".json,application/json" style="display:none" @change="importData">
             <input type="file" id="import-md-input" accept=".md" style="display:none" @change="importMarkdown">
@@ -302,8 +303,9 @@
       <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
       <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
       <button @click="deleteTabClick">Delete</button>
-      <button @click="showTabQr">Show QR</button>
       <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
+      <button v-if="mergeableCount > 0" @click="mergeTabNotes">Merge Items</button>
+      <button @click="showTabQr">Show QR</button>
       <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
     </div>
 
