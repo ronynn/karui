@@ -169,7 +169,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   // ------------------------------------------------------------------
   //  Per-event time reminder — persists until the event is marked done
   // ------------------------------------------------------------------
-  private void showEventNotification(Context context, int eventId)
+  private static void showEventNotification(Context context, int eventId)
   {
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     String json = prefs.getString(KEY_EVENTS_JSON, "[]");
@@ -186,7 +186,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         if (o.optInt("id", 0) != eventId) continue;
         if (!todayStr.equals(o.optString("date", ""))) continue;
 
-        // Completed events don't fire; any stale notification is cleared.
         if (o.optBoolean("completed", false))
         {
           NotificationManager nmStale =
@@ -222,8 +221,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
      .setContentText(eventText)
      .setStyle(new Notification.BigTextStyle().bigText(eventText))
      .setContentIntent(openAppIntent(context))
-     // Sticky + persistent: survives until the user marks the event done
-     // in the app. `updateCalendarEvents` cancels it at that point.
      .setAutoCancel(false)
      .setOngoing(true)
      .setOnlyAlertOnce(true);
@@ -232,7 +229,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     manager.notify(notifId, b.build());
   }
 
-  private Notification.Builder buildBaseBuilder(Context context)
+  private static Notification.Builder buildBaseBuilder(Context context)
   {
     Notification.Builder b;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -256,7 +253,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     return b;
   }
 
-  private PendingIntent openAppIntent(Context context)
+  private static PendingIntent openAppIntent(Context context)
   {
     Intent openApp = new Intent(context, MainActivity.class);
     openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -299,9 +296,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
     if (am == null) return;
 
-    // 1) Cancel notifications for events that were marked completed. This
-    //    runs on every REFRESH — so marking done in the app clears the sticky
-    //    reminder instantly. Date-agnostic: completed is completed.
     NotificationManager nmClean =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nmClean != null)
@@ -320,7 +314,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       catch (Exception ignored) {}
     }
 
-    // 2) Cancel every previously-scheduled event alarm.
     try
     {
       JSONArray prev = new JSONArray(prefs.getString(KEY_SCHEDULED_IDS, "[]"));
@@ -337,9 +330,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     }
     catch (Exception ignored) {}
 
-    // 3) Walk today's events. Past-due ones fire immediately (so a missed
-    //    alarm still surfaces when the app is next opened); future ones get
-    //    an exact alarm REMINDER_LEAD_MS early.
     String json = prefs.getString(KEY_EVENTS_JSON, "[]");
     String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
     List<Integer> newIds = new ArrayList<>();
