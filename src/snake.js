@@ -11,18 +11,9 @@ const TICK_RATE = 110
 const BOARD_PX = GRID * TILES
 const HEAD_POP_MS = 150
 const SHAKE_TIME = 0.18
+const OBSTACLE_EVERY = 10
 
-function easeOutBack(t)
-{
-  const c1 = 1.70158
-  const c3 = c1 + 1
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
-}
-
-function lerp(a, b, t)
-{
-  return a + (b - a) * t
-}
+function lerp(a, b, t) { return a + (b - a) * t }
 
 function roundRect(ctx, x, y, w, h, r)
 {
@@ -45,26 +36,21 @@ let session = null
 
 export function startSnakeGame()
 {
-  if (session)
-  {
-    return
-  }
-
+  if (session) return
   if (document.activeElement && typeof document.activeElement.blur === 'function')
-  {
     document.activeElement.blur()
-  }
 
   const highScore = parseInt(localStorage.getItem('snake_highscore') || '0', 10)
-
   const overlay = createGameOverlay({
     onBack: stopSnakeGame,
     onReset: resetHighScore,
     resetLabel: 'reset'
   })
-
   const theme = getGameTheme()
 
+  // Pre-size CSS for the portrait branch of applyCanvasSize() BEFORE
+  // appendChild, so the first paint is already correct. `visibility: hidden`
+  // guards against painting at intrinsic / circular-% / 0x0 size.
   const canvas = document.createElement('canvas')
   canvas.width = BOARD_PX
   canvas.height = BOARD_PX
@@ -72,7 +58,11 @@ export function startSnakeGame()
     display: 'block',
     aspectRatio: '1 / 1',
     border: `2px solid ${theme.border}`,
-    backgroundColor: theme.surface
+    backgroundColor: theme.surface,
+    width: '100%',
+    height: 'auto',
+    maxWidth: 'min(380px, 58vh)',
+    visibility: 'hidden'
   })
   overlay.contentHost.appendChild(canvas)
   const ctx = canvas.getContext('2d')
@@ -82,6 +72,23 @@ export function startSnakeGame()
 
   const landscapeControls = buildLandscapeControls()
   overlay.leftSlot.appendChild(landscapeControls)
+
+  function resizeInternalCanvas()
+  {
+    const dpr = window.devicePixelRatio || 1
+    const cssW = canvas.clientWidth
+    const cssH = canvas.clientHeight
+    if (!cssW || !cssH) return false
+    const pixelW = Math.round(cssW * dpr)
+    const pixelH = Math.round(cssH * dpr)
+    if (canvas.width !== pixelW || canvas.height !== pixelH)
+    {
+      canvas.width = pixelW
+      canvas.height = pixelH
+      ctx.setTransform(pixelW / BOARD_PX, 0, 0, pixelH / BOARD_PX, 0, 0)
+    }
+    return true
+  }
 
   function applyCanvasSize()
   {
@@ -99,8 +106,11 @@ export function startSnakeGame()
       canvas.style.maxHeight = ''
       canvas.style.maxWidth = 'min(380px, 58vh)'
     }
+    if (resizeInternalCanvas())
+    {
+      canvas.style.visibility = ''
+    }
   }
-  applyCanvasSize()
 
   session = {
     overlay,
@@ -110,9 +120,11 @@ export function startSnakeGame()
     highScoreBeaten: false,
     snake: [],
     food: { x: 0, y: 0 },
+    obstacles: [],
     dir: { x: 1, y: 0 },
     nextDir: { x: 1, y: 0 },
     score: 0,
+    lastObstacleScore: 0,
     gameOver: false,
     headEatPulse: 0,
     foodPulse: 0,
@@ -130,12 +142,21 @@ export function startSnakeGame()
   window.addEventListener('resize', applyCanvasSize)
   window.addEventListener('orientationchange', applyCanvasSize)
 
+  applyCanvasSize()
+  // Fallback: if circular % resolution deferred the first layout pass,
+  // retry on the next frame and force-reveal.
+  if (canvas.style.visibility === 'hidden')
+  {
+    requestAnimationFrame(() =>
+    {
+      applyCanvasSize()
+      canvas.style.visibility = ''
+    })
+  }
+
   canvas.addEventListener('click', () =>
   {
-    if (session && session.gameOver)
-    {
-      resetSnakeGame()
-    }
+    if (session && session.gameOver) resetSnakeGame()
   })
   canvas.addEventListener('touchstart', (e) =>
   {
@@ -152,14 +173,8 @@ export function startSnakeGame()
 
 export function stopSnakeGame()
 {
-  if (!session)
-  {
-    return
-  }
-  if (session.rafId)
-  {
-    cancelAnimationFrame(session.rafId)
-  }
+  if (!session) return
+  if (session.rafId) cancelAnimationFrame(session.rafId)
   window.removeEventListener('keydown', handleInput)
   window.removeEventListener('resize', session.applyCanvasSize)
   window.removeEventListener('orientationchange', session.applyCanvasSize)
@@ -169,10 +184,7 @@ export function stopSnakeGame()
 
 function resetHighScore()
 {
-  if (!session)
-  {
-    return
-  }
+  if (!session) return
   session.highScore = 0
   session.highScoreBeaten = false
   localStorage.setItem('snake_highscore', '0')
@@ -181,10 +193,7 @@ function resetHighScore()
 
 function resetSnakeGame()
 {
-  if (!session)
-  {
-    return
-  }
+  if (!session) return
   const cx = Math.floor(TILES / 2)
   const cy = Math.floor(TILES / 2)
   session.snake = [
@@ -192,9 +201,11 @@ function resetSnakeGame()
     { x: cx - 1, y: cy, px: cx - 1, py: cy },
     { x: cx - 2, y: cy, px: cx - 2, py: cy }
   ]
+  session.obstacles = []
   session.dir = { x: 1, y: 0 }
   session.nextDir = { x: 1, y: 0 }
   session.score = 0
+  session.lastObstacleScore = 0
   session.gameOver = false
   session.headEatPulse = 0
   session.foodPulse = 0
@@ -203,23 +214,55 @@ function resetSnakeGame()
   spawnFood()
 }
 
+function isBlocked(x, y, excludeHeadTail)
+{
+  const s = session
+  for (let i = 0; i < s.snake.length; i++)
+  {
+    if (excludeHeadTail && (i === 0 || i === s.snake.length - 1)) continue
+    if (s.snake[i].x === x && s.snake[i].y === y) return true
+  }
+  for (let i = 0; i < s.obstacles.length; i++)
+  {
+    if (s.obstacles[i].x === x && s.obstacles[i].y === y) return true
+  }
+  return false
+}
+
 function spawnFood()
 {
-  if (!session)
-  {
-    return
-  }
-  let x = 0
-  let y = 0
-  let tries = 0
+  if (!session) return
+  let x = 0, y = 0, tries = 0
   do
   {
     x = Math.floor(Math.random() * TILES)
     y = Math.floor(Math.random() * TILES)
     tries++
-  } while (session.snake.some(s => s.x === x && s.y === y) && tries < 60)
+  } while (isBlocked(x, y, false) && tries < 300)
   session.food = { x, y }
   session.foodPulse = 1
+}
+
+function addObstacle()
+{
+  const s = session
+  for (let tries = 0; tries < 40; tries++)
+  {
+    const horizontal = Math.random() < 0.5
+    const maxX = horizontal ? TILES - 1 : TILES
+    const maxY = horizontal ? TILES : TILES - 1
+    const x = 1 + Math.floor(Math.random() * (maxX - 2))
+    const y = 1 + Math.floor(Math.random() * (maxY - 2))
+    const cells = horizontal
+      ? [{ x, y }, { x: x + 1, y }]
+      : [{ x, y }, { x, y: y + 1 }]
+    if (cells.every(c => !isBlocked(c.x, c.y, false) &&
+                         !(c.x === s.food.x && c.y === s.food.y)))
+    {
+      s.obstacles.push(...cells)
+      return
+    }
+  }
 }
 
 function setDir(dx, dy)
@@ -254,11 +297,7 @@ function buildPortraitControls()
     b.style.fontWeight = 'bold'
     b.style.cursor = 'pointer'
     b.style.userSelect = 'none'
-    b.onclick = (e) =>
-    {
-      e.preventDefault()
-      fn()
-    }
+    b.onclick = (e) => { e.preventDefault(); fn() }
     return b
   }
 
@@ -266,7 +305,6 @@ function buildPortraitControls()
   host.appendChild(mk('A', '2 / 1 / 3 / 2', () => setDir(-1, 0)))
   host.appendChild(mk('S', '2 / 2 / 3 / 3', () => setDir(0, 1)))
   host.appendChild(mk('D', '2 / 3 / 3 / 4', () => setDir(1, 0)))
-
   return host
 }
 
@@ -296,11 +334,7 @@ function buildLandscapeControls()
       alignItems: 'center',
       justifyContent: 'center'
     })
-    b.onclick = (e) =>
-    {
-      e.preventDefault()
-      fn()
-    }
+    b.onclick = (e) => { e.preventDefault(); fn() }
     return b
   }
 
@@ -308,51 +342,42 @@ function buildLandscapeControls()
   host.appendChild(mk('A', 1, 2, () => setDir(-1, 0)))
   host.appendChild(mk('S', 2, 2, () => setDir(0, 1)))
   host.appendChild(mk('D', 3, 2, () => setDir(1, 0)))
-
   return host
 }
 
 function handleInput(e)
 {
-  if (!session || session.gameOver)
-  {
-    return
-  }
+  if (!session || session.gameOver) return
   const dir = session.dir
-  if ((e.key === 'ArrowUp' || e.key === 'w') && dir.y === 0)
-  {
-    session.nextDir = { x: 0, y: -1 }
-  }
-  else if ((e.key === 'ArrowDown' || e.key === 's') && dir.y === 0)
-  {
-    session.nextDir = { x: 0, y: 1 }
-  }
-  else if ((e.key === 'ArrowLeft' || e.key === 'a') && dir.x === 0)
-  {
-    session.nextDir = { x: -1, y: 0 }
-  }
-  else if ((e.key === 'ArrowRight' || e.key === 'd') && dir.x === 0)
-  {
-    session.nextDir = { x: 1, y: 0 }
-  }
+  if ((e.key === 'ArrowUp' || e.key === 'w') && dir.y === 0) session.nextDir = { x: 0, y: -1 }
+  else if ((e.key === 'ArrowDown' || e.key === 's') && dir.y === 0) session.nextDir = { x: 0, y: 1 }
+  else if ((e.key === 'ArrowLeft' || e.key === 'a') && dir.x === 0) session.nextDir = { x: -1, y: 0 }
+  else if ((e.key === 'ArrowRight' || e.key === 'd') && dir.x === 0) session.nextDir = { x: 1, y: 0 }
 }
 
 function tick()
 {
   const s = session
-  if (!s || s.gameOver)
-  {
-    return
-  }
+  if (!s || s.gameOver) return
   s.dir = s.nextDir
 
   const oldHead = s.snake[0]
   const nx = (oldHead.x + s.dir.x + TILES) % TILES
   const ny = (oldHead.y + s.dir.y + TILES) % TILES
 
+  // Self-collision (skip the tail -- it's about to move away).
   for (let i = 1; i < s.snake.length - 1; i++)
   {
     if (s.snake[i].x === nx && s.snake[i].y === ny)
+    {
+      triggerGameOver()
+      return
+    }
+  }
+  // Obstacle collision.
+  for (let i = 0; i < s.obstacles.length; i++)
+  {
+    if (s.obstacles[i].x === nx && s.obstacles[i].y === ny)
     {
       triggerGameOver()
       return
@@ -371,11 +396,17 @@ function tick()
   {
     const tail = s.snake[s.snake.length - 1]
     s.snake.push({ x: tail.x, y: tail.y, px: tail.x, py: tail.y })
-
     s.score++
     s.headEatPulse = 1
     s.shakeTime = SHAKE_TIME
     playGameSound('eat')
+
+    if (s.score % OBSTACLE_EVERY === 0 && s.score !== s.lastObstacleScore)
+    {
+      addObstacle()
+      s.lastObstacleScore = s.score
+    }
+
     spawnFood()
 
     if (s.score > s.highScore || s.highScore === 0)
@@ -383,10 +414,7 @@ function tick()
       if (!s.highScoreBeaten)
       {
         triggerConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
-        if (navigator.vibrate)
-        {
-          navigator.vibrate([100, 50, 100, 50, 200])
-        }
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200])
         s.highScoreBeaten = true
       }
       s.highScore = s.score
@@ -399,24 +427,17 @@ function tick()
     s.snake[i].x = s.snake[i - 1].x
     s.snake[i].y = s.snake[i - 1].y
   }
-
   s.snake[0].x = nx
   s.snake[0].y = ny
 }
 
 function triggerGameOver()
 {
-  if (!session)
-  {
-    return
-  }
+  if (!session) return
   session.gameOver = true
   session.accumulatedTime = TICK_RATE
   playGameSound('gameover')
-  if (navigator.vibrate)
-  {
-    navigator.vibrate(200)
-  }
+  if (navigator.vibrate) navigator.vibrate(200)
   if (session.score > session.highScore)
   {
     session.highScore = session.score
@@ -426,10 +447,7 @@ function triggerGameOver()
 
 function loop(now)
 {
-  if (!session)
-  {
-    return
-  }
+  if (!session) return
   const s = session
   const delta = now - s.lastFrame
   s.lastFrame = now
@@ -441,20 +459,14 @@ function loop(now)
     {
       tick()
       s.accumulatedTime -= TICK_RATE
-      if (s.gameOver)
-      {
-        break
-      }
+      if (s.gameOver) break
     }
   }
 
   const decay = Math.exp(-delta / HEAD_POP_MS)
   s.headEatPulse *= decay
   s.foodPulse *= decay
-  if (s.shakeTime > 0)
-  {
-    s.shakeTime = Math.max(0, s.shakeTime - delta / 1000)
-  }
+  if (s.shakeTime > 0) s.shakeTime = Math.max(0, s.shakeTime - delta / 1000)
 
   draw()
   s.rafId = requestAnimationFrame(loop)
@@ -463,32 +475,37 @@ function loop(now)
 function draw()
 {
   const s = session
-  if (!s)
-  {
-    return
-  }
+  if (!s) return
   const ctx = s.ctx
   const theme = getGameTheme()
-  const W = s.canvas.width
-  const H = s.canvas.height
+  const W = BOARD_PX
+  const H = BOARD_PX
 
   ctx.save()
 
   if (s.shakeTime > 0)
   {
     const amp = s.shakeMag * (s.shakeTime / SHAKE_TIME)
-    ctx.translate(
-      (Math.random() * 2 - 1) * amp,
-      (Math.random() * 2 - 1) * amp
-    )
+    ctx.translate((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp)
   }
 
   ctx.fillStyle = theme.surface
   ctx.fillRect(-12, -12, W + 24, H + 24)
 
+  // Linear interpolation between ticks. (The old easeOutBack overshoot
+  // made the whole snake appear to bounce on every step.)
   const t = s.gameOver ? 1 : Math.min(1, s.accumulatedTime / TICK_RATE)
-  const eased = easeOutBack(t)
 
+  // Obstacles.
+  ctx.fillStyle = theme.gray
+  for (let i = 0; i < s.obstacles.length; i++)
+  {
+    const o = s.obstacles[i]
+    roundRect(ctx, o.x * GRID + 1, o.y * GRID + 1, GRID - 2, GRID - 2, 3)
+    ctx.fill()
+  }
+
+  // Food.
   const foodScale = 1 + s.foodPulse * 0.45
   const fx = s.food.x * GRID + GRID / 2
   const fy = s.food.y * GRID + GRID / 2
@@ -498,31 +515,66 @@ function draw()
   ctx.arc(fx, fy, fr, 0, Math.PI * 2)
   ctx.fill()
 
-  const len = s.snake.length
-  for (let i = len - 1; i >= 0; i--)
+  // Snake body: draw as a thick rounded polyline, not cubes. Segments that
+  // wrapped across the board edge are drawn as separate strokes so we don't
+  // get a straight line across the whole screen.
+  const segs = []
+  for (let i = 0; i < s.snake.length; i++)
   {
     const seg = s.snake[i]
-    const isHead = i === 0
-
-    const movedX = Math.abs(seg.x - seg.px)
-    const movedY = Math.abs(seg.y - seg.py)
-    let rx = seg.x
-    let ry = seg.y
-    if (movedX <= 1 && movedY <= 1)
-    {
-      rx = lerp(seg.px, seg.x, eased)
-      ry = lerp(seg.py, seg.y, eased)
-    }
-
-    const scale = isHead ? 1 + s.headEatPulse * 0.35 : 1
-    const size = (GRID - 2) * scale
-    const px = rx * GRID + (GRID - size) / 2
-    const py = ry * GRID + (GRID - size) / 2
-
-    ctx.fillStyle = isHead ? theme.accent : theme.text
-    roundRect(ctx, px, py, size, size, 4)
-    ctx.fill()
+    const wrapped = Math.abs(seg.x - seg.px) > 1 || Math.abs(seg.y - seg.py) > 1
+    const rx = wrapped ? seg.x : lerp(seg.px, seg.x, t)
+    const ry = wrapped ? seg.y : lerp(seg.py, seg.y, t)
+    segs.push({
+      cx: rx * GRID + GRID / 2,
+      cy: ry * GRID + GRID / 2
+    })
   }
+
+  ctx.strokeStyle = theme.text
+  ctx.lineWidth = GRID * 0.72
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  let drewAny = false
+  ctx.beginPath()
+  for (let i = segs.length - 1; i >= 0; i--)
+  {
+    const p = segs[i]
+    if (i < segs.length - 1)
+    {
+      const prev = segs[i + 1]
+      const dx = Math.abs(p.cx - prev.cx)
+      const dy = Math.abs(p.cy - prev.cy)
+      if (dx > GRID * 1.5 || dy > GRID * 1.5)
+      {
+        // Wrap boundary: end the current stroke, start a new one.
+        if (drewAny) ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(p.cx, p.cy)
+        drewAny = false
+        continue
+      }
+    }
+    if (!drewAny)
+    {
+      ctx.moveTo(p.cx, p.cy)
+      drewAny = true
+    }
+    else
+    {
+      ctx.lineTo(p.cx, p.cy)
+    }
+  }
+  if (drewAny) ctx.stroke()
+
+  // Head: circle in the accent colour, pulsing on eat.
+  const head = segs[0]
+  const headR = (GRID / 2 - 2) * (1 + s.headEatPulse * 0.35)
+  ctx.fillStyle = theme.accent
+  ctx.beginPath()
+  ctx.arc(head.cx, head.cy, headR, 0, Math.PI * 2)
+  ctx.fill()
 
   ctx.restore()
 
