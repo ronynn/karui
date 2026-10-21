@@ -146,7 +146,12 @@ export function createNotesModule()
         if (!item) return
         const id = item.dataset.id
         if (!id) return
-        if (el.scrollHeight > el.clientHeight + 1) newNeedsExpand[id] = true
+        // Element not laid out yet — scrollHeight/clientHeight are unreliable
+        // here, so do NOT guess. The double-rAF pass will re-measure once
+        // layout is settled. This is what killed the "every note briefly
+        // shows an expand bar" FOUC.
+        if (el.clientHeight < 2) return
+        if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
       })
 
       wasExpanded.forEach(el => el.classList.add('expanded'))
@@ -167,17 +172,21 @@ export function createNotesModule()
       {
         if (this._noteOverflowMeasurePending) return
         this._noteOverflowMeasurePending = true
-        requestAnimationFrame(() =>
+        // Double rAF: the first callback runs after style/layout, the second
+        // guarantees the browser has finished the layout pass that Vue's DOM
+        // commit triggered. Single rAF was racing the layout and letting
+        // unlaid-out wrappers (clientHeight 0, scrollHeight > 0) get marked.
+        requestAnimationFrame(() => requestAnimationFrame(() =>
         {
           this._noteOverflowMeasurePending = false
           this._measureNoteOverflow()
-        })
+        }))
       })
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
 
-      // Initial pass — DOM may not be layout-stable until the next frame.
-      requestAnimationFrame(() => this._measureNoteOverflow())
+      // Same double-rAF for the initial pass.
+      requestAnimationFrame(() => requestAnimationFrame(() => this._measureNoteOverflow()))
     },
 
     // --- RECURRENCE HELPERS ---
@@ -530,23 +539,23 @@ export function createNotesModule()
       let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2)
       let clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : window.innerHeight / 2)
 
-      this.noteMenuPos = {
-        x: Math.max(12, Math.min(clientX, window.innerWidth - 172)),
-        y: Math.max(12, Math.min(clientY, window.innerHeight - 272))
-      }
+      // Render the menu offscreen first so we can measure its real size before
+      // positioning it. The old code guessed width 172 and then re-positioned
+      // in a setTimeout, which produced a visible "bounce from the right".
+      this.noteMenuPos = { x: -9999, y: -9999 }
       this.noteMenuVisible = true
 
       setTimeout(() =>
-        {
-          const el = document.getElementById('note-dropdown')
-          if (!el) return
-          const rect = el.getBoundingClientRect()
-          const w = rect.width || 160
-          const h = rect.height || 260
-          const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
-          const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
-          this.noteMenuPos = { x, y }
-        }, 0)
+      {
+        const el = document.getElementById('note-dropdown')
+        if (!el) return
+        const rect = el.getBoundingClientRect()
+        const w = rect.width || 160
+        const h = rect.height || 260
+        const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
+        const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
+        this.noteMenuPos = { x, y }
+      }, 0)
     },
 
     actionDeleteNote()
