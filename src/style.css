@@ -50,7 +50,7 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1); }
 
 
-.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(140px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 20px; }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.1s; font-family: inherit; position: relative; overflow: hidden; }

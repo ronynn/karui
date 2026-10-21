@@ -8,6 +8,51 @@ import { createNotesModule } from './notes.js'
 import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './settings.js'
 import { createQrModule } from './qr.js'
 
+// --- LAZY CONFETTI ---
+// We removed the eager <script defer> tag from index.html. Instead of blocking
+// startup parsing a library most users (celebrationMode=false) never touch, we
+// install a tiny stub at module-eval time and swap in the real library on the
+// first call. The public API (`confetti(opts)`, `.reset()`, `.create()`) stays
+// identical so the celebration code in notes.js needs no changes.
+let _confettiPromise = null
+function _loadConfetti()
+{
+  if (_confettiPromise) return _confettiPromise
+  _confettiPromise = new Promise((resolve, reject) =>
+  {
+    const s = document.createElement('script')
+    s.src = 'confetti.browser.min.js'
+    s.async = true
+    s.onload = () => resolve(window.confetti)
+    s.onerror = () => { _confettiPromise = null; reject(new Error('confetti failed to load')) }
+    document.head.appendChild(s)
+  })
+  return _confettiPromise
+}
+
+if (typeof window.confetti !== 'function')
+{
+  const stub = function(...args)
+  {
+    _loadConfetti().then(fn => { if (fn) fn(...args) }).catch(() => {})
+  }
+  stub.reset = function()
+  {
+    _loadConfetti().then(fn => { if (fn && fn.reset) fn.reset() }).catch(() => {})
+  }
+  stub.create = function(...args)
+  {
+    return function(...callArgs)
+    {
+      _loadConfetti().then(fn =>
+      {
+        if (fn && fn.create) fn.create(...args)(...callArgs)
+      }).catch(() => {})
+    }
+  }
+  window.confetti = stub
+}
+
 // --- VANILLA DOM HELPER ---
 export function autoExpandTextarea(el)
 {
@@ -32,6 +77,58 @@ function mergeModules(...mods)
     Object.defineProperties(result, Object.getOwnPropertyDescriptors(mod))
   }
   return result
+}
+
+// --- HYDRATE PERSISTED STATE BEFORE MOUNT ---
+// Reading localStorage inside init() (which runs on @vue:mounted) means the
+// first paint renders empty/default tabs and an empty note list, then re-renders
+// once the real data arrives -- a visible flash. Pre-populating the reactive
+// store here makes the very first paint correct.
+function hydrateStore(store)
+{
+  const ls = (k) =>
+  {
+    try { return JSON.parse(localStorage.getItem(k)) } catch (e) { return null }
+  }
+  const str = (k, def) =>
+  {
+    const v = localStorage.getItem(k)
+    return v === null ? def : v
+  }
+  const bool = (k) => localStorage.getItem(k) === 'true'
+
+  store.noteCategories = [...new Set(ls('noteCategories') || ['Inbox'])]
+  store.notes = ls('notes') || []
+  store.recycleBin = ls('recycleBin') || []
+  store.categoryMeta = ls('categoryMeta') || {}
+
+  store.currentTheme = str('theme', 'gruvbox')
+  store.currentFont = str('font', 'system-ui')
+  store.uiScale = parseFloat(localStorage.getItem('uiScale')) || 1
+
+  store.doubleTapDelete = bool('doubleTapDelete')
+  store.celebrationMode = bool('celebrationMode')
+  store.keepKeyboard = bool('keepKeyboard')
+  store.uiSounds = bool('uiSounds')
+  store.buttonRipples = bool('buttonRipples')
+  store.showFab = bool('showFab')
+  store.sortAlphabetical = bool('sortAlphabetical')
+  store.addNoteBottom = bool('addNoteBottom')
+  store.moveCompletedBottom = bool('moveCompletedBottom')
+  store.disableSwipe = bool('disableSwipe')
+  store.disableScreenshots = bool('disableScreenshots')
+  store.notificationEnabled = bool('notificationEnabled')
+  store.inboxTabName = str('inboxTabName', 'Inbox')
+  store.syncFilePath = str('syncFilePath', '')
+  store.enterNewLine = bool('enterNewLine')
+
+  store.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
+  store.calendarTabName = str('calendarTabName', 'Calendar')
+  store.calendarNotificationsEnabled = bool('calendarNotificationsEnabled')
+
+  // Resolve initial active tab to the first persisted category so the first
+  // render already highlights the right tab and shows its notes.
+  store.activeCategory = store.noteCategories[0] || 'Inbox'
 }
 
 const appStore = reactive(mergeModules(
@@ -83,34 +180,9 @@ const appStore = reactive(mergeModules(
     // --- lifecycle ---
     async init()
     {
-      this.noteCategories = JSON.parse(localStorage.getItem('noteCategories')) || ['Inbox']
-      this.notes = JSON.parse(localStorage.getItem('notes')) || []
-      this.recycleBin = JSON.parse(localStorage.getItem('recycleBin')) || []
-      this.categoryMeta = JSON.parse(localStorage.getItem('categoryMeta')) || {}
-      this.currentTheme = localStorage.getItem('theme') || 'gruvbox'
-      this.currentFont = localStorage.getItem('font') || 'system-ui'
-      this.uiScale = parseFloat(localStorage.getItem('uiScale')) || 1
-      this.doubleTapDelete = localStorage.getItem('doubleTapDelete') === 'true'
-      this.celebrationMode = localStorage.getItem('celebrationMode') === 'true'
-      this.keepKeyboard = localStorage.getItem('keepKeyboard') === 'true'
-      this.uiSounds = localStorage.getItem('uiSounds') === 'true'
-      this.buttonRipples = localStorage.getItem('buttonRipples') === 'true'
-      this.showFab = localStorage.getItem('showFab') === 'true'
-      this.sortAlphabetical = localStorage.getItem('sortAlphabetical') === 'true'
-      this.addNoteBottom = localStorage.getItem('addNoteBottom') === 'true'
-      this.moveCompletedBottom = localStorage.getItem('moveCompletedBottom') === 'true'
-      this.disableSwipe = localStorage.getItem('disableSwipe') === 'true'
-      this.disableScreenshots = localStorage.getItem('disableScreenshots') === 'true'
-      this.notificationEnabled = localStorage.getItem('notificationEnabled') === 'true'
-      this.inboxTabName = localStorage.getItem('inboxTabName') || 'Inbox'
-      this.syncFilePath = localStorage.getItem('syncFilePath') || ''
-      this.enterNewLine = localStorage.getItem('enterNewLine') === 'true'
-
-      this.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
-      this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calendar'
-      this.calendarNotificationsEnabled = localStorage.getItem('calendarNotificationsEnabled') === 'true'
-
-
+      // State was already hydrated before mount. We only reconcile anything
+      // that depends on cross-field invariants here (no redundant localStorage
+      // reads, so no extra re-render on mount).
       this.noteCategories = [...new Set(this.noteCategories)]
 
       if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
@@ -139,16 +211,28 @@ const appStore = reactive(mergeModules(
           }
         })
 
-      this.customFonts = await initFontSystem()
+      if (!this.noteCategories.includes(this.activeCategory))
+      {
+        this.activeCategory = this.noteCategories[0] || 'Inbox'
+      }
 
       applyTheme(this.currentTheme)
       applyFont(this.currentFont)
       applyUiScale(this.uiScale)
 
-      if (!this.noteCategories.includes(this.activeCategory))
+      // Measure note overflow NOW, in the synchronous portion of init(), so
+      // _noteNeedsExpand is committed in the same microtask flush as the first
+      // render -- i.e. before the browser paints. Previously this ran after
+      // `await initFontSystem()`, producing a visible post-paint layout shift
+      // when expand bars popped into existence.
+      this.initNoteOverflowObserver()
+      if (typeof this._measureNoteOverflow === 'function')
       {
-        this.activeCategory = this.noteCategories[0] || 'Main'
+        this._measureNoteOverflow()
       }
+
+      // Non-critical / async work follows.
+      this.customFonts = await initFontSystem()
 
       if (typeof getRandomQuote === 'function')
       {
@@ -161,8 +245,6 @@ const appStore = reactive(mergeModules(
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
-      // Kick off note overflow measurement (populates expand bars for long notes).
-      this.initNoteOverflowObserver()
       window.addEventListener('resize', () =>
       {
         clearTimeout(this._resizeDebounce)
@@ -232,7 +314,7 @@ const appStore = reactive(mergeModules(
         this.exportMarkdownSilent()
       }
 
-      // Deduped internally — safe to call on every saveData().
+      // Deduped internally -- safe to call on every saveData().
       this.syncCalendarEventsToAndroid()
 
       // Re-measure note overflow after layout-affecting changes
@@ -570,5 +652,9 @@ const appStore = reactive(mergeModules(
     }
   }
 ))
+
+// Hydrate before mount so the first paint already shows the real tabs,
+// the correct active tab, and the populated note list. No re-render flash.
+hydrateStore(appStore)
 
 createApp(appStore).mount()
