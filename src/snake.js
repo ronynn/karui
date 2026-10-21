@@ -1,7 +1,9 @@
 import {
   createGameOverlay,
   getGameTheme,
+  getGameAudioContext,
   playGameSound,
+  ensureConfettiLoaded,
   triggerConfetti
 } from './extras.js'
 
@@ -40,6 +42,8 @@ export function startSnakeGame()
   if (document.activeElement && typeof document.activeElement.blur === 'function')
     document.activeElement.blur()
 
+  try { getGameAudioContext() } catch (e) {}
+
   const highScore = parseInt(localStorage.getItem('snake_highscore') || '0', 10)
   const overlay = createGameOverlay({
     onBack: stopSnakeGame,
@@ -48,21 +52,18 @@ export function startSnakeGame()
   })
   const theme = getGameTheme()
 
-  // Pre-size CSS for the portrait branch of applyCanvasSize() BEFORE
-  // appendChild, so the first paint is already correct. `visibility: hidden`
-  // guards against painting at intrinsic / circular-% / 0x0 size.
   const canvas = document.createElement('canvas')
   canvas.width = BOARD_PX
   canvas.height = BOARD_PX
+  canvas.className = 'game-canvas'
   Object.assign(canvas.style, {
-    display: 'block',
-    aspectRatio: '1 / 1',
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface,
+    aspectRatio: '1 / 1',
     width: '100%',
     height: 'auto',
-    maxWidth: 'min(380px, 58vh)',
-    visibility: 'hidden'
+    maxHeight: '',
+    maxWidth: 'min(380px, 58vh)'
   })
   overlay.contentHost.appendChild(canvas)
   const ctx = canvas.getContext('2d')
@@ -78,7 +79,7 @@ export function startSnakeGame()
     const dpr = window.devicePixelRatio || 1
     const cssW = canvas.clientWidth
     const cssH = canvas.clientHeight
-    if (!cssW || !cssH) return false
+    if (!cssW || !cssH || cssW < 100 || cssH < 100) return false
     const pixelW = Math.round(cssW * dpr)
     const pixelH = Math.round(cssH * dpr)
     if (canvas.width !== pixelW || canvas.height !== pixelH)
@@ -108,7 +109,9 @@ export function startSnakeGame()
     }
     if (resizeInternalCanvas())
     {
-      canvas.style.visibility = ''
+      // Pre-render while hidden so reveal shows real content, not blank.
+      try { draw() } catch (e) {}
+      canvas.classList.add('ready')
     }
   }
 
@@ -116,6 +119,7 @@ export function startSnakeGame()
     overlay,
     canvas,
     ctx,
+    theme,                    // cached -- getComputedStyle per frame is ~100µs on Android
     highScore,
     highScoreBeaten: false,
     snake: [],
@@ -138,19 +142,23 @@ export function startSnakeGame()
 
   resetSnakeGame()
 
+  // Pre-load confetti -- see flap.js for rationale.
+  setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 300)
+
   window.addEventListener('keydown', handleInput)
   window.addEventListener('resize', applyCanvasSize)
   window.addEventListener('orientationchange', applyCanvasSize)
 
   applyCanvasSize()
-  // Fallback: if circular % resolution deferred the first layout pass,
-  // retry on the next frame and force-reveal.
-  if (canvas.style.visibility === 'hidden')
+  if (!canvas.classList.contains('ready'))
   {
     requestAnimationFrame(() =>
     {
       applyCanvasSize()
-      canvas.style.visibility = ''
+      if (!canvas.classList.contains('ready'))
+      {
+        requestAnimationFrame(applyCanvasSize)
+      }
     })
   }
 
@@ -214,12 +222,11 @@ function resetSnakeGame()
   spawnFood()
 }
 
-function isBlocked(x, y, excludeHeadTail)
+function isBlocked(x, y)
 {
   const s = session
   for (let i = 0; i < s.snake.length; i++)
   {
-    if (excludeHeadTail && (i === 0 || i === s.snake.length - 1)) continue
     if (s.snake[i].x === x && s.snake[i].y === y) return true
   }
   for (let i = 0; i < s.obstacles.length; i++)
@@ -238,7 +245,7 @@ function spawnFood()
     x = Math.floor(Math.random() * TILES)
     y = Math.floor(Math.random() * TILES)
     tries++
-  } while (isBlocked(x, y, false) && tries < 300)
+  } while (isBlocked(x, y) && tries < 300)
   session.food = { x, y }
   session.foodPulse = 1
 }
@@ -256,7 +263,7 @@ function addObstacle()
     const cells = horizontal
       ? [{ x, y }, { x: x + 1, y }]
       : [{ x, y }, { x, y: y + 1 }]
-    if (cells.every(c => !isBlocked(c.x, c.y, false) &&
+    if (cells.every(c => !isBlocked(c.x, c.y) &&
                          !(c.x === s.food.x && c.y === s.food.y)))
     {
       s.obstacles.push(...cells)
@@ -365,7 +372,6 @@ function tick()
   const nx = (oldHead.x + s.dir.x + TILES) % TILES
   const ny = (oldHead.y + s.dir.y + TILES) % TILES
 
-  // Self-collision (skip the tail -- it's about to move away).
   for (let i = 1; i < s.snake.length - 1; i++)
   {
     if (s.snake[i].x === nx && s.snake[i].y === ny)
@@ -374,7 +380,6 @@ function tick()
       return
     }
   }
-  // Obstacle collision.
   for (let i = 0; i < s.obstacles.length; i++)
   {
     if (s.obstacles[i].x === nx && s.obstacles[i].y === ny)
@@ -477,7 +482,7 @@ function draw()
   const s = session
   if (!s) return
   const ctx = s.ctx
-  const theme = getGameTheme()
+  const theme = s.theme          // cached; no getComputedStyle per frame
   const W = BOARD_PX
   const H = BOARD_PX
 
@@ -492,11 +497,8 @@ function draw()
   ctx.fillStyle = theme.surface
   ctx.fillRect(-12, -12, W + 24, H + 24)
 
-  // Linear interpolation between ticks. (The old easeOutBack overshoot
-  // made the whole snake appear to bounce on every step.)
   const t = s.gameOver ? 1 : Math.min(1, s.accumulatedTime / TICK_RATE)
 
-  // Obstacles.
   ctx.fillStyle = theme.gray
   for (let i = 0; i < s.obstacles.length; i++)
   {
@@ -505,7 +507,6 @@ function draw()
     ctx.fill()
   }
 
-  // Food.
   const foodScale = 1 + s.foodPulse * 0.45
   const fx = s.food.x * GRID + GRID / 2
   const fy = s.food.y * GRID + GRID / 2
@@ -515,9 +516,6 @@ function draw()
   ctx.arc(fx, fy, fr, 0, Math.PI * 2)
   ctx.fill()
 
-  // Snake body: draw as a thick rounded polyline, not cubes. Segments that
-  // wrapped across the board edge are drawn as separate strokes so we don't
-  // get a straight line across the whole screen.
   const segs = []
   for (let i = 0; i < s.snake.length; i++)
   {
@@ -548,7 +546,6 @@ function draw()
       const dy = Math.abs(p.cy - prev.cy)
       if (dx > GRID * 1.5 || dy > GRID * 1.5)
       {
-        // Wrap boundary: end the current stroke, start a new one.
         if (drewAny) ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(p.cx, p.cy)
@@ -568,7 +565,6 @@ function draw()
   }
   if (drewAny) ctx.stroke()
 
-  // Head: circle in the accent colour, pulsing on eat.
   const head = segs[0]
   const headR = (GRID / 2 - 2) * (1 + s.headEatPulse * 0.35)
   ctx.fillStyle = theme.accent

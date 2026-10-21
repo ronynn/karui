@@ -1,7 +1,7 @@
 *.html linguist-documentation=true
-*.css linguist-documentation=true
 
 # Ignore the archive folder for language stats
 archive/** linguist-detectable=false
+app/src/main/assets/** linguist-detectable=false
 
 *.js linguist-language=Vue

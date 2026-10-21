@@ -1,8 +1,6 @@
 Achieved Perfection
-- Fix: Landscape UI for the app UI, note and tab menu, and games
-- Fix: Note Menu always opens inside screen now
-- Changed: Removed blur from top bar to improve performance in older/all devices
+
+- Performance Enhancements, landscape UI fixes
 - Added: Widgets now supports more fonts
 - Added: Expand collapse buttons for long notes so that they dont appear as text bars
-- Added: Time syntax for reminders and recurring notes
-- Added: QR share for notes and note tabs, import entire tabs data with a Import QR button
+- Added: QR share for notes and note tabs, import qr data

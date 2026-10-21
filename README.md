@@ -99,6 +99,31 @@ All versions of the app are completely reproducible, just fork the source code f
 ## Licenses
 Karui is being developed under the GPLv3 License.
 
+
+## Most Recent Update Notes (2.2)
+
+> Achieved Perfection
+Try opening the app in older devices, changing themes, everything should feel snappier now.
+
+- Fix: Landscape UI for the app UI, note and tab menu, and games
+- Fix: Note Menu always opens inside screen now
+- Fix: Marked notes no longer in statusbar reminder
+- Loading time and Performance Enhancements
+    - Removed blur from top bar to improve performance in older/all devices, added gradient shadow instead inspired by telegram
+    - Tweaked transition of the header from 0.25 seconds to 0.1 seconds, removed the transition for the active tab highlighter, it feels snappier now
+    - Calendar CSS seperated from the calendar component, thus no more css in js loading lag
+    - Module preloading of vue and indexjs
+    - Lazy loading confetti library
+- Added: Widgets now supports more fonts, widget menu page has changes, widget buttons got an aesthetic overhaul
+- Added: Expand collapse buttons for long notes so that they dont appear as text bars
+- Added (BETA): Time syntax for reminders and recurring notes. Android is finicky with notification permissions and reminder apps.
+- Added: QR share for notes and note tabs, import entire tabs data with a Import QR button
+- Added: Merge notes in a tab, preferably after deleting done tasks, to easily share the plaintext using qr. I use it to batch my searches or quick notes which I then sometimes use [Hashiru](https://github.com/ronynn/hashiru) to save.
+- 
+
+
+
+
 ## Roadmap /Beta Features
 
 - [x] Letting user to select their own fonts from file picker

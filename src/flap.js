@@ -1,11 +1,12 @@
 import {
   createGameOverlay,
   getGameTheme,
+  getGameAudioContext,
   playGameSound,
+  ensureConfettiLoaded,
   triggerConfetti
 } from './extras.js'
 
-// --- Logical (game) coordinate system ---
 const CANVAS_W = 360
 const CANVAS_H = 476
 const GROUND_H = 24
@@ -34,9 +35,6 @@ const PULSE_DECAY_MS = 120
 const SHAKE_FRAMES = 12
 const FLASH_FRAMES = 5
 
-// Fixed timestep: every simulation step is EXACTLY 1/60 s. No dt parameter
-// is passed to update(), so wall-clock jitter can never leak into positions.
-// The render interpolates between the last two fixed states by `alpha`.
 const FIXED_MS = 1000 / 60
 const MAX_STEPS_PER_FRAME = 5
 const MAX_FRAME_MS = 100
@@ -54,6 +52,11 @@ export function startFlapGame()
     document.activeElement.blur()
   }
 
+  // Pre-warm the AudioContext. On Android WebView the first playGameSound()
+  // constructs it on the main thread (~20-50 ms) -- right as the first pipe
+  // arrives. Doing it here removes that hitch.
+  try { getGameAudioContext() } catch (e) {}
+
   const theme = getGameTheme()
   const overlay = createGameOverlay({
     onBack: stopFlapGame,
@@ -61,28 +64,30 @@ export function startFlapGame()
     resetLabel: 'reset'
   })
 
-  // Pre-size the canvas CSS to the portrait layout BEFORE appendChild so the
-  // very first paint is correct. `visibility: hidden` guards against the
-  // canvas ever painting at a wrong size (intrinsic / circular-% / 0x0).
   const canvas = document.createElement('canvas')
+
+  // Small internal bitmap upscaled via CSS. On a 4 GB Xiaomi this is ~3.5x
+  // cheaper on the GPU than rendering at DPR-2 native resolution. The
+  // compositor upscales with bilinear (not nearest-neighbour), so sub-pixel
+  // motion survives the upscale.
   canvas.width = CANVAS_W
   canvas.height = CANVAS_H
+  canvas.className = 'game-canvas'
   Object.assign(canvas.style, {
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface,
-    willChange: 'transform',
-    transform: 'translateZ(0)',
-    display: 'block',
-    touchAction: 'manipulation',
     aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
     width: '94%',
     height: 'auto',
     maxHeight: '72vh',
-    visibility: 'hidden'
+    touchAction: 'manipulation'
+    // NO willChange / translateZ(0): layer promotion shows a stale composite
+    // for one frame on Android WebView when the canvas flips hidden->visible.
   })
   overlay.contentHost.appendChild(canvas)
 
   const ctx = canvas.getContext('2d', { alpha: false })
+  ctx.imageSmoothingEnabled = false
 
   const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
 
@@ -117,14 +122,7 @@ export function startFlapGame()
     particles,
     heights,
     trackIndex: 0,
-    bird: {
-      y: CANVAS_H / 2,
-      prevY: CANVAS_H / 2,
-      vy: 0,
-      pulse: 0,
-      rot: 0,
-      prevRot: 0
-    },
+    bird: { y: CANVAS_H / 2, prevY: CANVAS_H / 2, vy: 0, pulse: 0, rot: 0, prevRot: 0 },
     spawnAccumulator: 0,
     score: 0,
     started: false,
@@ -140,29 +138,10 @@ export function startFlapGame()
 
   resetFlapGame()
 
-  // DPR-aware internal bitmap: 1 canvas pixel == 1 physical device pixel, so
-  // sub-pixel motion is preserved and shapes don't get snapped to integers.
-  function resizeInternalCanvas()
-  {
-    const dpr = window.devicePixelRatio || 1
-    const cssW = canvas.clientWidth
-    const cssH = canvas.clientHeight
-    if (!cssW || !cssH) return false
-    const pixelW = Math.round(cssW * dpr)
-    const pixelH = Math.round(cssH * dpr)
-    if (canvas.width !== pixelW || canvas.height !== pixelH)
-    {
-      canvas.width = pixelW
-      canvas.height = pixelH
-      // Map logical (CANVAS_W x CANVAS_H) into physical pixels exactly.
-      ctx.setTransform(pixelW / CANVAS_W, 0, 0, pixelH / CANVAS_H, 0, 0)
-      // Smoothing ON: we're drawing solid shapes at device resolution, so
-      // sub-pixel positions should antialias, not snap. (This is not a
-      // pixel-art game -- snapping was the source of the "chunky" judder.)
-      ctx.imageSmoothingEnabled = true
-    }
-    return true
-  }
+  // Pre-load confetti BEFORE the first score. Without this the first
+  // high-score beat lazy-loads + parses ~25 KB of confetti JS on the main
+  // thread -- a visible one-frame stutter right as the first pipe passes.
+  setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 300)
 
   function applyCanvasSize()
   {
@@ -180,24 +159,28 @@ export function startFlapGame()
       canvas.style.maxHeight = '72vh'
       canvas.style.maxWidth = ''
     }
-    if (resizeInternalCanvas())
+    if (canvas.clientWidth > 100 && canvas.clientHeight > 100)
     {
-      canvas.style.visibility = ''
+      // Render one frame while still hidden so the canvas backing store
+      // already contains game content. When .ready flips it visible, the
+      // composite shows real pixels -- not a blank rect later filled by rAF.
+      try { draw() } catch (e) {}
+      canvas.classList.add('ready')
     }
   }
 
   session.applyCanvasSize = applyCanvasSize
 
   applyCanvasSize()
-  // Fallback: if the circular % resolution deferred the first layout pass,
-  // retry on the next frame and force-reveal (worst case = 1 frame hidden,
-  // never a wrong-size canvas painted visibly).
-  if (canvas.style.visibility === 'hidden')
+  if (!canvas.classList.contains('ready'))
   {
     requestAnimationFrame(() =>
     {
       applyCanvasSize()
-      canvas.style.visibility = ''
+      if (!canvas.classList.contains('ready'))
+      {
+        requestAnimationFrame(applyCanvasSize)
+      }
     })
   }
 
@@ -250,6 +233,7 @@ function flapAction()
     return
   }
   if (!s.started) s.started = true
+  try { getGameAudioContext() } catch (e) {}
   s.bird.vy = BIRD_LIFT
   s.bird.pulse = 1
   spawnJumpParticles(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H)
@@ -354,8 +338,6 @@ function triggerGameOver()
   }
 }
 
-// One fixed-timestep simulation step (exactly 1/60 s). NO dt parameter --
-// the point of a fixed step is that every step is identical.
 function update()
 {
   const s = session
@@ -367,8 +349,6 @@ function update()
   const targetRot = Math.max(ROT_UP, Math.min(ROT_DOWN, s.bird.vy / ROT_VEL_SCALE))
   s.bird.rot += (targetRot - s.bird.rot) * ROT_LERP
 
-  // Per-step decay factor, pre-derived from PULSE_DECAY_MS. Equivalent to
-  // exp(-dt * k) but with dt fixed, so no per-frame variance.
   s.bird.pulse *= Math.exp(-FIXED_MS / PULSE_DECAY_MS)
 
   s.spawnAccumulator += FIXED_MS
@@ -464,7 +444,6 @@ function loop(now)
     s.accumulator -= FIXED_MS
     steps++
   }
-  // Death-spiral guard (tab was backgrounded, etc.)
   if (s.accumulator > FIXED_MS * MAX_STEPS_PER_FRAME) s.accumulator = 0
 
   s.alpha = s.accumulator / FIXED_MS
@@ -499,7 +478,6 @@ function draw()
   {
     const p = s.pipes[i]
     if (!p.active) continue
-    // Render at interpolated x. Collision stays authoritative on p.x.
     const x = lerp(p.prevX, p.x, alpha)
     const bottomY = CANVAS_H - GROUND_H - p.bottom
 

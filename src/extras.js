@@ -238,180 +238,41 @@ function makeTopButton(label, onClick)
 export function createGameOverlay(opts)
 {
   const options = opts || {}
-  const theme = getGameTheme()
   const lsMedia = window.matchMedia('(orientation: landscape) and (max-height: 600px)')
 
   const overlay = document.createElement('div')
-  Object.assign(overlay.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '100vw',
-    height: '100vh',
-    backgroundColor: theme.bg,
-    color: theme.text,
-    zIndex: '99999',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    boxSizing: 'border-box',
-    fontWeight: 'bold'
-  })
+  overlay.className = 'game-overlay'
 
-  const backBtn = makeTopButton('back', options.onBack)
+  const backBtn  = makeTopButton('back', options.onBack)
   const resetBtn = makeTopButton(options.resetLabel || 'reset', options.onReset)
 
   const topBar = document.createElement('div')
+  topBar.className = 'game-top-bar'
   topBar.appendChild(backBtn)
   topBar.appendChild(resetBtn)
 
   const playArea = document.createElement('div')
-  const leftSlot = document.createElement('div')
-  const centerHost = document.createElement('div')
-  const rightSlot = document.createElement('div')
+  playArea.className = 'game-play-area'
 
+  const leftSlot   = document.createElement('div')
+  leftSlot.className   = 'game-left-slot'
+
+  const centerHost = document.createElement('div')
+  centerHost.className = 'game-canvas-host'
+
+  const rightSlot  = document.createElement('div')
+  rightSlot.className  = 'game-right-slot'
+
+  // In portrait: topBar is the first flex item (buttons on top).
+  // In landscape: CSS re-orders it to sit right of centerHost, but the
+  // DOM order stays put so the flex-basis/height rules resolve cleanly.
+  playArea.appendChild(topBar)
   playArea.appendChild(leftSlot)
   playArea.appendChild(centerHost)
   playArea.appendChild(rightSlot)
-
-  overlay.appendChild(topBar)
   overlay.appendChild(playArea)
+
   document.body.appendChild(overlay)
-
-  function applyLayout()
-  {
-    const land = lsMedia.matches
-
-    if (land)
-    {
-      Object.assign(overlay.style, {
-        padding: '6px',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center'
-      })
-
-      topBar.style.display = 'none'
-
-      Object.assign(playArea.style, {
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '14px',
-        width: '100%',
-        height: '100%',
-        flex: '1',
-        minHeight: '0'
-      })
-
-      Object.assign(leftSlot.style, {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
-        height: '100%',
-        flexShrink: '0',
-        minWidth: '0',
-        padding: '0'
-      })
-
-      Object.assign(centerHost.style, {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: '0',
-        flexGrow: '0',
-        minWidth: '0',
-        minHeight: '0',
-        height: '100%'
-      })
-
-      Object.assign(rightSlot.style, {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        height: '100%',
-        flexShrink: '0',
-        gap: '10px',
-        minWidth: '0',
-        padding: '0'
-      })
-
-      if (backBtn.parentNode !== rightSlot) rightSlot.appendChild(backBtn)
-      if (resetBtn.parentNode !== rightSlot) rightSlot.appendChild(resetBtn)
-
-      backBtn.style.width = 'auto'
-      backBtn.style.minWidth = '76px'
-      backBtn.style.padding = '8px 12px'
-      backBtn.style.fontSize = '14px'
-      resetBtn.style.width = 'auto'
-      resetBtn.style.minWidth = '76px'
-      resetBtn.style.padding = '8px 12px'
-      resetBtn.style.fontSize = '14px'
-    }
-    else
-    {
-      Object.assign(overlay.style, {
-        padding: 'calc(52px + env(safe-area-inset-top, 0px)) 8px 8px',
-        flexDirection: 'column',
-        justifyContent: 'flex-start',
-        alignItems: 'center'
-      })
-
-      Object.assign(topBar.style, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        width: '100%',
-        maxWidth: '380px',
-        marginTop: '4px',
-        marginBottom: '12px'
-      })
-
-      if (backBtn.parentNode !== topBar) topBar.insertBefore(backBtn, topBar.firstChild)
-      if (resetBtn.parentNode !== topBar) topBar.appendChild(resetBtn)
-      backBtn.style.width = 'auto'
-      backBtn.style.minWidth = '110px'
-      backBtn.style.padding = '10px 28px'
-      backBtn.style.fontSize = '18px'
-      resetBtn.style.width = 'auto'
-      resetBtn.style.minWidth = '110px'
-      resetBtn.style.padding = '10px 28px'
-      resetBtn.style.fontSize = '18px'
-
-      Object.assign(playArea.style, {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: '0',
-        width: '100%',
-        flex: '1',
-        minHeight: '0'
-      })
-
-      leftSlot.style.display = 'none'
-      rightSlot.style.display = 'none'
-
-      Object.assign(centerHost.style, {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: '0 0 auto',   // resets grow/shrink AND flex-basis (was 0% from portrait)
-        width: 'auto',      // resets width: 100% left over from portrait
-        minWidth: '0',
-        minHeight: '0',
-        height: '100%'
-      })
-    }
-  }
-
-  applyLayout()
-  lsMedia.addEventListener('change', applyLayout)
 
   return {
     overlay,
@@ -424,11 +285,7 @@ export function createGameOverlay(opts)
     isLandscape: () => lsMedia.matches,
     remove()
     {
-      lsMedia.removeEventListener('change', applyLayout)
-      if (overlay.parentNode)
-      {
-        overlay.parentNode.removeChild(overlay)
-      }
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
     }
   }
 }
