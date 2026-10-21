@@ -324,6 +324,12 @@ export function setupNativeHooks(appStore)
     appStore.showToast('Sync connected!')
   }
 
+  window.syncCalendarEventsToAndroid = () => { appStore.syncCalendarEventsToAndroid() }
+
+
+
+  
+
   window.importMarkdownFromAndroid = (mdText) => { parseMarkdownAndMerge(mdText, appStore) }
 
   window.addEventListener('beforeunload', () =>

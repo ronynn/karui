@@ -4,6 +4,7 @@ import android.Manifest;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -20,6 +21,7 @@ import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
@@ -32,6 +34,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -44,7 +47,6 @@ public class MainActivity extends Activity
 {
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
 
-  // Section: Request Codes
   private static final int CREATE_FILE_REQUEST_CODE = 1;
   private static final int IMPORT_FILE_REQUEST_CODE = 2;
   private static final int FILECHOOSER_RESULTCODE = 3;
@@ -52,13 +54,11 @@ public class MainActivity extends Activity
   private static final int IMPORT_MD_FILE_REQUEST_CODE = 5;
   private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
 
-  // Section: Constants
   private static final String CHANNEL_ID = "note_reply_channel";
   private static final int NOTIFICATION_ID = 1;
   private static final String PREFS_SYNC = "sync_prefs";
   private static final String KEY_SYNC_URI = "sync_file_uri";
 
-  // Section: Class Members
   private WebView mWebView;
   private View splashScreen;
 
@@ -184,13 +184,11 @@ public class MainActivity extends Activity
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
 
-    // Re-arm the daily calendar notification alarm + per-event reminder alarms
-    // if the user previously enabled notifications.
     SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
     if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
     {
       CalendarNotificationReceiver.scheduleNext(this);
-      CalendarNotificationReceiver.scheduleEventReminders(this); // NEW: also re-arm per-event alarms
+      CalendarNotificationReceiver.scheduleEventReminders(this);
     }
   }
 
@@ -347,18 +345,11 @@ public class MainActivity extends Activity
 
   private void injectPendingNotes()
   {
-    if (!isPageLoaded)
-    {
-      return;
-    }
+    if (!isPageLoaded) return;
 
     SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
     String jsonStr = prefs.getString("pending_notes_json", "[]");
-
-    if (jsonStr.equals("[]") || jsonStr.isEmpty())
-    {
-      return;
-    }
+    if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
 
     prefs.edit().remove("pending_notes_json").apply();
 
@@ -372,7 +363,6 @@ public class MainActivity extends Activity
 
     SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
     String uriStr = prefs.getString(KEY_SYNC_URI, null);
-
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
@@ -409,7 +399,8 @@ public class MainActivity extends Activity
     if (mWebView != null && isPageLoaded)
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
-      // Push the very latest calendar events so tomorrow's alarm sees up-to-date data.
+      // Push the very latest calendar events so tomorrow's alarm sees fresh data.
+      // (Needs window.syncCalendarEventsToAndroid exposed by datasync.js.)
       mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
@@ -423,6 +414,17 @@ public class MainActivity extends Activity
       injectPendingNotes();
       readSyncFileAndInject();
     }
+
+    // Fire any past-due reminders the moment the user opens the app.
+    // Ongoing notifications with setOnlyAlertOnce(true) make this a no-op
+    // visually if they are already showing.
+    SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+    if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+    {
+      Intent refresh = new Intent(this, CalendarNotificationReceiver.class);
+      refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
+      sendBroadcast(refresh);
+    }
   }
 
   @Override
@@ -431,8 +433,6 @@ public class MainActivity extends Activity
     super.onStop();
     triggerAppCloseSync();
   }
-
-  // Section: Activity Results & Lifecycle
 
   @Override
   protected void onActivityResult(int requestCode, int resultCode, Intent data)
@@ -524,7 +524,6 @@ public class MainActivity extends Activity
             SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
             prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
 
-            // Read existing content from the chosen file first
             InputStream inputStream = getContentResolver().openInputStream(uri);
             StringBuilder sb = new StringBuilder();
             if (inputStream != null)
@@ -542,14 +541,12 @@ public class MainActivity extends Activity
 
             if (!existingContent.isEmpty())
             {
-              // File already has notes: import them into the app instead of overwriting
               String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
               mWebView.evaluateJavascript(jsCode, null);
               Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
             }
             else if (pendingFileData != null && !pendingFileData.isEmpty())
             {
-              // File is empty: write the initial app content into it
               OutputStream outputStream = getContentResolver().openInputStream(uri) != null ?
                 getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
               if (outputStream != null)
@@ -572,10 +569,7 @@ public class MainActivity extends Activity
     }
     else if (requestCode == FILECHOOSER_RESULTCODE)
     {
-      if (mFilePathCallback == null)
-      {
-        return;
-      }
+      if (mFilePathCallback == null) return;
       Uri[] results = null;
       if (resultCode == Activity.RESULT_OK && data != null)
       {
@@ -634,239 +628,286 @@ public class MainActivity extends Activity
   // Section: JavaScript Interface
 
   public class WebAppInterface
+  {
+    @JavascriptInterface
+    public void setupSyncFile(String defaultFileName, String currentContent)
     {
-      // ---------------------------------------------------------------
-      //  Quick-note bridge (existing)
-      // ---------------------------------------------------------------
-      @JavascriptInterface
-      public void setupSyncFile(String defaultFileName, String currentContent)
-      {
-        pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty()) ? defaultFileName : "file.md";
-        pendingFileData = currentContent != null ? currentContent : "";
+      pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty()) ? defaultFileName : "file.md";
+      pendingFileData = currentContent != null ? currentContent : "";
 
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("text/markdown");
-        intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
+      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType("text/markdown");
+      intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
 
-        try
-          {
-            startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
-          }
-        catch (ActivityNotFoundException e)
-          {
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
-          }
-      }
-
-      @JavascriptInterface
-      public void saveFileSync(String filePath, String content)
-      {
-        if (filePath == null || filePath.trim().isEmpty()) return;
-
-        try
-          {
-            Uri uri = Uri.parse(filePath);
-            OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-            if (outputStream == null)
-            {
-              outputStream = getContentResolver().openOutputStream(uri);
-            }
-            if (outputStream != null)
-            {
-              outputStream.write(content.getBytes());
-              outputStream.close();
-
-              // Broadcast update to force Widget refresh instantly
-              Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-              updateIntent.setPackage(getPackageName());
-              sendBroadcast(updateIntent);
-            }
-          }
-        catch (Exception e)
-          {
-            e.printStackTrace();
-          }
-      }
-
-      @JavascriptInterface
-      public void triggerManualReadSync()
-      {
-        runOnUiThread(() -> readSyncFileAndInject());
-      }
-
-      @JavascriptInterface
-      public void importMarkdownFile()
-      {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-
-        String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
-        intent.setType("*/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-
-        try
-          {
-            startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
-          }
-        catch (ActivityNotFoundException e)
-          {
-            runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
-          }
-      }
-
-      @JavascriptInterface
-      public void saveFile(String fileName, String fileData, String fileType)
-      {
-        pendingFileName = fileName;
-        pendingFileData = fileData;
-        pendingFileType = fileType;
-
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(fileType);
-        intent.putExtra(Intent.EXTRA_TITLE, fileName);
-        startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
-      }
-
-      @JavascriptInterface
-      public void importJsonFile()
-      {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/json");
-        startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
-      }
-
-      @JavascriptInterface
-      public void toggleNotification(boolean enable)
-      {
-        runOnUiThread(() -> {
-          if (enable)
-          {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            {
-              if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                  != PackageManager.PERMISSION_GRANTED)
-              {
-                requestPermissions(
-                  new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                  NOTIFICATION_PERMISSION_REQUEST);
-                return;
-              }
-            }
-            showNotification();
-          }
-          else
-          {
-            cancelNotification();
-          }
-        });
-      }
-
-      @JavascriptInterface
-      public void setInboxTabName(String tabName)
-      {
-        if (tabName == null || tabName.trim().isEmpty())
+      try
         {
-          tabName = "Inbox";
+          startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
         }
-        inboxTabName = tabName.trim();
-        getSharedPreferences("note_queue", MODE_PRIVATE)
-          .edit().putString("inbox_tab_name", inboxTabName).apply();
-      }
-
-      @JavascriptInterface
-      public void toggleScreenshots(boolean disable)
-      {
-        runOnUiThread(() -> {
-          if (disable)
-          {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-          }
-          else
-          {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
-          }
-        });
-      }
-
-      // ---------------------------------------------------------------
-      //  Calendar-event bridge
-      // ---------------------------------------------------------------
-
-      /**
-       * Called by JS when the event list changes (JS dedupes before calling,
-       * so this no longer fires on every keystroke).
-       *
-       * Triggers a *silent* in-place update. The receiver will NOT re-alert
-       * and will NOT fire at all if today's notification hasn't been shown yet.
-       */
-      @JavascriptInterface
-      public void updateCalendarEvents(String json)
-      {
-        if (json == null) json = "[]";
-        getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE)
-          .edit()
-          .putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json)
-          .apply();
-
-        SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
-        if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+      catch (ActivityNotFoundException e)
         {
-          Intent refresh = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
-          refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
-          sendBroadcast(refresh);
+          runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
         }
-      }
+    }
 
-      /**
-       * Enables / disables the daily reminder.
-       *
-       * Only the *first* time the user flips this from off → on do we
-       * force an immediate notification. Subsequent calls with `true`
-       * (e.g. from init() on app start) only ensure the alarm is scheduled.
-       */
-      @JavascriptInterface
-      public void setCalendarNotificationsEnabled(final boolean enabled)
-      {
-        SharedPreferences prefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
-        boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
-        prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
+    @JavascriptInterface
+    public void saveFileSync(String filePath, String content)
+    {
+      if (filePath == null || filePath.trim().isEmpty()) return;
 
-        final boolean justEnabled = enabled && !wasEnabled;
-
-        runOnUiThread(() ->
+      try
         {
-          if (enabled)
+          Uri uri = Uri.parse(filePath);
+          OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+          if (outputStream == null)
           {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                   != PackageManager.PERMISSION_GRANTED)
+            outputStream = getContentResolver().openOutputStream(uri);
+          }
+          if (outputStream != null)
+          {
+            outputStream.write(content.getBytes());
+            outputStream.close();
+
+            Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+            updateIntent.setPackage(getPackageName());
+            sendBroadcast(updateIntent);
+          }
+        }
+      catch (Exception e)
+        {
+          e.printStackTrace();
+        }
+    }
+
+    @JavascriptInterface
+    public void triggerManualReadSync()
+    {
+      runOnUiThread(() -> readSyncFileAndInject());
+    }
+
+    @JavascriptInterface
+    public void importMarkdownFile()
+    {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+      String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
+      intent.setType("*/*");
+      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+
+      try
+        {
+          startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
+        }
+      catch (ActivityNotFoundException e)
+        {
+          runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
+        }
+    }
+
+    @JavascriptInterface
+    public void saveFile(String fileName, String fileData, String fileType)
+    {
+      pendingFileName = fileName;
+      pendingFileData = fileData;
+      pendingFileType = fileType;
+
+      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType(fileType);
+      intent.putExtra(Intent.EXTRA_TITLE, fileName);
+      startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
+    }
+
+    @JavascriptInterface
+    public void importJsonFile()
+    {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType("application/json");
+      startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+    }
+
+    @JavascriptInterface
+    public void toggleNotification(boolean enable)
+    {
+      runOnUiThread(() -> {
+        if (enable)
+        {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+          {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED)
             {
               requestPermissions(
                 new String[]{Manifest.permission.POST_NOTIFICATIONS},
                 NOTIFICATION_PERMISSION_REQUEST);
+              return;
             }
-            CalendarNotificationReceiver.scheduleNext(MainActivity.this);
-            CalendarNotificationReceiver.scheduleEventReminders(MainActivity.this); // NEW: arm per-event alarms
+          }
+          showNotification();
+        }
+        else
+        {
+          cancelNotification();
+        }
+      });
+    }
 
-            if (justEnabled)
+    @JavascriptInterface
+    public void setInboxTabName(String tabName)
+    {
+      if (tabName == null || tabName.trim().isEmpty())
+      {
+        tabName = "Inbox";
+      }
+      inboxTabName = tabName.trim();
+      getSharedPreferences("note_queue", MODE_PRIVATE)
+        .edit().putString("inbox_tab_name", inboxTabName).apply();
+    }
+
+    @JavascriptInterface
+    public void toggleScreenshots(boolean disable)
+    {
+      runOnUiThread(() -> {
+        if (disable)
+        {
+          getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+        else
+        {
+          getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+      });
+    }
+
+    // ---------------------------------------------------------------
+    //  Calendar-event bridge
+    // ---------------------------------------------------------------
+
+    /**
+     * Called by JS whenever the calendar-tab note set changes. In addition
+     * to storing the JSON, we cancel any *stale* event notifications:
+     *   - events that were removed from the list, or
+     *   - events that are now marked completed.
+     * This is what clears the sticky reminder the instant the user taps
+     * "done" in the app.
+     */
+    @JavascriptInterface
+    public void updateCalendarEvents(String json)
+    {
+      if (json == null) json = "[]";
+      SharedPreferences prefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+      String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
+
+      prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
+
+      // Compare old vs new and cancel notifications for events that are no
+      // longer active (deleted or completed). Date-agnostic on purpose so a
+      // reminder from yesterday also clears when the event is finally marked
+      // done today.
+      try
+      {
+        JSONArray oldArr = new JSONArray(oldJson);
+        JSONArray newArr = new JSONArray(json);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null)
+        {
+          for (int i = 0; i < oldArr.length(); i++)
+          {
+            JSONObject oldO = oldArr.getJSONObject(i);
+            int oldId = oldO.optInt("id", 0);
+            boolean stillActive = false;
+            for (int j = 0; j < newArr.length(); j++)
             {
-              // No action → receiver treats this as a normal (alerting) fire.
-              Intent show = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
-              sendBroadcast(show);
+              JSONObject newO = newArr.getJSONObject(j);
+              if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
+              {
+                stillActive = true;
+                break;
+              }
+            }
+            if (!stillActive)
+            {
+              nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE + Math.abs(oldId % 100000));
             }
           }
-          else
-          {
-            // cancel() internally calls cancelEventReminders() and clears
-            // both the daily summary and any visible per-event notifications.
-            CalendarNotificationReceiver.cancel(MainActivity.this);
-          }
-        });
+        }
+      }
+      catch (Exception ignored) {}
+
+      if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+      {
+        Intent refresh = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
+        refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
+        sendBroadcast(refresh);
       }
     }
+
+    /**
+     * Enables / disables calendar notifications.
+     *
+     * All permission prompts (POST_NOTIFICATIONS + exact-alarm capability)
+     * live here so they only ever show when the user explicitly toggles
+     * calendar reminders on.
+     */
+    @JavascriptInterface
+    public void setCalendarNotificationsEnabled(final boolean enabled)
+    {
+      SharedPreferences prefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
+      boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
+      prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
+
+      final boolean justEnabled = enabled && !wasEnabled;
+
+      runOnUiThread(() ->
+      {
+        if (enabled)
+        {
+          // 1. Notification runtime permission (Android 13+).
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+              && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                 != PackageManager.PERMISSION_GRANTED)
+          {
+            requestPermissions(
+              new String[]{Manifest.permission.POST_NOTIFICATIONS},
+              NOTIFICATION_PERMISSION_REQUEST);
+          }
+
+          // 2. Exact-alarm capability. With USE_EXACT_ALARM this is
+          //    auto-granted on Android 13+; on Android 14+ the user can
+          //    revoke it. Prompt only on the off→on transition so we don't
+          //    nag on every app launch.
+          if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+          {
+            AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (am != null && !am.canScheduleExactAlarms())
+            {
+              Toast.makeText(MainActivity.this,
+                "Allow 'Alarms & reminders' so calendar reminders fire on time.",
+                Toast.LENGTH_LONG).show();
+              Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+              i.setData(Uri.parse("package:" + getPackageName()));
+              try { startActivity(i); } catch (Exception ignored) {}
+            }
+          }
+
+          CalendarNotificationReceiver.scheduleNext(MainActivity.this);
+          CalendarNotificationReceiver.scheduleEventReminders(MainActivity.this);
+
+          if (justEnabled)
+          {
+            Intent show = new Intent(MainActivity.this, CalendarNotificationReceiver.class);
+            sendBroadcast(show);
+          }
+        }
+        else
+        {
+          CalendarNotificationReceiver.cancel(MainActivity.this);
+        }
+      });
+    }
+  }
 
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
