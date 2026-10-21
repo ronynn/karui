@@ -1,29 +1,47 @@
 // --- SECTION: DATA SYNCHRONISATION & FILE I/O HANDLERS ---
-export function generateMarkdownString(noteCategories, notes, categoryMeta = {})
+
+// `clean = true` emits a metadata-free markdown file: just category headers
+// and `- [ ] text` / `- [x] text` lines. Useful for sharing / QR payloads.
+export function generateMarkdownString(noteCategories, notes, categoryMeta = {}, clean = false)
 {
   let mdStr = ''
   noteCategories.forEach((cat, idx) =>
   {
-    let catId = categoryMeta[cat]?.id || (Date.now() + idx)
-    let catUpdated = categoryMeta[cat]?.updatedAt || Date.now()
-    mdStr += `## ${cat} <!-- cat_id:${catId} u:${catUpdated} -->\n`
+    if (clean)
+    {
+      mdStr += `## ${cat}\n`
+    }
+    else
+    {
+      let catId = categoryMeta[cat]?.id || (Date.now() + idx)
+      let catUpdated = categoryMeta[cat]?.updatedAt || Date.now()
+      mdStr += `## ${cat} <!-- cat_id:${catId} u:${catUpdated} -->\n`
+    }
 
     let catNotes = notes.filter(n => n.category === cat)
     catNotes.forEach(n =>
     {
       let mark = n.completed ? 'x' : ' '
-      let pin = n.pinned ? ' pinned:true' : ''
-      let updated = n.updatedAt || Date.now()
-
-      // Recurring metadata is emitted ONLY when present, keeping clean notes clean.
-      let extra = ''
-      if (n.groupId) extra += ` gid:${n.groupId}`
-      if (n.scheduledDate) extra += ` sd:${n.scheduledDate}`
-      if (n.recurrence) extra += ` rec:${n.recurrence}`
-
       let rawText = (n.text || '').replace(/^(?:- \[[ xX]\]\s*)+/, '')
       let sanitizedText = rawText.replace(/\r?\n/g, '\\n')
-      mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin}${extra} -->\n`
+
+      if (clean)
+      {
+        mdStr += `- [${mark}] ${sanitizedText}\n`
+      }
+      else
+      {
+        let pin = n.pinned ? ' pinned:true' : ''
+        let updated = n.updatedAt || Date.now()
+
+        // Recurring metadata is emitted ONLY when present, keeping clean notes clean.
+        let extra = ''
+        if (n.groupId) extra += ` gid:${n.groupId}`
+        if (n.scheduledDate) extra += ` sd:${n.scheduledDate}`
+        if (n.recurrence) extra += ` rec:${n.recurrence}`
+
+        mdStr += `- [${mark}] ${sanitizedText} <!-- id:${n.id} u:${updated}${pin}${extra} -->\n`
+      }
     })
     if (idx < noteCategories.length - 1) mdStr += '\n'
   })
@@ -170,23 +188,27 @@ export function parseMarkdownAndMerge(text, appStore)
   }
 }
 
-export function exportData(notes)
+function saveTextFile(filename, content, mime)
 {
-  let fileData = JSON.stringify(notes)
   if (window.Android && window.Android.saveFile)
   {
-    window.Android.saveFile("notes.json", fileData, "application/json")
+    window.Android.saveFile(filename, content, mime)
   }
   else
   {
-    const blob = new Blob([fileData], { type: "application/json" })
+    const blob = new Blob([content], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = "notes.json"
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
+}
+
+export function exportData(notes)
+{
+  saveTextFile("notes.json", JSON.stringify(notes), "application/json")
 }
 
 export function importJsonFile(file, appStore)
@@ -244,20 +266,14 @@ export function importJsonFile(file, appStore)
 export function exportMarkdown(noteCategories, notes, categoryMeta)
 {
   let mdStr = generateMarkdownString(noteCategories, notes, categoryMeta)
-  if (window.Android && window.Android.saveFile)
-  {
-    window.Android.saveFile("notes.md", mdStr, "text/markdown")
-  }
-  else
-  {
-    const blob = new Blob([mdStr], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = "notes.md"
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+  saveTextFile("notes.md", mdStr, "text/markdown")
+}
+
+// Metadata-free markdown for sharing / QR / copy-paste.
+export function exportCleanMarkdown(noteCategories, notes, categoryMeta)
+{
+  let mdStr = generateMarkdownString(noteCategories, notes, categoryMeta, true)
+  saveTextFile("notes-clean.md", mdStr, "text/markdown")
 }
 
 export function importMarkdownFile(file, appStore)

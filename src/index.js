@@ -1,7 +1,7 @@
 import { createApp, reactive, nextTick } from './petite-vue.es.js'
 import { setupDragAndDrop } from './dragdrop.js'
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
-import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
+import { generateMarkdownString, exportData, importJsonFile, exportMarkdown, exportCleanMarkdown, importMarkdownFile, setupNativeHooks } from './datasync.js'
 import { playSound, createRipple } from './extras.js'
 import { initCalendar, createCalendarModule } from './calendar.js'
 import { createNotesModule } from './notes.js'
@@ -83,7 +83,7 @@ const appStore = reactive(mergeModules(
     // --- lifecycle ---
     async init()
     {
-      this.noteCategories = JSON.parse(localStorage.getItem('noteCategories')) || ['Main']
+      this.noteCategories = JSON.parse(localStorage.getItem('noteCategories')) || ['Inbox']
       this.notes = JSON.parse(localStorage.getItem('notes')) || []
       this.recycleBin = JSON.parse(localStorage.getItem('recycleBin')) || []
       this.categoryMeta = JSON.parse(localStorage.getItem('categoryMeta')) || {}
@@ -107,7 +107,7 @@ const appStore = reactive(mergeModules(
       this.enterNewLine = localStorage.getItem('enterNewLine') === 'true'
 
       this.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
-      this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calkarui'
+      this.calendarTabName = localStorage.getItem('calendarTabName') || 'Calendar'
       this.calendarNotificationsEnabled = localStorage.getItem('calendarNotificationsEnabled') === 'true'
 
 
@@ -486,6 +486,11 @@ const appStore = reactive(mergeModules(
       exportMarkdown(this.noteCategories, this.notes, this.categoryMeta)
     },
 
+    exportCleanMarkdownCall()
+    {
+      exportCleanMarkdown(this.noteCategories, this.notes, this.categoryMeta)
+    },
+
     triggerImportMD()
     {
       if (window.Android && window.Android.importMarkdownFile)
@@ -532,7 +537,7 @@ const appStore = reactive(mergeModules(
     {
       if (!this.syncFilePath)
       {
-        this.showToast('Please set a sync file first')
+        this.showToast('Set sync file first')
         return
       }
       this.exportMarkdownSilent()

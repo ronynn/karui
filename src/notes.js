@@ -8,7 +8,7 @@ export function createNotesModule()
 {
   return {
     // --- state ---
-    noteCategories: ['Main'],
+    noteCategories: ['Inbox'],
     activeCategory: 'Main',
     notes: [],
     recycleBin: [],
@@ -84,6 +84,18 @@ export function createNotesModule()
       for (let i = 0; i < this.notes.length; i++)
       {
         if (this.notes[i].category === cat && this.notes[i].completed && !this.notes[i].groupId) c++
+      }
+      return c
+    },
+
+    get mergeableCount()
+    {
+      let cat = this.contextTab
+      if (!cat) return 0
+      let c = 0
+      for (let i = 0; i < this.notes.length; i++)
+      {
+        if (this.notes[i].category === cat) c++
       }
       return c
     },
@@ -727,6 +739,51 @@ export function createNotesModule()
         if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
         this.saveData()
       }
+      this.closeAllMenus()
+    },
+
+    // Collapse every note in the tab (in display order) into ONE new note.
+    // Great for copying or a single clean QR payload.
+    mergeTabNotes()
+    {
+      let cat = this.contextTab || this.activeCategory
+      let catNotes = this.notes.filter(n => n.category === cat)
+
+      if (!catNotes.length)
+      {
+        this.showToast('Nothing to merge')
+        this.closeAllMenus()
+        return
+      }
+
+      // Mirror displayedNotes ordering so the merged text matches what's on screen.
+      catNotes.sort((a, b) =>
+      {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+        if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+        return 0
+      })
+
+      let mergedText = catNotes.map(n => n.text).join('\n')
+      let now = Date.now()
+      let merged = {
+        id: now,
+        text: mergedText,
+        completed: false,
+        category: cat,
+        pinned: false,
+        updatedAt: now
+      }
+
+      if (this.addNoteBottom) this.notes.push(merged)
+      else this.notes.unshift(merged)
+
+      if (this.activeCategory !== cat) this.activeCategory = cat
+
+      playSound('add', this.uiSounds)
+      this.showToast(`Merged ${catNotes.length} note${catNotes.length === 1 ? '' : 's'}`)
+      this.saveData()
       this.closeAllMenus()
     },
 
