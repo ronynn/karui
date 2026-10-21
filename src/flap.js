@@ -52,9 +52,6 @@ export function startFlapGame()
     document.activeElement.blur()
   }
 
-  // Pre-warm the AudioContext. On Android WebView the first playGameSound()
-  // constructs it on the main thread (~20-50 ms) -- right as the first pipe
-  // arrives. Doing it here removes that hitch.
   try { getGameAudioContext() } catch (e) {}
 
   const theme = getGameTheme()
@@ -65,29 +62,26 @@ export function startFlapGame()
   })
 
   const canvas = document.createElement('canvas')
-
-  // Small internal bitmap upscaled via CSS. On a 4 GB Xiaomi this is ~3.5x
-  // cheaper on the GPU than rendering at DPR-2 native resolution. The
-  // compositor upscales with bilinear (not nearest-neighbour), so sub-pixel
-  // motion survives the upscale.
   canvas.width = CANVAS_W
   canvas.height = CANVAS_H
   canvas.className = 'game-canvas'
   Object.assign(canvas.style, {
     border: `2px solid ${theme.border}`,
-    backgroundColor: theme.surface,
+    backgroundColor: theme.bg,   // pre-draw state blends with overlay bg
     aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
     width: '94%',
     height: 'auto',
     maxHeight: '72vh',
     touchAction: 'manipulation'
-    // NO willChange / translateZ(0): layer promotion shows a stale composite
-    // for one frame on Android WebView when the canvas flips hidden->visible.
   })
   overlay.contentHost.appendChild(canvas)
 
   const ctx = canvas.getContext('2d', { alpha: false })
   ctx.imageSmoothingEnabled = false
+  // Paint the canvas with --bg immediately. Until draw() runs, the canvas
+  // looks identical to the overlay behind it -- no flash of black/surface.
+  ctx.fillStyle = theme.bg
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
 
   const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
 
@@ -138,9 +132,6 @@ export function startFlapGame()
 
   resetFlapGame()
 
-  // Pre-load confetti BEFORE the first score. Without this the first
-  // high-score beat lazy-loads + parses ~25 KB of confetti JS on the main
-  // thread -- a visible one-frame stutter right as the first pipe passes.
   setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 300)
 
   function applyCanvasSize()
@@ -159,29 +150,22 @@ export function startFlapGame()
       canvas.style.maxHeight = '72vh'
       canvas.style.maxWidth = ''
     }
+    // Reading clientWidth forces layout; if the box isn't ready yet, retry
+    // on the next frame instead of leaving the canvas blank.
     if (canvas.clientWidth > 100 && canvas.clientHeight > 100)
     {
-      // Render one frame while still hidden so the canvas backing store
-      // already contains game content. When .ready flips it visible, the
-      // composite shows real pixels -- not a blank rect later filled by rAF.
       try { draw() } catch (e) {}
-      canvas.classList.add('ready')
     }
   }
 
   session.applyCanvasSize = applyCanvasSize
 
+  // Draw synchronously; no paint can happen between here and the return
+  // of startFlapGame(), so the first frame already shows content.
   applyCanvasSize()
-  if (!canvas.classList.contains('ready'))
+  if (canvas.clientWidth < 100 || canvas.clientHeight < 100)
   {
-    requestAnimationFrame(() =>
-    {
-      applyCanvasSize()
-      if (!canvas.classList.contains('ready'))
-      {
-        requestAnimationFrame(applyCanvasSize)
-      }
-    })
+    requestAnimationFrame(applyCanvasSize)
   }
 
   window.addEventListener('resize', applyCanvasSize)

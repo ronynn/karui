@@ -112,6 +112,7 @@ export function startSnakeGame()
       // Pre-render while hidden so reveal shows real content, not blank.
       try { draw() } catch (e) {}
       canvas.classList.add('ready')
+      overlay.reveal()
     }
   }
 
@@ -119,7 +120,7 @@ export function startSnakeGame()
     overlay,
     canvas,
     ctx,
-    theme,                    // cached -- getComputedStyle per frame is ~100µs on Android
+    theme,                    // cached -- getComputedStyle per frame is ~100us on Android
     highScore,
     highScoreBeaten: false,
     snake: [],

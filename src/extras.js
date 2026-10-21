@@ -263,9 +263,6 @@ export function createGameOverlay(opts)
   const rightSlot  = document.createElement('div')
   rightSlot.className  = 'game-right-slot'
 
-  // In portrait: topBar is the first flex item (buttons on top).
-  // In landscape: CSS re-orders it to sit right of centerHost, but the
-  // DOM order stays put so the flex-basis/height rules resolve cleanly.
   playArea.appendChild(topBar)
   playArea.appendChild(leftSlot)
   playArea.appendChild(centerHost)
@@ -282,12 +279,99 @@ export function createGameOverlay(opts)
     rightSlot,
     backBtn,
     resetBtn,
+    reveal() {},
     isLandscape: () => lsMedia.matches,
     remove()
     {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
     }
   }
+}
+
+// --- Loading spinner shown while we wait for the viewport to settle ---
+
+function createLoadingSpinner()
+{
+  const host = document.createElement('div')
+  host.style.position = 'fixed'
+  host.style.top = '0'
+  host.style.left = '0'
+  host.style.right = '0'
+  host.style.bottom = '0'
+  host.style.background = 'var(--bg)'
+  host.style.zIndex = '99998'
+  host.style.display = 'flex'
+  host.style.alignItems = 'center'
+  host.style.justifyContent = 'center'
+
+  const spinner = document.createElement('div')
+  spinner.style.width = '32px'
+  spinner.style.height = '32px'
+  spinner.style.border = '3px solid var(--surface)'
+  spinner.style.borderTopColor = 'var(--accent)'
+  spinner.style.borderRadius = '50%'
+  spinner.style.animation = 'karui-spin 0.7s linear infinite'
+  host.appendChild(spinner)
+
+  if (!document.getElementById('karui-spin-keyframes'))
+  {
+    const style = document.createElement('style')
+    style.id = 'karui-spin-keyframes'
+    style.textContent = '@keyframes karui-spin { to { transform: rotate(360deg); } }'
+    document.head.appendChild(style)
+  }
+
+  document.body.appendChild(host)
+
+  return {
+    remove()
+    {
+      if (host.parentNode) host.parentNode.removeChild(host)
+    }
+  }
+}
+
+// Resolves when the viewport (window.innerHeight/Width) has been unchanged
+// for 3 consecutive frames, after an initial settling period. Enter-key
+// presses open the soft keyboard, which changes the viewport height when
+// it dismisses. We must not create a position:fixed game overlay during
+// that transition, or it gets created at the "keyboard still up" size and
+// visibly resizes when the keyboard finishes animating away.
+function waitForStableViewport(minMs, maxMs)
+{
+  return new Promise(resolve =>
+  {
+    const start = performance.now()
+    let lastH = window.innerHeight
+    let lastW = window.innerWidth
+    let stableCount = 0
+
+    const check = () =>
+    {
+      const elapsed = performance.now() - start
+      const h = window.innerHeight
+      const w = window.innerWidth
+
+      if (h === lastH && w === lastW)
+      {
+        stableCount++
+      }
+      else
+      {
+        stableCount = 0
+        lastH = h
+        lastW = w
+      }
+
+      if ((elapsed >= minMs && stableCount >= 3) || elapsed >= maxMs)
+      {
+        resolve()
+        return
+      }
+      requestAnimationFrame(check)
+    }
+    check()
+  })
 }
 
 export const gameRegistry = {
@@ -318,8 +402,65 @@ export function tryRunGame(code)
   {
     return false
   }
-  Promise.resolve()
-    .then(loader)
-    .catch(err => console.error('Game load failed:', err))
+
+  // Did the user start the game with the keyboard open? (Enter key path)
+  // If so, the viewport is about to shrink back to its resting size as the
+  // soft keyboard animates away. Creating a position:fixed overlay during
+  // that transition is what caused the FOUC on Android WebView.
+  const active = document.activeElement
+  const hadKeyboard = !!(
+    active && (
+      active.tagName === 'INPUT' ||
+      active.tagName === 'TEXTAREA' ||
+      active.tagName === 'SELECT'
+    )
+  )
+  if (hadKeyboard && typeof active.blur === 'function')
+  {
+    active.blur()
+  }
+
+  // Show the spinner immediately, in the same synchronous tick as the
+  // key press. It covers the notes screen for the entire process, and
+  // (unlike the game canvas) it's centred and tiny, so viewport resize
+  // during keyboard dismissal doesn't cause a visible jump.
+  const loading = createLoadingSpinner()
+
+  // Wait for the viewport to be stable before creating the game overlay.
+  // If no keyboard was involved (E button path), skip the wait entirely.
+  const settled = hadKeyboard
+    ? waitForStableViewport(250, 900)
+    : Promise.resolve()
+
+  // Remove the spinner only once the game overlay is actually visible --
+  // for flap, this means waiting through its own internal canvas-size-
+  // stability check, which guarantees the canvas never appears mid-layout.
+  const removeWhenGameVisible = (startTime) =>
+  {
+    const gameOverlay = document.querySelector('.game-overlay')
+    const now = performance.now()
+    const visible = gameOverlay && gameOverlay.style.visibility !== 'hidden'
+    if (visible || now - startTime > 3000)
+    {
+      loading.remove()
+    }
+    else
+    {
+      requestAnimationFrame(() => removeWhenGameVisible(startTime))
+    }
+  }
+
+  settled
+    .then(() => Promise.resolve().then(loader))
+    .then(() =>
+    {
+      removeWhenGameVisible(performance.now())
+    })
+    .catch(err =>
+    {
+      loading.remove()
+      console.error('Game load failed:', err)
+    })
+
   return true
 }

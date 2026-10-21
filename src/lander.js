@@ -3,6 +3,7 @@ import {
   getGameTheme,
   getGameAudioContext,
   playGameSound,
+  ensureConfettiLoaded,
   triggerConfetti
 } from './extras.js'
 
@@ -52,6 +53,8 @@ export function startLanderGame()
     document.activeElement.blur()
   }
 
+  try { getGameAudioContext() } catch (e) {}
+
   const theme = getGameTheme()
   const overlay = createGameOverlay({
     onBack: stopLanderGame,
@@ -62,8 +65,8 @@ export function startLanderGame()
   const canvas = document.createElement('canvas')
   canvas.width = CANVAS_W
   canvas.height = CANVAS_H
+  canvas.className = 'game-canvas'
   Object.assign(canvas.style, {
-    display: 'block',
     border: `2px solid ${theme.border}`,
     backgroundColor: theme.surface,
     touchAction: 'manipulation',
@@ -97,8 +100,15 @@ export function startLanderGame()
       canvas.style.maxHeight = '52vh'
       canvas.style.maxWidth = '380px'
     }
+    if (canvas.clientWidth > 100 && canvas.clientHeight > 100)
+    {
+      // Pre-render while hidden so reveal shows real content (rocket +
+      // platforms), not a blank rect that rAF fills one frame later.
+      try { draw() } catch (e) {}
+      canvas.classList.add('ready')
+      overlay.reveal()
+    }
   }
-  applyCanvasSize()
 
   const highScore = parseInt(localStorage.getItem('lander_highscore') || '0', 10)
 
@@ -131,6 +141,23 @@ export function startLanderGame()
   }
 
   resetLanderLevel(true)
+
+  // Pre-load confetti (see flap.js for rationale).
+  setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 300)
+
+  // session + platforms are valid: size, pre-render, reveal.
+  applyCanvasSize()
+  if (!canvas.classList.contains('ready'))
+  {
+    requestAnimationFrame(() =>
+    {
+      applyCanvasSize()
+      if (!canvas.classList.contains('ready'))
+      {
+        requestAnimationFrame(applyCanvasSize)
+      }
+    })
+  }
 
   const handleTap = (e) =>
   {
