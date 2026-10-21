@@ -38,6 +38,10 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
   public static final String ACTION_REFRESH = "io.github.ronynn.karui.REFRESH_CALENDAR";
 
+  // Timed events fire this many milliseconds before their scheduled time,
+  // so the user gets a heads-up rather than a reminder that is already late.
+  private static final long REMINDER_LEAD_MS = 5 * 60 * 1000L;
+
   @Override
   public void onReceive(Context context, Intent intent)
   {
@@ -66,7 +70,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   }
 
   // ------------------------------------------------------------------
-  //  Daily summary
+  //  Daily summary — UNTIMED events only
   // ------------------------------------------------------------------
   private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)
   {
@@ -95,12 +99,16 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       {
         JSONObject o = arr.getJSONObject(i);
         if (!todayStr.equals(o.optString("date", ""))) continue;
-        if (o.optBoolean("completed", false)) continue;   // NEW: completed events don't appear
+        if (o.optBoolean("completed", false)) continue;
+
+        // Timed events do not belong in the "all day" summary — they each
+        // have their own alarm and would otherwise be double-notified.
+        String time = o.optString("time", "");
+        if (!time.isEmpty()) continue;
+
         String text = o.optString("text", "").trim();
         if (text.isEmpty()) continue;
-        String time = o.optString("time", "");
-        String prefix = time.isEmpty() ? "" : time + " · ";
-        todays.add(prefix + text);
+        todays.add(text);
       }
     }
     catch (Exception ignored) {}
@@ -182,7 +190,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         if (o.optInt("id", 0) != eventId) continue;
         if (!todayStr.equals(o.optString("date", ""))) continue;
 
-        // NEW: completed events don't fire and any stale notif is cleared.
         if (o.optBoolean("completed", false))
         {
           NotificationManager nmStale =
@@ -291,9 +298,8 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
     if (am == null) return;
 
-    // NEW: cancel any currently-visible notifications for events that
-    // have since been marked completed. Covers the case where the
-    // reminder already fired and the user then ticked it.
+    // Clear any currently-visible reminders for events that have since been
+    // completed (covers "reminder already fired, user then ticked it").
     NotificationManager nmClean =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nmClean != null)
@@ -330,7 +336,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     }
     catch (Exception ignored) {}
 
-    // 2) Schedule today's events with a time still in the future.
+    // 2) Schedule today's events with a time still in the future (minus lead).
     String json = prefs.getString(KEY_EVENTS_JSON, "[]");
     String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
     List<Integer> newIds = new ArrayList<>();
@@ -363,6 +369,14 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         target.set(Calendar.MILLISECOND, 0);
         if (target.getTimeInMillis() <= now) continue;
 
+        // Fire a few minutes early so the reminder isn't already stale.
+        long trigger = target.getTimeInMillis() - REMINDER_LEAD_MS;
+        if (trigger <= now)
+        {
+          trigger = target.getTimeInMillis();
+          if (trigger <= now) continue;
+        }
+
         int rid = 300 + (o.optInt("id", 0) % 100000);
         Intent ei = new Intent(context, CalendarNotificationReceiver.class);
         ei.putExtra(EXTRA_EVENT_ID, o.optInt("id", 0));
@@ -370,7 +384,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) ef |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent epi = PendingIntent.getBroadcast(context, rid, ei, ef);
 
-        setExactCompat(am, target.getTimeInMillis(), epi);
+        setExactCompat(am, trigger, epi);
         newIds.add(rid);
       }
     }
@@ -403,7 +417,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     prefs.edit().putString(KEY_SCHEDULED_IDS, "[]").apply();
 
-    // Clear any visible per-event notifications too.
     NotificationManager nm =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nm != null)

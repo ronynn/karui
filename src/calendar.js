@@ -1,5 +1,7 @@
 // --- SECTION: CALENDAR COMPONENT ---
 // --- Calendar notification module (moved out of index.js) ---
+import { parseReminderTime, stripReminderTime } from './notes.js'
+
 export function createCalendarModule()
 {
   return {
@@ -24,31 +26,37 @@ export function createCalendarModule()
       const dateRe = /^(\d{4}-\d{2}-\d{2})\s+([\s\S]+)$/
       const events = []
 
+      // Strips the visible `@HHMM` from the text sent to Android so the
+      // notification body reads cleanly; the original note keeps it.
+      const push = (date, rawText, note) =>
+      {
+        const time = parseReminderTime(rawText)
+        const ev = {
+          date,
+          text: time ? stripReminderTime(rawText) : rawText,
+          id: note.id,
+          completed: !!note.completed
+        }
+        if (time) ev.time = time
+        events.push(ev)
+      }
+
       this.notes.forEach(n =>
+      {
+        if (!n || n.category !== cat || !n.text) return
+
+        const m = n.text.match(dateRe)
+        if (m)
         {
-          if (!n || n.category !== cat || !n.text) return
+          push(m[1], m[2].trim(), n)
+          return
+        }
 
-          const m = n.text.match(dateRe)
-          if (m)
-          {
-            const ev = { date: m[1], text: m[2].trim(), id: n.id, completed: !!n.completed }
-            if (n.reminderTime) ev.time = n.reminderTime
-            events.push(ev)
-            return
-          }
-
-          if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
-          {
-            const ev = {
-              date: n.scheduledDate,
-              text: n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(),
-              id: n.id,
-              completed: !!n.completed
-            }
-            if (n.reminderTime) ev.time = n.reminderTime
-            events.push(ev)
-          }
-        })
+        if (n.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(n.scheduledDate))
+        {
+          push(n.scheduledDate, n.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '').trim(), n)
+        }
+      })
 
       const json = JSON.stringify(events)
       if (json === this._lastSyncedCalendarJson) return
@@ -116,6 +124,8 @@ export function initCalendar(appStore)
     return appStore.notes.filter(n => n.category === cat)
   }
 
+  // Note: this keeps the `@HHMM` token in the returned `text` — the calendar
+  // list, day modal and "recurring today" strip all display it intentionally.
   function parseNoteDateAndText(note)
   {
     if (note.scheduledDate)
@@ -123,7 +133,6 @@ export function initCalendar(appStore)
       const displayText = note.text.replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
       return { date: note.scheduledDate, text: displayText, note: note, isRecurring: true }
     }
-    // [\s\S] matches newlines too, so multiline notes work.
     let match = note.text.match(/^(\d{4}-\d{2}-\d{2})\s*([\s\S]*)$/)
     if (match) return { date: match[1], text: match[2], note: note, isRecurring: false }
     return { date: null, text: note.text, note: note, isRecurring: false }
@@ -217,7 +226,7 @@ export function initCalendar(appStore)
   {
     body.innerHTML = `
       <div class="calendar-add-form">
-        <textarea id="event-text" rows="4" placeholder="Enter event details... (prefix with !1w for recurring)"></textarea>
+        <textarea id="event-text" rows="4" placeholder="Event details… append @1810 for an 18:10 reminder. Prefix !1d for daily."></textarea>
         <div class="calendar-add-form-actions">
           <button id="save-event">Save</button>
           <button id="cancel-event">Cancel</button>

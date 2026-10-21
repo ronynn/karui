@@ -1,8 +1,35 @@
 import { playSound, tryRunGame } from './extras.js'
 
-const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})(?:_(\d{1,2})-(\d{1,2}))?\s+([\s\S]+)$/i
+// Recurrence token only; the trailing body captures everything else — including
+// any `@HHMM` the user typed, which we deliberately keep in the note text.
+const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+([\s\S]+)$/i
 const FUTURE_BUFFER = 3
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
+
+// Single supported reminder-time syntax: `@HHMM` (exactly 4 digits).
+// Not `@HMM`, not `@HH:MM`, not `@HHMM` glued to a word.
+const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})(?=\s|$)/
+
+// Extract "HH:MM" from text, or null if absent / invalid. Exported so
+// calendar.js can reuse the exact same rule when building Android payloads.
+export function parseReminderTime(text)
+{
+  const m = (text || '').match(TIME_TOKEN_RE)
+  if (!m) return null
+  const h = parseInt(m[1], 10)
+  const mi = parseInt(m[2], 10)
+  if (h > 23 || mi > 59) return null
+  return m[1] + ':' + m[2]
+}
+
+// Remove a `@HHMM` token. Used only when producing notification-facing text.
+export function stripReminderTime(text)
+{
+  return (text || '')
+    .replace(TIME_TOKEN_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 export function createNotesModule()
 {
@@ -126,7 +153,6 @@ export function createNotesModule()
     // --- EXPAND/COLLAPSE ---
     toggleNoteExpand(id)
     {
-      // Reassign whole object so petite-vue notifies all dependent notes.
       const next = { ...this._expandedNotes }
       if (next[id]) delete next[id]
       else next[id] = true
@@ -140,7 +166,6 @@ export function createNotesModule()
       const wraps = list.querySelectorAll('.note-content-wrap')
       if (!wraps.length) return
 
-      // Temporarily clamp expanded wraps so scrollHeight reflects full content.
       const wasExpanded = []
       wraps.forEach(el =>
       {
@@ -158,17 +183,12 @@ export function createNotesModule()
         if (!item) return
         const id = item.dataset.id
         if (!id) return
-        // Element not laid out yet — scrollHeight/clientHeight are unreliable
-        // here, so do NOT guess. The double-rAF pass will re-measure once
-        // layout is settled. This is what killed the "every note briefly
-        // shows an expand bar" FOUC.
         if (el.clientHeight < 2) return
         if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
       })
 
       wasExpanded.forEach(el => el.classList.add('expanded'))
 
-      // Only assign if the *set* of ids changed — prevents re-render loops.
       const oldKey = Object.keys(this._noteNeedsExpand).sort().join(',')
       const newKey = Object.keys(newNeedsExpand).sort().join(',')
       if (oldKey !== newKey) this._noteNeedsExpand = newNeedsExpand
@@ -184,10 +204,6 @@ export function createNotesModule()
       {
         if (this._noteOverflowMeasurePending) return
         this._noteOverflowMeasurePending = true
-        // Double rAF: the first callback runs after style/layout, the second
-        // guarantees the browser has finished the layout pass that Vue's DOM
-        // commit triggered. Single rAF was racing the layout and letting
-        // unlaid-out wrappers (clientHeight 0, scrollHeight > 0) get marked.
         requestAnimationFrame(() => requestAnimationFrame(() =>
         {
           this._noteOverflowMeasurePending = false
@@ -197,27 +213,18 @@ export function createNotesModule()
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
 
-      // Same double-rAF for the initial pass.
       requestAnimationFrame(() => requestAnimationFrame(() => this._measureNoteOverflow()))
     },
 
     // --- RECURRENCE HELPERS ---
+    // Returns { token, body }. `body` keeps any `@HHMM` the user typed so it
+    // shows up in the calendar — only the `!token` prefix is consumed.
     parseRecurrence(text)
     {
       if (!text) return null
       const m = text.match(RECURRENCE_RE)
       if (!m) return null
-      const out = { token: m[1].toLowerCase(), body: m[4] }
-      if (m[2] && m[3])
-      {
-        const h = parseInt(m[2], 10)
-        const min = parseInt(m[3], 10)
-        if (h >= 0 && h <= 23 && min >= 0 && min <= 59)
-        {
-          out.reminderTime = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0')
-        }
-      }
-      return out
+      return { token: m[1].toLowerCase(), body: m[2] }
     },
 
     stripDatePrefix(text)
@@ -288,7 +295,10 @@ export function createNotesModule()
       return `${y}-${m}-${day}`
     },
 
-    buildRecurrenceGroup(text, token, category, anchorDateStr, reminderTime)
+    // `text` is the body of the recurrence (with `!token` already stripped)
+    // and may include an `@HHMM` token — that token is intentionally preserved
+    // in the note text so it is visible in the calendar list.
+    buildRecurrenceGroup(text, token, category, anchorDateStr)
     {
       const now = Date.now()
       const groupId = now
@@ -321,7 +331,6 @@ export function createNotesModule()
         scheduledDate: firstDateStr,
         recurrence: token
       }
-      if (reminderTime) firstNote.reminderTime = reminderTime
       created.push(firstNote)
 
       for (let i = 0; i < FUTURE_BUFFER; i++)
@@ -341,7 +350,6 @@ export function createNotesModule()
           scheduledDate: nextStr,
           recurrence: token
         }
-        if (reminderTime) occ.reminderTime = reminderTime
         created.push(occ)
       }
       return created
@@ -379,7 +387,6 @@ export function createNotesModule()
         scheduledDate: nextStr,
         recurrence: note.recurrence
       }
-      if (note.reminderTime) newNote.reminderTime = note.reminderTime
       if (this.addNoteBottom) this.notes.push(newNote)
       else this.notes.unshift(newNote)
     },
@@ -405,7 +412,7 @@ export function createNotesModule()
       const rec = this.parseRecurrence(v)
       if (rec)
       {
-        const group = this.buildRecurrenceGroup(v, rec.token, cat, anchorDateStr || null, rec.reminderTime || null)
+        const group = this.buildRecurrenceGroup(rec.body, rec.token, cat, anchorDateStr || null)
         if (group.length > 0)
         {
           if (this.addNoteBottom) this.notes.push(...group)
@@ -551,9 +558,6 @@ export function createNotesModule()
       let clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : window.innerWidth / 2)
       let clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : window.innerHeight / 2)
 
-      // Render the menu offscreen first so we can measure its real size before
-      // positioning it. The old code guessed width 172 and then re-positioned
-      // in a setTimeout, which produced a visible "bounce from the right".
       this.noteMenuPos = { x: -9999, y: -9999 }
       this.noteMenuVisible = true
 
@@ -742,8 +746,6 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // Collapse every note in the tab (in display order) into ONE new note.
-    // Great for copying or a single clean QR payload.
     mergeTabNotes()
     {
       let cat = this.contextTab || this.activeCategory
@@ -756,7 +758,6 @@ export function createNotesModule()
         return
       }
 
-      // Mirror displayedNotes ordering so the merged text matches what's on screen.
       catNotes.sort((a, b) =>
       {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
@@ -838,7 +839,6 @@ export function createNotesModule()
             if (n.groupId) existing.groupId = n.groupId
             if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
             if (n.recurrence) existing.recurrence = n.recurrence
-            if (n.reminderTime) existing.reminderTime = n.reminderTime
             updated++
           }
         }
@@ -852,7 +852,6 @@ export function createNotesModule()
           if (n.groupId) newNote.groupId = n.groupId
           if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
           if (n.recurrence) newNote.recurrence = n.recurrence
-          if (n.reminderTime) newNote.reminderTime = n.reminderTime
           this.notes.push(newNote)
           added++
         }
