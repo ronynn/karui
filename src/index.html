@@ -157,13 +157,13 @@
                 <span class="slider"></span>
               </label>
             </div>
-  <!--          <div class="toggle-container">
-              <span>Double Tap Delete To Delete</span>
-              <label class="switch">
-                <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
-                <span class="slider"></span>
-              </label>
-            </div> -->
+            <!--          <div class="toggle-container">
+            <span>Double Tap Delete To Delete</span>
+            <label class="switch">
+            <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
+            <span class="slider"></span>
+          </label>
+          </div> -->
             <div class="toggle-container">
               <span>Enter key inserts newline</span>
               <label class="switch">
@@ -202,7 +202,7 @@
               </label>
             </div>
             <div style="text-align:center;padding-top:15px;">Functionality</div>
-            
+
             <div class="toggle-container">
               <span>Enable Quick Note from statusbar</span>
               <label class="switch">
@@ -240,16 +240,15 @@
         <div class="box">
           <span class="box-title">Box 4: Instructions</span>
           <div class="about-text">
-            - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu.<br/>
-            - Long press from your launcher homescreen to add Karui widgets. <br/>
-            - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete notes.<br/>
+            - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu. Long press from your launcher homescreen to add Karui widgets. <br/>
+            - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete individual notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
             - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
-            - Recurring notes (BETA): start a note with !Nx to repeat it.
+            - Recurring notes (BETA): Start a note with !Nx to repeat it.
             !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly. 
             !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 
             Deleting one occurrence deletes the whole series (and restoring brings it back whole).
-            Completing an occurrence automatically queues the next fourth one. Adding time goes like !1d_15-00 <br/>
+            Completing an occurrence automatically queues the next fourth one. Adding time goes like !1d @1500 event.<br/>
             - To pin a note to status bar, add it as a journal/calendar entry for today.<br/>
             - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram where we talk about foss apps, design and productivity.
           </div>
@@ -311,11 +310,13 @@
     </div>
 
     <div id="note-dropdown" class="menu" :style="noteMenuStyle">
+      <div class="note-menu-stats note-menu-stats-top">WC:{{ activeNoteWordCount }}</div>
       <button @click="actionCopyNote">Copy</button>
       <button @click="showNoteQr">Show QR</button>
       <button @click="actionEditNote">Edit</button>
       <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
       <button @click="actionDeleteNote">Delete</button>
+      <div class="note-menu-stats note-menu-stats-bottom">CH: {{ activeNoteCharCount }}</div>
     </div>
 
     <div id="modal-overlay" v-if="modalVisible">

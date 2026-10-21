@@ -1,1 +1,1 @@
-140kB aesthetic offline todo list app with calendar, sync and widgets
+145kB aesthetic todo list app with calendar, reminders, sync and widgets

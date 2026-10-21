@@ -25,14 +25,18 @@ All versions of the app are completely reproducible, just fork the source code f
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" alt="Screenshot 3" width="45%">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Screenshot 4" width="45%">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" alt="Screenshot 5" width="45%">
-    <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="Screenshot 6" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" alt="Screenshot 6" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" alt="Screenshot 7" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" alt="Screenshot 8" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" alt="Screenshot 9" width="45%">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" alt="Screenshot 10" width="45%">
 
 </div>
 
 
 ## Use it for
 
-- Daily quick notetaking and mood journalling
+- Daily quick notetaking, making shoping lists and mood journalling
 - Set reminders and use Karui like a habit tracker
 - Tasks list with percentage remaining metrics
 - Taking notes from status bar or other app without switching to Karui or leaving opened app
@@ -52,7 +56,6 @@ All versions of the app are completely reproducible, just fork the source code f
 - Lightweight: Consumes only 0.05% CPU and 128KB of RAM. After all, simple apps shouldn't need more—remember, the Apollo mission operated on a computer with around 4KB of RAM!
 - Highly customizable: Offers many themes with option for custom fonts.
 - To add a new note tab: use the `/TabName` format. Bringing some Linux Terminal vibes.
-- To remove any tab (except the Main tab): use the `\TabName` format.
 - Or just long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes)
 - Support for custom fonts, so pick and select any .ttf files you like from your files system
 - Add notes from status bar, or from other apps when selecting text (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
@@ -103,7 +106,7 @@ Karui is being developed under the GPLv3 License.
 ## Most Recent Update Notes (2.2)
 
 > Achieved Perfection
-Try opening the app in older devices, changing themes, everything should feel snappier now.
+Try opening the app in older devices, changing themes and the games, everything should feel snappier now.
 
 - Fix: Landscape UI for the app UI, note and tab menu, and games
 - Fix: Note Menu always opens inside screen now
@@ -114,10 +117,12 @@ Try opening the app in older devices, changing themes, everything should feel sn
     - Calendar CSS seperated from the calendar component, thus no more css in js loading lag
     - Module preloading of vue and indexjs
     - Lazy loading confetti library
+    - Adding a spinner before games load to prevent FOUC when screen resizes due to keyboard
 - Added: Widgets now supports more fonts, widget menu page has changes, widget buttons got an aesthetic overhaul
 - Added: Expand collapse buttons for long notes so that they dont appear as text bars
-- Added (BETA): Time syntax for reminders and recurring notes. Android is finicky with notification permissions and reminder apps.
+- Added (BETA): Time syntax for reminders and recurring notes. !1d @1800 always fires just 5 minutes before the event. Android is finicky with notification permissions and reminder apps.
 - Added: QR share for notes and note tabs, import entire tabs data with a Import QR button
+- Added: Note Menu now shows word count and character count, I often find the need for it and don't want to keep a seperate app just for this.
 - Added: Merge notes in a tab, preferably after deleting done tasks, to easily share the plaintext using qr. I use it to batch my searches or quick notes which I then sometimes use [Hashiru](https://github.com/ronynn/hashiru) to save.
 - 
 

@@ -77,12 +77,12 @@ export function createNotesModule()
       }
 
       result.sort((a, b) =>
-      {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-        if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
-        if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
-        return 0
-      })
+        {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+          if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+          if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+          return 0
+        })
 
       this._cacheKey = key
       this._dirtyNotes = false
@@ -133,6 +133,28 @@ export function createNotesModule()
       return n ? n.pinned : false
     },
 
+    get activeNote()
+    {
+      if (!this.activeNoteMenuId) return null
+      return this.notes.find(x => x.id === this.activeNoteMenuId) || null
+    },
+
+    get activeNoteWordCount()
+    {
+      const n = this.activeNote
+      if (!n || !n.text) return 0
+      const trimmed = n.text.trim()
+      if (!trimmed) return 0
+      return trimmed.split(/\s+/).filter(Boolean).length
+    },
+
+    get activeNoteCharCount()
+    {
+      const n = this.activeNote
+      if (!n || typeof n.text !== 'string') return 0
+      return n.text.length
+    },
+
     get canMoveTabLeft() { return this.noteCategories.indexOf(this.contextTab) > 0 },
     get canMoveTabRight()
     {
@@ -168,24 +190,24 @@ export function createNotesModule()
 
       const wasExpanded = []
       wraps.forEach(el =>
-      {
-        if (el.classList.contains('expanded'))
         {
-          el.classList.remove('expanded')
-          wasExpanded.push(el)
-        }
-      })
+          if (el.classList.contains('expanded'))
+          {
+            el.classList.remove('expanded')
+            wasExpanded.push(el)
+          }
+        })
 
       const newNeedsExpand = {}
       wraps.forEach(el =>
-      {
-        const item = el.closest('.note-item')
-        if (!item) return
-        const id = item.dataset.id
-        if (!id) return
-        if (el.clientHeight < 2) return
-        if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
-      })
+        {
+          const item = el.closest('.note-item')
+          if (!item) return
+          const id = item.dataset.id
+          if (!id) return
+          if (el.clientHeight < 2) return
+          if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
+        })
 
       wasExpanded.forEach(el => el.classList.add('expanded'))
 
@@ -201,15 +223,15 @@ export function createNotesModule()
       if (!list) return
 
       const obs = new MutationObserver(() =>
-      {
-        if (this._noteOverflowMeasurePending) return
-        this._noteOverflowMeasurePending = true
-        requestAnimationFrame(() => requestAnimationFrame(() =>
         {
-          this._noteOverflowMeasurePending = false
-          this._measureNoteOverflow()
-        }))
-      })
+          if (this._noteOverflowMeasurePending) return
+          this._noteOverflowMeasurePending = true
+          requestAnimationFrame(() => requestAnimationFrame(() =>
+            {
+              this._noteOverflowMeasurePending = false
+              this._measureNoteOverflow()
+            }))
+        })
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
 
@@ -562,16 +584,16 @@ export function createNotesModule()
       this.noteMenuVisible = true
 
       setTimeout(() =>
-      {
-        const el = document.getElementById('note-dropdown')
-        if (!el) return
-        const rect = el.getBoundingClientRect()
-        const w = rect.width || 160
-        const h = rect.height || 260
-        const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
-        const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
-        this.noteMenuPos = { x, y }
-      }, 0)
+        {
+          const el = document.getElementById('note-dropdown')
+          if (!el) return
+          const rect = el.getBoundingClientRect()
+          const w = rect.width || 160
+          const h = rect.height || 260
+          const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
+          const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
+          this.noteMenuPos = { x, y }
+        }, 0)
     },
 
     actionDeleteNote()
@@ -630,9 +652,9 @@ export function createNotesModule()
       if (n)
       {
         this.openPrompt('Edit Note', n.text, val =>
-        {
-          if (val) { n.text = val; n.updatedAt = Date.now(); this.saveData() }
-        })
+          {
+            if (val) { n.text = val; n.updatedAt = Date.now(); this.saveData() }
+          })
       }
       this.closeAllMenus()
     },
@@ -720,9 +742,9 @@ export function createNotesModule()
       if (oldName !== trimmed) delete this.categoryMeta[oldName]
 
       this.notes.forEach(n =>
-      {
-        if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
-      })
+        {
+          if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
+        })
 
       if (this.activeCategory === oldName) this.activeCategory = trimmed
       this._dirtyNotes = true
@@ -736,10 +758,10 @@ export function createNotesModule()
         this.noteCategories = this.noteCategories.filter(x => x !== t)
         let now = Date.now()
         this.notes = this.notes.filter(note =>
-        {
-          if (note.category === t) { note.updatedAt = now; this.recycleBin.push(note); return false }
-          return true
-        })
+          {
+            if (note.category === t) { note.updatedAt = now; this.recycleBin.push(note); return false }
+            return true
+          })
         if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
         this.saveData()
       }
@@ -759,12 +781,12 @@ export function createNotesModule()
       }
 
       catNotes.sort((a, b) =>
-      {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-        if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
-        if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
-        return 0
-      })
+        {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+          if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+          if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+          return 0
+        })
 
       let mergedText = catNotes.map(n => n.text).join('\n')
       let now = Date.now()
@@ -811,51 +833,51 @@ export function createNotesModule()
       let added = 0
       let updated = 0
       imported.forEach((n, idx) =>
-      {
-        if (!n || typeof n.text !== 'string') return
-        let cat = n.category || 'Main'
-        if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
-        if (!this.categoryMeta) this.categoryMeta = {}
-        if (!this.categoryMeta[cat]) this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
-
-        let noteId = (typeof n.id === 'number' && !isNaN(n.id)) ? n.id : null
-        let existing = null
-        if (noteId) existing = this.notes.find(x => x.id === noteId)
-        if (!existing) existing = this.notes.find(x => x.text === n.text && x.category === cat)
-
-        let itemUpdatedAt = (typeof n.updatedAt === 'number' && !isNaN(n.updatedAt)) ? n.updatedAt : now
-        let itemPinned = typeof n.pinned === 'boolean' ? n.pinned : false
-        let itemCompleted = Boolean(n.completed)
-
-        if (existing)
         {
-          if (itemUpdatedAt >= (existing.updatedAt || 0))
+          if (!n || typeof n.text !== 'string') return
+          let cat = n.category || 'Main'
+          if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
+          if (!this.categoryMeta) this.categoryMeta = {}
+          if (!this.categoryMeta[cat]) this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+
+          let noteId = (typeof n.id === 'number' && !isNaN(n.id)) ? n.id : null
+          let existing = null
+          if (noteId) existing = this.notes.find(x => x.id === noteId)
+          if (!existing) existing = this.notes.find(x => x.text === n.text && x.category === cat)
+
+          let itemUpdatedAt = (typeof n.updatedAt === 'number' && !isNaN(n.updatedAt)) ? n.updatedAt : now
+          let itemPinned = typeof n.pinned === 'boolean' ? n.pinned : false
+          let itemCompleted = Boolean(n.completed)
+
+          if (existing)
           {
-            existing.text = n.text
-            existing.completed = itemCompleted
-            existing.category = cat
-            existing.pinned = itemPinned
-            existing.updatedAt = itemUpdatedAt
-            if (n.groupId) existing.groupId = n.groupId
-            if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
-            if (n.recurrence) existing.recurrence = n.recurrence
-            updated++
+            if (itemUpdatedAt >= (existing.updatedAt || 0))
+            {
+              existing.text = n.text
+              existing.completed = itemCompleted
+              existing.category = cat
+              existing.pinned = itemPinned
+              existing.updatedAt = itemUpdatedAt
+              if (n.groupId) existing.groupId = n.groupId
+              if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
+              if (n.recurrence) existing.recurrence = n.recurrence
+              updated++
+            }
           }
-        }
-        else
-        {
-          let newNote = {
-            id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
-            text: n.text, completed: itemCompleted, category: cat,
-            pinned: itemPinned, updatedAt: itemUpdatedAt
+          else
+          {
+            let newNote = {
+              id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
+              text: n.text, completed: itemCompleted, category: cat,
+              pinned: itemPinned, updatedAt: itemUpdatedAt
+            }
+            if (n.groupId) newNote.groupId = n.groupId
+            if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
+            if (n.recurrence) newNote.recurrence = n.recurrence
+            this.notes.push(newNote)
+            added++
           }
-          if (n.groupId) newNote.groupId = n.groupId
-          if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
-          if (n.recurrence) newNote.recurrence = n.recurrence
-          this.notes.push(newNote)
-          added++
-        }
-      })
+        })
       this.saveData()
       return { added, updated }
     }
