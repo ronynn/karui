@@ -9,11 +9,6 @@ import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './set
 import { createQrModule } from './qr.js'
 
 // --- LAZY CONFETTI ---
-// We removed the eager <script defer> tag from index.html. Instead of blocking
-// startup parsing a library most users (celebrationMode=false) never touch, we
-// install a tiny stub at module-eval time and swap in the real library on the
-// first call. The public API (`confetti(opts)`, `.reset()`, `.create()`) stays
-// identical so the celebration code in notes.js needs no changes.
 let _confettiPromise = null
 function _loadConfetti()
 {
@@ -80,10 +75,6 @@ function mergeModules(...mods)
 }
 
 // --- HYDRATE PERSISTED STATE BEFORE MOUNT ---
-// Reading localStorage inside init() (which runs on @vue:mounted) means the
-// first paint renders empty/default tabs and an empty note list, then re-renders
-// once the real data arrives -- a visible flash. Pre-populating the reactive
-// store here makes the very first paint correct.
 function hydrateStore(store)
 {
   const ls = (k) =>
@@ -101,6 +92,19 @@ function hydrateStore(store)
   store.notes = ls('notes') || []
   store.recycleBin = ls('recycleBin') || []
   store.categoryMeta = ls('categoryMeta') || {}
+
+  // Normalize IDs/timestamps BEFORE mount so the very first render has
+  // stable :key values and the overflow measurement is keyed correctly.
+  // Without this, notes loaded from older versions (or imports) that lack
+  // an `id` produce `data-id="undefined"` on the first render, and the
+  // measurement can mis-key results, briefly flagging every note as
+  // overflowing on slower WebViews.
+  const seedTime = Date.now()
+  store.notes.forEach((n, idx) =>
+  {
+    if (!n.id) n.id = seedTime + idx
+    if (!n.updatedAt) n.updatedAt = seedTime
+  })
 
   store.currentTheme = str('theme', 'gruvbox')
   store.currentFont = str('font', 'system-ui')
@@ -126,8 +130,6 @@ function hydrateStore(store)
   store.calendarTabName = str('calendarTabName', 'Calendar')
   store.calendarNotificationsEnabled = bool('calendarNotificationsEnabled')
 
-  // Resolve initial active tab to the first persisted category so the first
-  // render already highlights the right tab and shows its notes.
   store.activeCategory = store.noteCategories[0] || 'Inbox'
 }
 
@@ -180,9 +182,6 @@ const appStore = reactive(mergeModules(
     // --- lifecycle ---
     async init()
     {
-      // State was already hydrated before mount. We only reconcile anything
-      // that depends on cross-field invariants here (no redundant localStorage
-      // reads, so no extra re-render on mount).
       this.noteCategories = [...new Set(this.noteCategories)]
 
       if (this.calendarEnabled && !this.noteCategories.includes(this.calendarTabName))
@@ -199,6 +198,7 @@ const appStore = reactive(mergeModules(
           }
         })
 
+      // IDs are already normalized in hydrateStore; keep this as a safety net.
       this.notes.forEach((n, idx) =>
         {
           if (!n.id)
@@ -220,16 +220,25 @@ const appStore = reactive(mergeModules(
       applyFont(this.currentFont)
       applyUiScale(this.uiScale)
 
-      // Measure note overflow NOW, in the synchronous portion of init(), so
-      // _noteNeedsExpand is committed in the same microtask flush as the first
-      // render -- i.e. before the browser paints. Previously this ran after
-      // `await initFontSystem()`, producing a visible post-paint layout shift
-      // when expand bars popped into existence.
+      // Attach the overflow observer. This also schedules a delayed
+      // double-rAF re-measure (used for later layout changes).
       this.initNoteOverflowObserver()
-      if (typeof this._measureNoteOverflow === 'function')
+
+      // Defer the FIRST measurement until fonts are ready AND the browser
+      // has produced at least one frame of final layout. The previous code
+      // called this synchronously here, which on slower WebViews measured
+      // stale (near-zero) client heights and briefly flagged EVERY note as
+      // overflowing — the visible "all bars for a split second" flash.
+      const fontReady = (document.fonts && document.fonts.ready)
+        ? document.fonts.ready
+        : Promise.resolve()
+      fontReady.then(() => requestAnimationFrame(() =>
       {
-        this._measureNoteOverflow()
-      }
+        if (typeof this._measureNoteOverflow === 'function')
+        {
+          this._measureNoteOverflow()
+        }
+      }))
 
       // Non-critical / async work follows.
       this.customFonts = await initFontSystem()
@@ -254,9 +263,6 @@ const appStore = reactive(mergeModules(
         }, 150)
       })
 
-      // Push the initial event list (deduped), then let Android re-arm
-      // if the toggle was already on. If it was already on, this call is
-      // a no-op on the Java side (no re-notify).
       this.syncCalendarEventsToAndroid()
       if (this.calendarNotificationsEnabled &&
           window.Android &&
@@ -314,12 +320,8 @@ const appStore = reactive(mergeModules(
         this.exportMarkdownSilent()
       }
 
-      // Deduped internally -- safe to call on every saveData().
       this.syncCalendarEventsToAndroid()
 
-      // Re-measure note overflow after layout-affecting changes
-      // (ui scale, font, edit, add/delete). MutationObserver catches
-      // DOM changes; this covers CSS-variable changes it can't see.
       if (typeof this._measureNoteOverflow === 'function')
       {
         requestAnimationFrame(() => this._measureNoteOverflow())
@@ -338,7 +340,7 @@ const appStore = reactive(mergeModules(
       {
         if (this.enterNewLine && !e.ctrlKey && !e.metaKey)
         {
-          return // let textarea insert a newline
+          return
         }
         e.preventDefault()
         this.submitNote()
@@ -653,8 +655,6 @@ const appStore = reactive(mergeModules(
   }
 ))
 
-// Hydrate before mount so the first paint already shows the real tabs,
-// the correct active tab, and the populated note list. No re-render flash.
 hydrateStore(appStore)
 
 createApp(appStore).mount()

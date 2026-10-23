@@ -205,7 +205,14 @@ export function createNotesModule()
           if (!item) return
           const id = item.dataset.id
           if (!id) return
-          if (el.clientHeight < 2) return
+          // Skip elements that look "not laid out yet". On slower WebViews
+          // (e.g. Ablemark 7) right after mount, a flex ancestor can report a
+          // near-zero clientHeight even though the text node has full height,
+          // which made EVERY note look overflowing for one frame. A real line
+          // of text is ~20px at ui-scale 1, so anything below 5px is
+          // almost certainly a collapsed ancestor, not a real note.
+          if (el.clientHeight < 5) return
+          if (el.scrollHeight < 5) return
           if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
         })
 
@@ -235,12 +242,19 @@ export function createNotesModule()
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
 
-      requestAnimationFrame(() => requestAnimationFrame(() => this._measureNoteOverflow()))
+      // Wait for fonts to be ready, THEN double-rAF. On slower WebViews the
+      // very first measurement used to run before custom/web fonts had been
+      // applied, so the boxes were measured at the fallback font's metrics
+      // and briefly flagged every note as overflowing.
+      const fontReady = (document.fonts && document.fonts.ready)
+        ? document.fonts.ready
+        : Promise.resolve()
+      fontReady.then(() => requestAnimationFrame(() => requestAnimationFrame(() =>
+        this._measureNoteOverflow()
+      )))
     },
 
     // --- RECURRENCE HELPERS ---
-    // Returns { token, body }. `body` keeps any `@HHMM` the user typed so it
-    // shows up in the calendar — only the `!token` prefix is consumed.
     parseRecurrence(text)
     {
       if (!text) return null
@@ -317,9 +331,6 @@ export function createNotesModule()
       return `${y}-${m}-${day}`
     },
 
-    // `text` is the body of the recurrence (with `!token` already stripped)
-    // and may include an `@HHMM` token — that token is intentionally preserved
-    // in the note text so it is visible in the calendar list.
     buildRecurrenceGroup(text, token, category, anchorDateStr)
     {
       const now = Date.now()
