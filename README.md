@@ -124,7 +124,6 @@ Try opening the app in older devices, changing themes and the games, everything 
 - Added: QR share for notes and note tabs, import entire tabs data with a Import QR button
 - Added: Note Menu now shows word count and character count, I often find the need for it and don't want to keep a seperate app just for this.
 - Added: Merge notes in a tab, preferably after deleting done tasks, to easily share the plaintext using qr. I use it to batch my searches or quick notes which I then sometimes use [Hashiru](https://github.com/ronynn/hashiru) to save.
-- 
 
 
 
