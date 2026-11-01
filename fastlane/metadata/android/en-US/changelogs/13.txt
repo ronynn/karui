@@ -1,0 +1,2 @@
+- Fix: FOUC of expand bar in armeable7 architecture
+- Added Themes: Things, CRT-Amber

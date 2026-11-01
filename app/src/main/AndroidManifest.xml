@@ -18,11 +18,20 @@
     <activity
       android:configChanges="orientation|screenSize"
       android:name="io.github.ronynn.karui.MainActivity"
-      android:exported="true">
+      android:exported="true"
+      android:launchMode="singleTask">
 
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+
+      <!-- Digital assistant / long-press-home support.
+           Once the user selects Karui in Settings → Default apps → Digital assistant,
+           the system will route the ASSIST gesture here. -->
+      <intent-filter>
+        <action android:name="android.intent.action.ASSIST" />
+        <category android:name="android.intent.category.DEFAULT" />
       </intent-filter>
 
     </activity>
@@ -80,21 +89,21 @@
     </receiver>
 
     <receiver
-    android:name=".CalendarNotificationReceiver"
-    android:exported="false" />
+      android:name=".CalendarNotificationReceiver"
+      android:exported="false" />
 
-<receiver
-    android:name=".BootReceiver"
-    android:exported="true">
-  <intent-filter>
-    <action android:name="android.intent.action.BOOT_COMPLETED" />
-    <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-  </intent-filter>
-</receiver>
+    <receiver
+      android:name=".BootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
 
     <service
       android:name=".NotesWidgetService"
-      android:permission="android.permission.BIND_REMOTEVIEWS" 
+      android:permission="android.permission.BIND_REMOTEVIEWS"
       android:exported="false" />
   </application>
 </manifest>

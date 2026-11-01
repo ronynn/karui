@@ -9,8 +9,8 @@ android {
         applicationId "io.github.ronynn.karui"
         minSdkVersion 21
         targetSdkVersion 36
-        versionCode 12
-        versionName "2.2"
+        versionCode 13
+        versionName "2.3"
     }
     
     signingConfigs {

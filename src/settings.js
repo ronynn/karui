@@ -39,27 +39,71 @@ export function createSettingsModule()
     calendarRef: null,
     enterNewLine: false,
 
-    themes: [
-      { key: 'gruvbox', label: 'GRUVBOX' },
-      { key: 'amoled', label: 'AMOLED' },
-
-      { key: 'sol-dark', label: 'SOL-DARK' },
-      { key: 'catppuccin', label: 'CATPPUCCIN' },
-      { key: 'catppuccin-frappe', label: 'FRAPPE' },
-      { key: 'nord', label: 'NORD' },
 
 
-      { key: 'tokyo-night', label: 'TOKYO' },
 
-      { key: 'everforest', label: 'EVERFOREST' },
-      { key: 'everforest-light', label: 'EV-LIGHT' },
-      { key: 'sakura', label: 'SAKURA' },
 
-      { key: 'purple', label: 'PURPLE' },
 
-      { key: 'paper', label: 'PAPER' }
 
-    ],
+
+
+
+themes : [
+  { key: 'gruvbox', label: 'GRUVBOX' },
+  { key: 'crt-amber', label: 'CRT-AMBER' },
+  { key: 'sepia-terminal', label: 'SEPIA-TERMINAL' },
+  { key: 'sepia', label: 'SEPIA' },
+  { key: 'wheat', label: 'WHEAT' },
+  { key: 'paper', label: 'PAPER' },
+  { key: 'gruvbox-light', label: 'GRUVBOX-LIGHT' },
+
+
+  { key: 'monokai', label: 'MONOKAI' },
+  { key: 'monokai-pro', label: 'MONOKAI-PRO' },
+  { key: 'zenburn', label: 'ZENBURN' },
+
+  
+  { key: 'gruvbox-material', label: 'GRUVBOX-MATERIAL' },
+  { key: 'everforest', label: 'EVERFOREST' },
+  { key: 'everforest-light', label: 'FOREST-LIGHT' },
+  { key: 'sol-dark', label: 'SOL-DARK' },
+  { key: 'sol-light', label: 'SOL-LIGHT' },
+  { key: 'papercolor-light', label: 'PAPERCOLOR-LIGHT' },
+
+  { key: 'tokyo-night', label: 'TOKYO-NIGHT' },
+  { key: 'things', label: 'THINGS' },
+
+  { key: 'nord', label: 'NORD' },
+  { key: 'rose-pine', label: 'ROSE-PINE' },
+  { key: 'sakura', label: 'SAKURA' },
+
+  { key: 'amoled', label: 'AMOLED' },
+  { key: 'charcoal', label: 'CHARCOAL' },
+
+  { key: 'slate', label: 'SLATE' },
+
+  { key: 'newsprint', label: 'NEWSPRINT' },
+
+
+
+  { key: 'catppuccin', label: 'CATPPUCCIN' },
+  { key: 'catppuccin-frappe', label: 'FRAPPE' },
+  { key: 'purple', label: 'PURPLE' },
+
+],
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
     defaultFonts: [
       { name: 'SYSTEM', val: 'system-ui' },

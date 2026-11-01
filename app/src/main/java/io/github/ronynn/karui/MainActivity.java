@@ -59,6 +59,9 @@ public class MainActivity extends Activity
   private static final String PREFS_SYNC = "sync_prefs";
   private static final String KEY_SYNC_URI = "sync_file_uri";
 
+  private static final String PREFS_NOTE_QUEUE = "note_queue";
+  private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
+
   private WebView mWebView;
   private View splashScreen;
 
@@ -71,6 +74,10 @@ public class MainActivity extends Activity
   private boolean isNotificationActive = false;
   private boolean isPageLoaded = false;
   private String inboxTabName = "Inbox";
+
+  /** Set when the quick-note toggle requested the POST_NOTIFICATIONS permission,
+   *  so onRequestPermissionsResult knows which flow to resume. */
+  private boolean pendingQuickNoteEnable = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
@@ -141,6 +148,16 @@ public class MainActivity extends Activity
                                   isPageLoaded = true;
                                   injectPendingNotes();
                                   readSyncFileAndInject();
+
+                                  // If the app was launched via the assistant gesture,
+                                  // let the web layer focus whatever it wants.
+                                  Intent launchIntent = getIntent();
+                                  if (launchIntent != null
+                                      && Intent.ACTION_ASSIST.equals(launchIntent.getAction()))
+                                  {
+                                    mWebView.evaluateJavascript(
+                                      "if(window.onAssistantLaunched) window.onAssistantLaunched();", null);
+                                  }
                                 }
                               });
 
@@ -170,7 +187,7 @@ public class MainActivity extends Activity
 
     mWebView.loadUrl("file:///android_asset/index.html");
 
-    SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     inboxTabName = prefs.getString("inbox_tab_name", "Inbox");
 
     createNotificationChannel();
@@ -209,38 +226,49 @@ public class MainActivity extends Activity
     }
   }
 
-  private void showNotification()
+  /**
+   * Post (or re-post) the quick-note notification.
+   *
+   * @param silent  When true, no Toast / settings prompts are shown. This is the
+   *                path used by {@link #ensureNotificationMatchesPreference()}
+   *                on every resume so the notification is re-created after a
+   *                reboot / force-stop / memory kill without nagging the user.
+   */
+  private void showNotification(boolean silent)
   {
     createNotificationChannel();
 
     NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null)
     {
-      Toast.makeText(this, "Notification service unavailable", Toast.LENGTH_SHORT).show();
+      if (!silent) Toast.makeText(this, "Notification service unavailable", Toast.LENGTH_SHORT).show();
       return;
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !manager.areNotificationsEnabled())
     {
-      Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
-      try
-        {
-          Intent intent = new Intent();
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      if (!silent)
+      {
+        Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
+        try
           {
-            intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-            intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+            Intent intent = new Intent();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            {
+              intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+              intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+            }
+            else
+            {
+              intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+              intent.setData(Uri.parse("package:" + getPackageName()));
+            }
+            startActivity(intent);
           }
-          else
+        catch (Exception ignored)
           {
-            intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
           }
-          startActivity(intent);
-        }
-      catch (Exception ignored)
-        {
-        }
+      }
       return;
     }
 
@@ -313,7 +341,8 @@ public class MainActivity extends Activity
           .setContentText("Swipe down to add a note")
           .setContentIntent(openPendingIntent)
           .addAction(replyAction)
-          .setOngoing(true);
+          .setOngoing(true)
+          .setOnlyAlertOnce(true);
 
         Notification notification = builder.build();
         manager.notify(NOTIFICATION_ID, notification);
@@ -321,12 +350,15 @@ public class MainActivity extends Activity
       }
     catch (Exception e)
       {
-        String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-        if (e.getCause() != null)
+        if (!silent)
         {
-          msg += "\nCause: " + e.getCause().toString();
+          String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
+          if (e.getCause() != null)
+          {
+            msg += "\nCause: " + e.getCause().toString();
+          }
+          Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
         }
-        Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
         e.printStackTrace();
       }
   }
@@ -341,13 +373,58 @@ public class MainActivity extends Activity
     isNotificationActive = false;
   }
 
+  // --- Quick-note state reconciliation -------------------------------------
+
+  private void setNotificationEnabled(boolean enabled)
+  {
+    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
+      .edit().putBoolean(KEY_NOTIFICATION_ENABLED, enabled).apply();
+  }
+
+  private boolean isNotificationShowing()
+  {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+    NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    if (manager == null) return false;
+    for (Notification n : manager.getActiveNotifications())
+    {
+      if (n.getId() == NOTIFICATION_ID) return true;
+    }
+    return false;
+  }
+
+  /**
+   * On every resume: if the user had the quick-note toggle on, make sure the
+   * notification actually exists. The OS can silently drop it after reboot,
+   * force-stop, memory-kill of the app, or when the notification channel is
+   * re-created — this brings it back without the user needing to untoggle
+   * and re-toggle the switch in the app.
+   */
+  private void ensureNotificationMatchesPreference()
+  {
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    if (!prefs.getBoolean(KEY_NOTIFICATION_ENABLED, false)) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+           != PackageManager.PERMISSION_GRANTED)
+    {
+      // Permission was revoked while we weren't looking. Nothing we can do
+      // silently — next time the user opens the toggle we'll re-prompt.
+      return;
+    }
+
+    if (isNotificationShowing()) return;
+    showNotification(true);
+  }
+
   // Section: Data Injection & Sync
 
   private void injectPendingNotes()
   {
     if (!isPageLoaded) return;
 
-    SharedPreferences prefs = getSharedPreferences("note_queue", MODE_PRIVATE);
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     String jsonStr = prefs.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
 
@@ -400,7 +477,6 @@ public class MainActivity extends Activity
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
       // Push the very latest calendar events so tomorrow's alarm sees fresh data.
-      // (Needs window.syncCalendarEventsToAndroid exposed by datasync.js.)
       mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
@@ -409,6 +485,11 @@ public class MainActivity extends Activity
   protected void onResume()
   {
     super.onResume();
+
+    // Re-create the status-bar note input if the user had it on but the OS
+    // dropped the notification (reboot, force-stop, memory kill, …).
+    ensureNotificationMatchesPreference();
+
     if (isPageLoaded)
     {
       injectPendingNotes();
@@ -416,14 +497,28 @@ public class MainActivity extends Activity
     }
 
     // Fire any past-due reminders the moment the user opens the app.
-    // Ongoing notifications with setOnlyAlertOnce(true) make this a no-op
-    // visually if they are already showing.
     SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
     if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
     {
       Intent refresh = new Intent(this, CalendarNotificationReceiver.class);
       refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
       sendBroadcast(refresh);
+    }
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent)
+  {
+    super.onNewIntent(intent);
+    setIntent(intent);
+
+    if (intent != null
+        && Intent.ACTION_ASSIST.equals(intent.getAction())
+        && isPageLoaded
+        && mWebView != null)
+    {
+      mWebView.evaluateJavascript(
+        "if(window.onAssistantLaunched) window.onAssistantLaunched();", null);
     }
   }
 
@@ -734,24 +829,34 @@ public class MainActivity extends Activity
       runOnUiThread(() -> {
         if (enable)
         {
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+              && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                 != PackageManager.PERMISSION_GRANTED)
           {
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED)
-            {
-              requestPermissions(
-                new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                NOTIFICATION_PERMISSION_REQUEST);
-              return;
-            }
+            pendingQuickNoteEnable = true;
+            requestPermissions(
+              new String[]{Manifest.permission.POST_NOTIFICATIONS},
+              NOTIFICATION_PERMISSION_REQUEST);
+            return; // persisted after the grant in onRequestPermissionsResult
           }
-          showNotification();
+          setNotificationEnabled(true);
+          showNotification(false);
         }
         else
         {
+          setNotificationEnabled(false);
           cancelNotification();
         }
       });
+    }
+
+    /** True if the user has the quick-note toggle enabled.
+     *  Use this from JS to restore the switch state on app start. */
+    @JavascriptInterface
+    public boolean isNotificationEnabled()
+    {
+      return getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
+        .getBoolean(KEY_NOTIFICATION_ENABLED, false);
     }
 
     @JavascriptInterface
@@ -762,7 +867,7 @@ public class MainActivity extends Activity
         tabName = "Inbox";
       }
       inboxTabName = tabName.trim();
-      getSharedPreferences("note_queue", MODE_PRIVATE)
+      getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
         .edit().putString("inbox_tab_name", inboxTabName).apply();
     }
 
@@ -785,14 +890,6 @@ public class MainActivity extends Activity
     //  Calendar-event bridge
     // ---------------------------------------------------------------
 
-    /**
-     * Called by JS whenever the calendar-tab note set changes. In addition
-     * to storing the JSON, we cancel any *stale* event notifications:
-     *   - events that were removed from the list, or
-     *   - events that are now marked completed.
-     * This is what clears the sticky reminder the instant the user taps
-     * "done" in the app.
-     */
     @JavascriptInterface
     public void updateCalendarEvents(String json)
     {
@@ -802,10 +899,6 @@ public class MainActivity extends Activity
 
       prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
 
-      // Compare old vs new and cancel notifications for events that are no
-      // longer active (deleted or completed). Date-agnostic on purpose so a
-      // reminder from yesterday also clears when the event is finally marked
-      // done today.
       try
       {
         JSONArray oldArr = new JSONArray(oldJson);
@@ -844,13 +937,6 @@ public class MainActivity extends Activity
       }
     }
 
-    /**
-     * Enables / disables calendar notifications.
-     *
-     * All permission prompts (POST_NOTIFICATIONS + exact-alarm capability)
-     * live here so they only ever show when the user explicitly toggles
-     * calendar reminders on.
-     */
     @JavascriptInterface
     public void setCalendarNotificationsEnabled(final boolean enabled)
     {
@@ -869,6 +955,9 @@ public class MainActivity extends Activity
               && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                  != PackageManager.PERMISSION_GRANTED)
           {
+            // Deliberately NOT setting pendingQuickNoteEnable — this is the
+            // calendar flow, so onRequestPermissionsResult must not post the
+            // quick-note notification.
             requestPermissions(
               new String[]{Manifest.permission.POST_NOTIFICATIONS},
               NOTIFICATION_PERMISSION_REQUEST);
@@ -912,16 +1001,33 @@ public class MainActivity extends Activity
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
   {
-    if (requestCode == NOTIFICATION_PERMISSION_REQUEST)
+    if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return;
+
+    boolean granted = grantResults.length > 0
+      && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+
+    boolean wasQuickNote = pendingQuickNoteEnable;
+    pendingQuickNoteEnable = false;
+
+    if (wasQuickNote)
     {
-      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+      if (granted)
       {
-        showNotification();
+        setNotificationEnabled(true);
+        showNotification(false);
       }
       else
       {
+        setNotificationEnabled(false);
         Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
       }
     }
+    else if (!granted)
+    {
+      // Calendar flow, permission denied.
+      Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
+    }
+    // else: calendar flow granted — setCalendarNotificationsEnabled already
+    // handled scheduling; nothing to do here.
   }
 }
