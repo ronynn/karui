@@ -75,31 +75,37 @@ export function createSettingsModule()
       { key: 'gruvbox', label: 'GRUVBOX' },
       { key: 'crt-amber', label: 'CRT-AMBER' },
       { key: 'sepia-terminal', label: 'SEPIA-TERM' },
+      { key: 'catppuccin', label: 'CATPPUCCIN' },
+      { key: 'catppuccin-frappe', label: 'FRAPPE' },
+
+      { key: 'monokai', label: 'MONOKAI' },
+      { key: 'monokai-pro', label: 'KAI-PRO' },
+      { key: 'zenburn', label: 'ZENBURN' },
+      { key: 'rose-pine', label: 'ROSE-PINE' },
+
+      { key: 'sol-dark', label: 'SOL-DARK' },
+      { key: 'nord', label: 'NORD' },
+
+      { key: 'tokyo-night', label: 'TOKYO-NIGHT' },
+      { key: 'amoled', label: 'AMOLED' },
+      { key: 'charcoal', label: 'CHARCOAL' },
+      { key: 'gruvbox-material', label: 'GMATERIAL' },
+
+      { key: 'everforest', label: 'EVERFOREST' },
+      { key: 'everforest-light', label: 'EV-LIGHT' },
       { key: 'sepia', label: 'SEPIA' },
       { key: 'wheat', label: 'WHEAT' },
       { key: 'paper', label: 'PAPER' },
       { key: 'gruvbox-light', label: 'GRUV-LIGHT' },
-      { key: 'monokai', label: 'MONOKAI' },
-      { key: 'monokai-pro', label: 'KAI-PRO' },
-      { key: 'zenburn', label: 'ZENBURN' },
-      { key: 'gruvbox-material', label: 'GMATERIAL' },
-      { key: 'everforest', label: 'EVERFOREST' },
-      { key: 'everforest-light', label: 'FOREST-LIGHT' },
-      { key: 'sol-dark', label: 'SOL-DARK' },
+
       { key: 'sol-light', label: 'SOL-LIGHT' },
-      { key: 'papercolor-light', label: 'PAPER' },
-      { key: 'tokyo-night', label: 'TOKYO-NIGHT' },
+      { key: 'papercolor-light', label: 'CUPERTINO' },
       { key: 'things', label: 'THINGS' },
-      { key: 'nord', label: 'NORD' },
-      { key: 'rose-pine', label: 'ROSE-PINE' },
       { key: 'sakura', label: 'SAKURA' },
-      { key: 'amoled', label: 'AMOLED' },
-      { key: 'charcoal', label: 'CHARCOAL' },
+      { key: 'purple', label: 'PURPLE' },
+
       { key: 'slate', label: 'SLATE' },
       { key: 'newsprint', label: 'NEWSPRINT' },
-      { key: 'catppuccin', label: 'CATPPUCCIN' },
-      { key: 'catppuccin-frappe', label: 'FRAPPE' },
-      { key: 'purple', label: 'PURPLE' }
     ],
 
     defaultFonts: [

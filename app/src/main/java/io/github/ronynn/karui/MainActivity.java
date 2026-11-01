@@ -54,6 +54,7 @@ public class MainActivity extends Activity
   private static final int SYNC_FILE_REQUEST_CODE = 4;
   private static final int IMPORT_MD_FILE_REQUEST_CODE = 5;
   private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
+  private static final int OVERLAY_PERMISSION_REQUEST = 101;
 
   private static final String CHANNEL_ID = "note_reply_channel";
   private static final int NOTIFICATION_ID = 1;
@@ -62,6 +63,7 @@ public class MainActivity extends Activity
 
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
+  private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
 
   private WebView mWebView;
   private View splashScreen;
@@ -76,8 +78,6 @@ public class MainActivity extends Activity
   private boolean isPageLoaded = false;
   private String inboxTabName = "Inbox";
 
-  /** Set when the quick-note toggle requested the POST_NOTIFICATIONS permission,
-   *  so onRequestPermissionsResult knows which flow to resume. */
   private boolean pendingQuickNoteEnable = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
@@ -97,6 +97,22 @@ public class MainActivity extends Activity
   protected void onCreate(Bundle savedInstanceState)
   {
     super.onCreate(savedInstanceState);
+
+    Intent launchIntent = getIntent();
+    boolean assistLaunch = launchIntent != null
+      && Intent.ACTION_ASSIST.equals(launchIntent.getAction());
+
+    // ── ASSIST fast path ────────────────────────────────────────────
+    // If the user long-pressed home and we already have overlay
+    // permission, launch the floating panel and bail out before
+    // inflating the full-screen UI at all.
+    if (assistLaunch && canDrawOverlays())
+    {
+      startOverlayAndExit();
+      return;
+    }
+
+    // ── Full-screen UI setup (normal launch, or ASSIST fallback) ────
     setContentView(R.layout.activity_main);
 
     mWebView = findViewById(R.id.activity_main_webview);
@@ -119,72 +135,70 @@ public class MainActivity extends Activity
     mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
     mWebView.setWebViewClient(new WebViewClient()
-                              {
-                                @Override
-                                public boolean shouldOverrideUrlLoading(WebView view, String url)
-                                {
-                                  Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                                  try
-                                    {
-                                      view.getContext().startActivity(intent);
-                                    }
-                                  catch (ActivityNotFoundException e)
-                                    {
-                                      Toast.makeText(view.getContext(), R.string.no_app_to_open_link, Toast.LENGTH_SHORT).show();
-                                    }
-                                  return true;
-                                }
+    {
+      @Override
+      public boolean shouldOverrideUrlLoading(WebView view, String url)
+      {
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        try
+        {
+          view.getContext().startActivity(intent);
+        }
+        catch (ActivityNotFoundException e)
+        {
+          Toast.makeText(view.getContext(), R.string.no_app_to_open_link, Toast.LENGTH_SHORT).show();
+        }
+        return true;
+      }
 
-                                @Override
-                                public void onPageFinished(WebView view, String url)
-                                {
-                                  ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
-                                  fadeOut.setInterpolator(new DecelerateInterpolator());
-                                  fadeOut.setDuration(500);
-                                  fadeOut.start();
+      @Override
+      public void onPageFinished(WebView view, String url)
+      {
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(splashScreen, "alpha", 1f, 0f);
+        fadeOut.setInterpolator(new DecelerateInterpolator());
+        fadeOut.setDuration(500);
+        fadeOut.start();
 
-                                  splashScreen.setVisibility(View.GONE);
-                                  mWebView.setVisibility(View.VISIBLE);
+        splashScreen.setVisibility(View.GONE);
+        mWebView.setVisibility(View.VISIBLE);
 
-                                  isPageLoaded = true;
-                                  injectPendingNotes();
-                                  readSyncFileAndInject();
+        isPageLoaded = true;
+        injectPendingNotes();
+        readSyncFileAndInject();
 
-                                  // If the app was launched via the assistant gesture,
-                                  // let the web layer focus whatever it wants.
-                                  Intent launchIntent = getIntent();
-                                  if (launchIntent != null
-                                      && Intent.ACTION_ASSIST.equals(launchIntent.getAction()))
-                                  {
-                                    mWebView.evaluateJavascript(
-                                      "if(window.onAssistantLaunched) window.onAssistantLaunched();", null);
-                                  }
-                                }
-                              });
+        // Legacy hook — retained in case the JS side still listens for it.
+        Intent launch = getIntent();
+        if (launch != null && Intent.ACTION_ASSIST.equals(launch.getAction()))
+        {
+          mWebView.evaluateJavascript(
+            "if(window.onAssistantLaunched) window.onAssistantLaunched();", null);
+        }
+      }
+    });
 
     mWebView.setWebChromeClient(new WebChromeClient()
-                                {
-                                  @Override
-                                  public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams)
-                                  {
-                                    if (mFilePathCallback != null)
-                                    {
-                                      mFilePathCallback.onReceiveValue(null);
-                                    }
-                                    mFilePathCallback = filePathCallback;
-                                    Intent intent = fileChooserParams.createIntent();
-                                    try
-                                      {
-                                        startActivityForResult(intent, FILECHOOSER_RESULTCODE);
-                                      }
-                                    catch (Exception e)
-                                      {
-                                        mFilePathCallback = null;
-                                        return false;
-                                      }
-                                    return true;
-                                  }
-                                });
+    {
+      @Override
+      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams)
+      {
+        if (mFilePathCallback != null)
+        {
+          mFilePathCallback.onReceiveValue(null);
+        }
+        mFilePathCallback = filePathCallback;
+        Intent intent = fileChooserParams.createIntent();
+        try
+        {
+          startActivityForResult(intent, FILECHOOSER_RESULTCODE);
+        }
+        catch (Exception e)
+        {
+          mFilePathCallback = null;
+          return false;
+        }
+        return true;
+      }
+    });
 
     mWebView.loadUrl("file:///android_asset/index.html");
 
@@ -208,6 +222,104 @@ public class MainActivity extends Activity
       CalendarNotificationReceiver.scheduleNext(this);
       CalendarNotificationReceiver.scheduleEventReminders(this);
     }
+
+    // ── ASSIST without overlay permission: onboard the user ─────────
+    // We stay in the full-screen app as a fallback; if the user grants
+    // permission in Settings and comes back, onActivityResult will
+    // swap us into the floating overlay.
+    if (assistLaunch && !canDrawOverlays())
+    {
+      requestOverlayPermissionOnboarding();
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  Overlay / ASSIST plumbing
+  // ────────────────────────────────────────────────────────────────
+
+  private boolean canDrawOverlays()
+  {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+    {
+      return Settings.canDrawOverlays(this);
+    }
+    // Pre-Marshmallow: SYSTEM_ALERT_WINDOW is auto-granted at install.
+    return true;
+  }
+
+  /**
+   * Starts the overlay and hides the full-screen activity.
+   *
+   * We use moveTaskToBack(true) so the user's previous task (the game
+   * or app they were using) is revealed underneath the overlay, instead
+   * of leaving them looking at a blank home screen.
+   */
+  private void startOverlayAndExit()
+  {
+    try
+    {
+      Intent serviceIntent = new Intent(this, OverlayService.class);
+      startService(serviceIntent);
+    }
+    catch (Exception e)
+    {
+      Toast.makeText(this, "Could not open floating window: " + e.getMessage(),
+                     Toast.LENGTH_LONG).show();
+      // Fall through — don't finish; the user is left in the full app.
+      return;
+    }
+    moveTaskToBack(true);
+    finish();
+  }
+
+  /**
+   * Called when ASSIST arrives but overlay permission is missing.
+   * The first time, we push the user to the system settings page;
+   * subsequent times we just show a toast so we don't hijack them
+   * into Settings every time they long-press home.
+   */
+  private void requestOverlayPermissionOnboarding()
+  {
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    boolean alreadyPrompted = prefs.getBoolean(KEY_OVERLAY_PROMPTED, false);
+
+    if (!alreadyPrompted)
+    {
+      prefs.edit().putBoolean(KEY_OVERLAY_PROMPTED, true).apply();
+      Toast.makeText(this,
+        "Enable 'Display over other apps' for Karui to open as a floating panel.",
+        Toast.LENGTH_LONG).show();
+      openOverlaySettings();
+    }
+    else
+    {
+      Toast.makeText(this,
+        "Floating mode needs 'Display over other apps' permission. "
+          + "Grant it from Karui's settings.",
+        Toast.LENGTH_LONG).show();
+    }
+  }
+
+  private void openOverlaySettings()
+  {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+    try
+    {
+      Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                 Uri.parse("package:" + getPackageName()));
+      startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
+    }
+    catch (Exception e)
+    {
+      // Fallback for OEMs that don't expose the per-app overlay page.
+      try
+      {
+        startActivityForResult(
+          new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION),
+          OVERLAY_PERMISSION_REQUEST);
+      }
+      catch (Exception ignored) {}
+    }
   }
 
   // Section: Notification Handling
@@ -227,14 +339,6 @@ public class MainActivity extends Activity
     }
   }
 
-  /**
-   * Post (or re-post) the quick-note notification.
-   *
-   * @param silent  When true, no Toast / settings prompts are shown. This is the
-   *                path used by {@link #ensureNotificationMatchesPreference()}
-   *                on every resume so the notification is re-created after a
-   *                reboot / force-stop / memory kill without nagging the user.
-   */
   private void showNotification(boolean silent)
   {
     createNotificationChannel();
@@ -252,116 +356,114 @@ public class MainActivity extends Activity
       {
         Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
         try
+        {
+          Intent intent = new Intent();
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
           {
-            Intent intent = new Intent();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            {
-              intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-              intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
-            }
-            else
-            {
-              intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-              intent.setData(Uri.parse("package:" + getPackageName()));
-            }
-            startActivity(intent);
+            intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
           }
-        catch (Exception ignored)
+          else
           {
+            intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
           }
+          startActivity(intent);
+        }
+        catch (Exception ignored) {}
       }
       return;
     }
 
     try
+    {
+      Intent openAppIntent = new Intent(this, MainActivity.class);
+      int openFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
       {
-        Intent openAppIntent = new Intent(this, MainActivity.class);
-        int openFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-        {
-          openFlags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, openFlags);
+        openFlags |= PendingIntent.FLAG_IMMUTABLE;
+      }
+      PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, openFlags);
 
-        RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
-          .setLabel("Add Note")
+      RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
+        .setLabel("Add Note")
+        .build();
+
+      Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
+      int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+      {
+        replyFlags |= PendingIntent.FLAG_MUTABLE;
+      }
+      else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      {
+        replyFlags |= 0;
+      }
+      PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
+
+      Notification.Action replyAction;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      {
+        replyAction = new Notification.Action.Builder(
+          Icon.createWithResource(this, R.drawable.ic_note),
+          "Add Note",
+          replyPendingIntent)
+          .addRemoteInput(remoteInput)
           .build();
-
-        Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
-        int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-        {
-          replyFlags |= PendingIntent.FLAG_MUTABLE;
-        }
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-        {
-          replyFlags |= 0;
-        }
-        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
-
-        Notification.Action replyAction;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-        {
-          replyAction = new Notification.Action.Builder(
-            Icon.createWithResource(this, R.drawable.ic_note),
-            "Add Note",
-            replyPendingIntent)
-            .addRemoteInput(remoteInput)
-            .build();
-        }
-        else
-        {
-          replyAction = new Notification.Action.Builder(
-            R.drawable.ic_note,
-            "Add Note",
-            replyPendingIntent)
-            .addRemoteInput(remoteInput)
-            .build();
-        }
-
-        Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        {
-          builder = new Notification.Builder(this, CHANNEL_ID);
-        }
-        else
-        {
-          builder = new Notification.Builder(this);
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-        {
-          builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
-        }
-        else
-        {
-          builder.setSmallIcon(R.drawable.ic_note);
-        }
-
-        builder.setContentTitle("Karui Quick Note")
-          .setContentText("Swipe down to add a note")
-          .setContentIntent(openPendingIntent)
-          .addAction(replyAction)
-          .setOngoing(true)
-          .setOnlyAlertOnce(true);
-
-        Notification notification = builder.build();
-        manager.notify(NOTIFICATION_ID, notification);
-        isNotificationActive = true;
       }
-    catch (Exception e)
+      else
       {
-        if (!silent)
-        {
-          String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-          if (e.getCause() != null)
-          {
-            msg += "\nCause: " + e.getCause().toString();
-          }
-          Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
-        }
-        e.printStackTrace();
+        replyAction = new Notification.Action.Builder(
+          R.drawable.ic_note,
+          "Add Note",
+          replyPendingIntent)
+          .addRemoteInput(remoteInput)
+          .build();
       }
+
+      Notification.Builder builder;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      {
+        builder = new Notification.Builder(this, CHANNEL_ID);
+      }
+      else
+      {
+        builder = new Notification.Builder(this);
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      {
+        builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
+      }
+      else
+      {
+        builder.setSmallIcon(R.drawable.ic_note);
+      }
+
+      builder.setContentTitle("Karui Quick Note")
+        .setContentText("Swipe down to add a note")
+        .setContentIntent(openPendingIntent)
+        .addAction(replyAction)
+        .setOngoing(true)
+        .setOnlyAlertOnce(true);
+
+      Notification notification = builder.build();
+      manager.notify(NOTIFICATION_ID, notification);
+      isNotificationActive = true;
+    }
+    catch (Exception e)
+    {
+      if (!silent)
+      {
+        String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (e.getCause() != null)
+        {
+          msg += "\nCause: " + e.getCause().toString();
+        }
+        Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
+      }
+      e.printStackTrace();
+    }
   }
 
   private void cancelNotification()
@@ -382,11 +484,6 @@ public class MainActivity extends Activity
       .edit().putBoolean(KEY_NOTIFICATION_ENABLED, enabled).apply();
   }
 
-  /**
-   * Returns true if a notification with our id is currently posted by this app.
-   * Note: getActiveNotifications() returns StatusBarNotification[], so we must
-   * iterate that type and read getId() from it (not from Notification).
-   */
   private boolean isNotificationShowing()
   {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
@@ -399,13 +496,6 @@ public class MainActivity extends Activity
     return false;
   }
 
-  /**
-   * On every resume: if the user had the quick-note toggle on, make sure the
-   * notification actually exists. The OS can silently drop it after reboot,
-   * force-stop, memory-kill of the app, or when the notification channel is
-   * re-created — this brings it back without the user needing to untoggle
-   * and re-toggle the switch in the app.
-   */
   private void ensureNotificationMatchesPreference()
   {
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
@@ -415,8 +505,6 @@ public class MainActivity extends Activity
         && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
            != PackageManager.PERMISSION_GRANTED)
     {
-      // Permission was revoked while we weren't looking. Nothing we can do
-      // silently — next time the user opens the toggle we'll re-prompt.
       return;
     }
 
@@ -449,32 +537,32 @@ public class MainActivity extends Activity
     if (uriStr == null || uriStr.isEmpty()) return;
 
     try
+    {
+      Uri uri = Uri.parse(uriStr);
+      InputStream inputStream = getContentResolver().openInputStream(uri);
+      if (inputStream == null) return;
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      StringBuilder sb = new StringBuilder();
+      String line;
+      while ((line = reader.readLine()) != null)
       {
-        Uri uri = Uri.parse(uriStr);
-        InputStream inputStream = getContentResolver().openInputStream(uri);
-        if (inputStream == null) return;
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null)
-          {
-            sb.append(line).append("\n");
-          }
-        reader.close();
-
-        String mdContent = sb.toString();
-        String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
-        mWebView.evaluateJavascript(js, null);
+        sb.append(line).append("\n");
       }
+      reader.close();
+
+      String mdContent = sb.toString();
+      String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
+      mWebView.evaluateJavascript(js, null);
+    }
     catch (SecurityException se)
-      {
-        Toast.makeText(this, "Sync file permission lost. Please re-select file.", Toast.LENGTH_LONG).show();
-      }
+    {
+      Toast.makeText(this, "Sync file permission lost. Please re-select file.", Toast.LENGTH_LONG).show();
+    }
     catch (IOException e)
-      {
-        e.printStackTrace();
-      }
+    {
+      e.printStackTrace();
+    }
   }
 
   private void triggerAppCloseSync()
@@ -491,8 +579,6 @@ public class MainActivity extends Activity
   {
     super.onResume();
 
-    // Re-create the status-bar note input if the user had it on but the OS
-    // dropped the notification (reboot, force-stop, memory kill, …).
     ensureNotificationMatchesPreference();
 
     if (isPageLoaded)
@@ -516,13 +602,20 @@ public class MainActivity extends Activity
     super.onNewIntent(intent);
     setIntent(intent);
 
-    if (intent != null
-        && Intent.ACTION_ASSIST.equals(intent.getAction())
-        && isPageLoaded
-        && mWebView != null)
+    // ASSIST fired while the activity already exists (singleTask).
+    if (intent != null && Intent.ACTION_ASSIST.equals(intent.getAction()))
     {
-      mWebView.evaluateJavascript(
-        "if(window.onAssistantLaunched) window.onAssistantLaunched();", null);
+      if (canDrawOverlays())
+      {
+        startOverlayAndExit();
+      }
+      else
+      {
+        // Full-screen app is already up — don't kill it, just nudge the user.
+        Toast.makeText(this,
+          "Enable 'Display over other apps' for floating mode.",
+          Toast.LENGTH_LONG).show();
+      }
     }
   }
 
@@ -538,23 +631,35 @@ public class MainActivity extends Activity
   {
     super.onActivityResult(requestCode, resultCode, data);
 
+    // ── Overlay permission round-trip ───────────────────────────────
+    if (requestCode == OVERLAY_PERMISSION_REQUEST)
+    {
+      if (canDrawOverlays())
+      {
+        startOverlayAndExit();
+      }
+      // If denied: user stays in the full-screen app. No extra message;
+      // we already showed the rationale toast above.
+      return;
+    }
+
     if (requestCode == CREATE_FILE_REQUEST_CODE && resultCode == RESULT_OK)
     {
       if (data != null && data.getData() != null && pendingFileData != null)
       {
         try
+        {
+          OutputStream outputStream = getContentResolver().openOutputStream(data.getData());
+          if (outputStream != null)
           {
-            OutputStream outputStream = getContentResolver().openOutputStream(data.getData());
-            if (outputStream != null)
-            {
-              outputStream.write(pendingFileData.getBytes());
-              outputStream.close();
-            }
+            outputStream.write(pendingFileData.getBytes());
+            outputStream.close();
           }
+        }
         catch (IOException e)
-          {
-            e.printStackTrace();
-          }
+        {
+          e.printStackTrace();
+        }
       }
     }
     else if (requestCode == IMPORT_FILE_REQUEST_CODE && resultCode == RESULT_OK)
@@ -562,25 +667,25 @@ public class MainActivity extends Activity
       if (data != null && data.getData() != null)
       {
         try
+        {
+          InputStream inputStream = getContentResolver().openInputStream(data.getData());
+          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+          StringBuilder sb = new StringBuilder();
+          String line;
+          while ((line = reader.readLine()) != null)
           {
-            InputStream inputStream = getContentResolver().openInputStream(data.getData());
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null)
-              {
-                sb.append(line);
-              }
-            reader.close();
-            String jsonContent = sb.toString();
+            sb.append(line);
+          }
+          reader.close();
+          String jsonContent = sb.toString();
 
-            String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
-            mWebView.evaluateJavascript(jsCode, null);
-          }
+          String jsCode = "if(window.setAndroidNotes) window.setAndroidNotes(" + JSONObject.quote(jsonContent) + ");";
+          mWebView.evaluateJavascript(jsCode, null);
+        }
         catch (IOException e)
-          {
-            e.printStackTrace();
-          }
+        {
+          e.printStackTrace();
+        }
       }
     }
     else if (requestCode == IMPORT_MD_FILE_REQUEST_CODE && resultCode == RESULT_OK)
@@ -588,25 +693,25 @@ public class MainActivity extends Activity
       if (data != null && data.getData() != null)
       {
         try
+        {
+          InputStream inputStream = getContentResolver().openInputStream(data.getData());
+          BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+          StringBuilder sb = new StringBuilder();
+          String line;
+          while ((line = reader.readLine()) != null)
           {
-            InputStream inputStream = getContentResolver().openInputStream(data.getData());
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null)
-              {
-                sb.append(line).append("\n");
-              }
-            reader.close();
-            String mdContent = sb.toString();
+            sb.append(line).append("\n");
+          }
+          reader.close();
+          String mdContent = sb.toString();
 
-            String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
-            mWebView.evaluateJavascript(jsCode, null);
-          }
+          String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(mdContent) + ");";
+          mWebView.evaluateJavascript(jsCode, null);
+        }
         catch (IOException e)
-          {
-            e.printStackTrace();
-          }
+        {
+          e.printStackTrace();
+        }
       }
     }
     else if (requestCode == SYNC_FILE_REQUEST_CODE && resultCode == RESULT_OK)
@@ -615,55 +720,55 @@ public class MainActivity extends Activity
       {
         Uri uri = data.getData();
         try
+        {
+          int takeFlags = data.getFlags()
+            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+          getContentResolver().takePersistableUriPermission(uri, takeFlags);
+
+          SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+          prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
+
+          InputStream inputStream = getContentResolver().openInputStream(uri);
+          StringBuilder sb = new StringBuilder();
+          if (inputStream != null)
           {
-            int takeFlags = data.getFlags()
-              & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            getContentResolver().takePersistableUriPermission(uri, takeFlags);
-
-            SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-            prefs.edit().putString(KEY_SYNC_URI, uri.toString()).apply();
-
-            InputStream inputStream = getContentResolver().openInputStream(uri);
-            StringBuilder sb = new StringBuilder();
-            if (inputStream != null)
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+            String line;
+            while ((line = reader.readLine()) != null)
             {
-              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-              String line;
-              while ((line = reader.readLine()) != null)
-                {
-                  sb.append(line).append("\n");
-                }
-              reader.close();
+              sb.append(line).append("\n");
             }
+            reader.close();
+          }
 
-            String existingContent = sb.toString().trim();
+          String existingContent = sb.toString().trim();
 
-            if (!existingContent.isEmpty())
-            {
-              String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
-              mWebView.evaluateJavascript(jsCode, null);
-              Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
-            }
-            else if (pendingFileData != null && !pendingFileData.isEmpty())
-            {
-              OutputStream outputStream = getContentResolver().openInputStream(uri) != null ?
-                getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
-              if (outputStream != null)
-              {
-                outputStream.write(pendingFileData.getBytes());
-                outputStream.close();
-              }
-              Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
-            }
-
-            String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
+          if (!existingContent.isEmpty())
+          {
+            String jsCode = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid(" + JSONObject.quote(existingContent) + ");";
             mWebView.evaluateJavascript(jsCode, null);
+            Toast.makeText(this, "Imported notes from sync file!", Toast.LENGTH_SHORT).show();
           }
-        catch (Exception e)
+          else if (pendingFileData != null && !pendingFileData.isEmpty())
           {
-            Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            e.printStackTrace();
+            OutputStream outputStream = getContentResolver().openInputStream(uri) != null ?
+              getContentResolver().openOutputStream(uri, "rwt") : getContentResolver().openOutputStream(uri);
+            if (outputStream != null)
+            {
+              outputStream.write(pendingFileData.getBytes());
+              outputStream.close();
+            }
+            Toast.makeText(this, "Sync file connected!", Toast.LENGTH_SHORT).show();
           }
+
+          String jsCode = "if(window.onSyncFileSelected) window.onSyncFileSelected(" + JSONObject.quote(uri.toString()) + ");";
+          mWebView.evaluateJavascript(jsCode, null);
+        }
+        catch (Exception e)
+        {
+          Toast.makeText(this, "Failed to initialize sync file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+          e.printStackTrace();
+        }
       }
     }
     else if (requestCode == FILECHOOSER_RESULTCODE)
@@ -682,9 +787,9 @@ public class MainActivity extends Activity
           int count = data.getClipData().getItemCount();
           results = new Uri[count];
           for (int i = 0; i < count; i++)
-            {
-              results[i] = data.getClipData().getItemAt(i).getUri();
-            }
+          {
+            results[i] = data.getClipData().getItemAt(i).getUri();
+          }
         }
       }
       mFilePathCallback.onReceiveValue(results);
@@ -695,7 +800,7 @@ public class MainActivity extends Activity
   @Override
   public void onBackPressed()
   {
-    if (mWebView.canGoBack())
+    if (mWebView != null && mWebView.canGoBack())
     {
       mWebView.goBack();
     }
@@ -711,12 +816,10 @@ public class MainActivity extends Activity
     triggerAppCloseSync();
     super.onDestroy();
     try
-      {
-        unregisterReceiver(noteReceiver);
-      }
-    catch (Exception ignored)
-      {
-      }
+    {
+      unregisterReceiver(noteReceiver);
+    }
+    catch (Exception ignored) {}
 
     if (mWebView != null)
     {
@@ -740,13 +843,13 @@ public class MainActivity extends Activity
       intent.putExtra(Intent.EXTRA_TITLE, pendingFileName);
 
       try
-        {
-          startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
-        }
+      {
+        startActivityForResult(intent, SYNC_FILE_REQUEST_CODE);
+      }
       catch (ActivityNotFoundException e)
-        {
-          runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
-        }
+      {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found on device.", Toast.LENGTH_SHORT).show());
+      }
     }
 
     @JavascriptInterface
@@ -755,27 +858,27 @@ public class MainActivity extends Activity
       if (filePath == null || filePath.trim().isEmpty()) return;
 
       try
+      {
+        Uri uri = Uri.parse(filePath);
+        OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
+        if (outputStream == null)
         {
-          Uri uri = Uri.parse(filePath);
-          OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-          if (outputStream == null)
-          {
-            outputStream = getContentResolver().openOutputStream(uri);
-          }
-          if (outputStream != null)
-          {
-            outputStream.write(content.getBytes());
-            outputStream.close();
+          outputStream = getContentResolver().openOutputStream(uri);
+        }
+        if (outputStream != null)
+        {
+          outputStream.write(content.getBytes());
+          outputStream.close();
 
-            Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-            updateIntent.setPackage(getPackageName());
-            sendBroadcast(updateIntent);
-          }
+          Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+          updateIntent.setPackage(getPackageName());
+          sendBroadcast(updateIntent);
         }
+      }
       catch (Exception e)
-        {
-          e.printStackTrace();
-        }
+      {
+        e.printStackTrace();
+      }
     }
 
     @JavascriptInterface
@@ -795,13 +898,13 @@ public class MainActivity extends Activity
       intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
 
       try
-        {
-          startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
-        }
+      {
+        startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE);
+      }
       catch (ActivityNotFoundException e)
-        {
-          runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
-        }
+      {
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "No document picker found", Toast.LENGTH_SHORT).show());
+      }
     }
 
     @JavascriptInterface
@@ -841,7 +944,7 @@ public class MainActivity extends Activity
             requestPermissions(
               new String[]{Manifest.permission.POST_NOTIFICATIONS},
               NOTIFICATION_PERMISSION_REQUEST);
-            return; // persisted after the grant in onRequestPermissionsResult
+            return;
           }
           setNotificationEnabled(true);
           showNotification(false);
@@ -854,8 +957,6 @@ public class MainActivity extends Activity
       });
     }
 
-    /** True if the user has the quick-note toggle enabled.
-     *  Use this from JS to restore the switch state on app start. */
     @JavascriptInterface
     public boolean isNotificationEnabled()
     {
@@ -888,6 +989,30 @@ public class MainActivity extends Activity
           getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }
       });
+    }
+
+    // ── Overlay permission bridge for the web UI ────────────────────
+
+    /**
+     * True if the floating overlay permission is granted.
+     * Use in the web settings UI to show/hide an "Enable floating mode"
+     * banner or toggle.
+     */
+    @JavascriptInterface
+    public boolean isOverlayPermissionGranted()
+    {
+      return canDrawOverlays();
+    }
+
+    /**
+     * Opens the system "Display over other apps" settings page so the
+     * user can grant overlay permission without being told about it
+     * only via a toast on long-press-home.
+     */
+    @JavascriptInterface
+    public void requestOverlayPermission()
+    {
+      runOnUiThread(() -> openOverlaySettings());
     }
 
     // ---------------------------------------------------------------
@@ -954,20 +1079,15 @@ public class MainActivity extends Activity
       {
         if (enabled)
         {
-          // 1. Notification runtime permission (Android 13+).
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
               && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                  != PackageManager.PERMISSION_GRANTED)
           {
-            // Deliberately NOT setting pendingQuickNoteEnable — this is the
-            // calendar flow, so onRequestPermissionsResult must not post the
-            // quick-note notification.
             requestPermissions(
               new String[]{Manifest.permission.POST_NOTIFICATIONS},
               NOTIFICATION_PERMISSION_REQUEST);
           }
 
-          // 2. Exact-alarm capability.
           if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
           {
             AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
@@ -1025,10 +1145,7 @@ public class MainActivity extends Activity
     }
     else if (!granted)
     {
-      // Calendar flow, permission denied.
       Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
     }
-    // else: calendar flow granted — setCalendarNotificationsEnabled already
-    // handled scheduling; nothing to do here.
   }
 }

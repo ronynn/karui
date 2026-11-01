@@ -7,6 +7,8 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <!-- Required for the floating overlay window -->
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
   <application
     android:allowBackup="true"
@@ -26,9 +28,7 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
 
-      <!-- Digital assistant / long-press-home support.
-           Once the user selects Karui in Settings → Default apps → Digital assistant,
-           the system will route the ASSIST gesture here. -->
+      <!-- Digital assistant / long-press-home support -->
       <intent-filter>
         <action android:name="android.intent.action.ASSIST" />
         <category android:name="android.intent.category.DEFAULT" />
@@ -36,30 +36,25 @@
 
     </activity>
 
+    <!-- ... all other existing components (ProcessTextActivity, receivers, etc.) ... -->
     <activity
       android:name=".ProcessTextActivity"
       android:theme="@android:style/Theme.Translucent.NoTitleBar"
       android:excludeFromRecents="true"
       android:exported="true">
-
       <intent-filter android:label="Copy to Karui">
         <action android:name="android.intent.action.PROCESS_TEXT" />
         <category android:name="android.intent.category.DEFAULT" />
         <data android:mimeType="text/plain" />
       </intent-filter>
-
       <intent-filter android:label="Karui">
         <action android:name="android.intent.action.SEND" />
         <category android:name="android.intent.category.DEFAULT" />
         <data android:mimeType="text/plain" />
       </intent-filter>
-
     </activity>
 
-    <receiver
-      android:name=".NoteReplyReceiver"
-      android:exported="false" />
-
+    <receiver android:name=".NoteReplyReceiver" android:exported="false" />
     <activity
       android:name=".WidgetConfigActivity"
       android:exported="true"
@@ -71,14 +66,8 @@
         <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
       </intent-filter>
     </activity>
-
-    <receiver
-      android:name=".WidgetToggleReceiver"
-      android:exported="false" />
-
-    <receiver
-      android:name=".NotesWidgetProvider"
-      android:exported="true">
+    <receiver android:name=".WidgetToggleReceiver" android:exported="false" />
+    <receiver android:name=".NotesWidgetProvider" android:exported="true">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
         <action android:name="io.github.ronynn.karui.ACTION_NOTE_ADDED" />
@@ -87,23 +76,21 @@
         android:name="android.appwidget.provider"
         android:resource="@xml/notes_widget_info" />
     </receiver>
-
-    <receiver
-      android:name=".CalendarNotificationReceiver"
-      android:exported="false" />
-
-    <receiver
-      android:name=".BootReceiver"
-      android:exported="true">
+    <receiver android:name=".CalendarNotificationReceiver" android:exported="false" />
+    <receiver android:name=".BootReceiver" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
       </intent-filter>
     </receiver>
-
     <service
       android:name=".NotesWidgetService"
       android:permission="android.permission.BIND_REMOTEVIEWS"
+      android:exported="false" />
+
+    <!-- NEW: Service for the floating overlay window -->
+    <service
+      android:name=".OverlayService"
       android:exported="false" />
   </application>
 </manifest>
