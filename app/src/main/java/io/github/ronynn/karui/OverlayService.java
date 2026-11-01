@@ -13,16 +13,18 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
@@ -39,6 +41,14 @@ public class OverlayService extends Service
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
 
+  /**
+   * Background colour used to prevent the WebView's white flash on first
+   * paint. Change this if your web app uses a different theme colour.
+   */
+  private static final String PANEL_BG_COLOR = "#1A1A1A";
+  private static final String HANDLE_BG_COLOR = "#2A2A2A";
+  private static final String PILL_COLOR = "#7A7A7A";
+
   private WindowManager mWindowManager;
   private View mOverlayView;
   private WindowManager.LayoutParams mParams;
@@ -50,9 +60,6 @@ public class OverlayService extends Service
 
   private boolean mPageLoaded = false;
 
-  // Push externally-added notes (from the status-bar reply, from a widget
-  // tap, or from another app sharing to Karui) straight into the open
-  // overlay without needing to reopen it.
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
     @Override
@@ -84,34 +91,49 @@ public class OverlayService extends Service
     createOverlay();
   }
 
+  private int dp(float value)
+  {
+    return (int) TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics());
+  }
+
   private void createOverlay()
   {
-    // --- 1. Screen dimensions and resize limits ---
     int screenHeight = getResources().getDisplayMetrics().heightPixels;
     mInitialHeight = (int) (screenHeight * 0.75);
     mMinHeight = (int) (screenHeight * 0.25);
     mMaxHeight = screenHeight;
 
-    // --- 2. Programmatic layout ---
     LinearLayout rootLayout = new LinearLayout(this);
     rootLayout.setOrientation(LinearLayout.VERTICAL);
-    rootLayout.setBackgroundColor(Color.TRANSPARENT);
+    // Fill with the eventual panel colour so the very first paint is not
+    // the default white that WebView shows before HTML loads.
+    rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
 
-    // --- Drag handle ---
-    TextView dragHandle = new TextView(this);
-    dragHandle.setText("≡");
-    dragHandle.setTextSize(24);
-    dragHandle.setTextColor(Color.WHITE);
-    dragHandle.setGravity(Gravity.CENTER);
-    dragHandle.setBackgroundColor(Color.parseColor("#333333"));
+    // --- Drag handle (thin) ---
+    FrameLayout dragHandle = new FrameLayout(this);
+    dragHandle.setBackgroundColor(Color.parseColor(HANDLE_BG_COLOR));
     LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, 80);
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(28));
     dragHandle.setLayoutParams(handleParams);
+
+    View pill = new View(this);
+    FrameLayout.LayoutParams pillParams = new FrameLayout.LayoutParams(
+        dp(48), dp(4));
+    pillParams.gravity = Gravity.CENTER;
+    pill.setLayoutParams(pillParams);
+    pill.setBackgroundColor(Color.parseColor(PILL_COLOR));
+    dragHandle.addView(pill);
 
     // --- WebView ---
     mWebView = new WebView(this);
     mWebView.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+    mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
+    // Keep it invisible until the page has actually rendered, so the user
+    // sees the panel colour, then the content fades in — no white flash.
+    mWebView.setVisibility(View.INVISIBLE);
+
     WebSettings settings = mWebView.getSettings();
     settings.setJavaScriptEnabled(true);
     settings.setDomStorageEnabled(true);
@@ -126,11 +148,12 @@ public class OverlayService extends Service
       public void onPageFinished(WebView view, String url)
       {
         mPageLoaded = true;
-        // Order matters: pending notes first (so a note captured while the
-        // overlay was closed is not lost when the sync file overwrites state),
-        // then the full sync file (which is the source of truth for display).
         injectPendingNotes();
         readSyncFileAndInject();
+
+        view.setAlpha(0f);
+        view.setVisibility(View.VISIBLE);
+        view.animate().alpha(1f).setDuration(150).start();
       }
     });
 
@@ -140,7 +163,7 @@ public class OverlayService extends Service
     rootLayout.addView(dragHandle);
     rootLayout.addView(mWebView);
 
-    // --- 3. WindowManager.LayoutParams ---
+    // --- LayoutParams ---
     mParams = new WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         mInitialHeight,
@@ -158,7 +181,19 @@ public class OverlayService extends Service
     mOverlayView = rootLayout;
     mWindowManager.addView(mOverlayView, mParams);
 
-    // --- 4. Drag-to-resize on the handle ---
+    // --- Slide-in animation ---
+    // Start translated down by the full panel height (fully off-screen),
+    // then animate to the natural position.
+    mOverlayView.setTranslationY(mInitialHeight);
+    mOverlayView.setAlpha(0f);
+    mOverlayView.animate()
+        .translationY(0f)
+        .alpha(1f)
+        .setDuration(260)
+        .setInterpolator(new DecelerateInterpolator())
+        .start();
+
+    // --- Drag-to-resize on the handle ---
     dragHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int initialHeight;
@@ -187,7 +222,7 @@ public class OverlayService extends Service
       }
     });
 
-    // --- 5. Tap outside to dismiss ---
+    // --- Tap outside to dismiss ---
     mOverlayView.setOnTouchListener(new View.OnTouchListener()
     {
       @Override
@@ -203,7 +238,7 @@ public class OverlayService extends Service
     });
   }
 
-  // --- Data injection (mirrors MainActivity) -------------------------
+  // --- Data injection ---------------------------------------------------
 
   private void injectPendingNotes()
   {
@@ -254,11 +289,6 @@ public class OverlayService extends Service
     }
   }
 
-  /**
-   * Ask the web layer to persist its in-memory state to the sync file.
-   * The JS callback fires asynchronously, so the WebView must outlive this
-   * call long enough for `Android.saveFileSync(...)` to round-trip.
-   */
   private void triggerCloseSync()
   {
     if (mWebView != null && mPageLoaded)
@@ -270,8 +300,6 @@ public class OverlayService extends Service
     }
   }
 
-  // --- Lifecycle -----------------------------------------------------
-
   @Override
   public int onStartCommand(Intent intent, int flags, int startId)
   {
@@ -281,11 +309,8 @@ public class OverlayService extends Service
   @Override
   public void onDestroy()
   {
-    // 1. Ask JS to persist while the WebView is still alive.
     triggerCloseSync();
 
-    // 2. Visually close immediately — the user sees the panel disappear
-    //    without waiting for the save round-trip.
     if (mOverlayView != null && mWindowManager != null)
     {
       try
@@ -296,10 +321,6 @@ public class OverlayService extends Service
       mOverlayView = null;
     }
 
-    // 3. Keep the WebView alive briefly so `Android.saveFileSync(...)` can
-    //    land, then destroy it. The `Android` bridge object is an inner
-    //    class of this service, so `getContentResolver()` still works during
-    //    this window.
     final WebView webToDestroy = mWebView;
     mWebView = null;
     mPageLoaded = false;
@@ -334,12 +355,10 @@ public class OverlayService extends Service
     return null;
   }
 
-  // --- JS bridge -----------------------------------------------------
+  // --- JS bridge -------------------------------------------------------
 
   public class OverlayWebAppInterface
   {
-    // ── Core persistence ──────────────────────────────────────────
-
     @JavascriptInterface
     public void saveFileSync(String filePath, String content)
     {
@@ -391,8 +410,6 @@ public class OverlayService extends Service
       stopSelf();
     }
 
-    // ── Settings that work fine from the Service ──────────────────
-
     @JavascriptInterface
     public void setInboxTabName(String tabName)
     {
@@ -408,38 +425,34 @@ public class OverlayService extends Service
         .getBoolean(KEY_NOTIFICATION_ENABLED, false);
     }
 
-    /** Lets the JS layer know it's running in the floating panel and can
-     *  hide full-screen-only buttons (settings, import, etc.). */
     @JavascriptInterface
     public boolean isOverlayMode()
     {
       return true;
     }
 
-    // ── Activity-only operations: stub with a guiding toast ───────
-
     @JavascriptInterface
     public void setupSyncFile(String defaultFileName, String currentContent)
     {
-      notifyPickerUnavailable();
+      showToast("Open the full Karui app for this.");
     }
 
     @JavascriptInterface
     public void saveFile(String fileName, String fileData, String fileType)
     {
-      notifyPickerUnavailable();
+      showToast("Open the full Karui app for this.");
     }
 
     @JavascriptInterface
     public void importJsonFile()
     {
-      notifyPickerUnavailable();
+      showToast("Open the full Karui app for this.");
     }
 
     @JavascriptInterface
     public void importMarkdownFile()
     {
-      notifyPickerUnavailable();
+      showToast("Open the full Karui app for this.");
     }
 
     @JavascriptInterface
@@ -449,27 +462,13 @@ public class OverlayService extends Service
     }
 
     @JavascriptInterface
-    public void toggleScreenshots(boolean disable)
-    {
-      // No Activity window to apply FLAG_SECURE to.
-    }
+    public void toggleScreenshots(boolean disable) {}
 
     @JavascriptInterface
-    public void updateCalendarEvents(String json)
-    {
-      // Calendar setup lives in the main app.
-    }
+    public void updateCalendarEvents(String json) {}
 
     @JavascriptInterface
-    public void setCalendarNotificationsEnabled(boolean enabled)
-    {
-      // Calendar setup lives in the main app.
-    }
-  }
-
-  private void notifyPickerUnavailable()
-  {
-    showToast("Open the full Karui app for this.");
+    public void setCalendarNotificationsEnabled(boolean enabled) {}
   }
 
   private void showToast(final String msg)

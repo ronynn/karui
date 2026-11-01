@@ -7,7 +7,6 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-  <!-- Required for the floating overlay window -->
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
   <application
@@ -28,7 +27,6 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
 
-      <!-- Digital assistant / long-press-home support -->
       <intent-filter>
         <action android:name="android.intent.action.ASSIST" />
         <category android:name="android.intent.category.DEFAULT" />
@@ -36,7 +34,6 @@
 
     </activity>
 
-    <!-- ... all other existing components (ProcessTextActivity, receivers, etc.) ... -->
     <activity
       android:name=".ProcessTextActivity"
       android:theme="@android:style/Theme.Translucent.NoTitleBar"
@@ -88,9 +85,27 @@
       android:permission="android.permission.BIND_REMOTEVIEWS"
       android:exported="false" />
 
-    <!-- NEW: Service for the floating overlay window -->
     <service
       android:name=".OverlayService"
       android:exported="false" />
+
+    <!-- NEW: VoiceInteractionService plumbing -->
+    <service
+      android:name=".KaruiVoiceInteractionService"
+      android:exported="true"
+      android:permission="android.permission.BIND_VOICE_INTERACTION">
+      <meta-data
+        android:name="android.voice_interaction"
+        android:resource="@xml/interaction_service" />
+      <intent-filter>
+        <action android:name="android.service.voice.VoiceInteractionService" />
+      </intent-filter>
+    </service>
+
+    <service
+      android:name=".KaruiSessionService"
+      android:exported="true"
+      android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
   </application>
 </manifest>
