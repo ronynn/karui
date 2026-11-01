@@ -689,7 +689,7 @@ export function createNotesModule()
         let pct = tot > 0 ? Math.round((comp / tot) * 100) : 0
         label = t.replace('%', `${pct}%`)
       }
-      if (this.isTabLocked(t)) label = '🔒 ' + label
+      if (this.isTabLocked(t)) label = '⊷ ' + label
       return label
     },
 

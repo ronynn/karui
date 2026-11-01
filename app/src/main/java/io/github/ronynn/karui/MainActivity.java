@@ -22,6 +22,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.service.notification.StatusBarNotification;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
@@ -381,14 +382,19 @@ public class MainActivity extends Activity
       .edit().putBoolean(KEY_NOTIFICATION_ENABLED, enabled).apply();
   }
 
+  /**
+   * Returns true if a notification with our id is currently posted by this app.
+   * Note: getActiveNotifications() returns StatusBarNotification[], so we must
+   * iterate that type and read getId() from it (not from Notification).
+   */
   private boolean isNotificationShowing()
   {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
     NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     if (manager == null) return false;
-    for (Notification n : manager.getActiveNotifications())
+    for (StatusBarNotification sbn : manager.getActiveNotifications())
     {
-      if (n.getId() == NOTIFICATION_ID) return true;
+      if (sbn.getId() == NOTIFICATION_ID) return true;
     }
     return false;
   }
@@ -476,7 +482,6 @@ public class MainActivity extends Activity
     if (mWebView != null && isPageLoaded)
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
-      // Push the very latest calendar events so tomorrow's alarm sees fresh data.
       mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
@@ -496,7 +501,6 @@ public class MainActivity extends Activity
       readSyncFileAndInject();
     }
 
-    // Fire any past-due reminders the moment the user opens the app.
     SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
     if (calPrefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
     {
@@ -963,10 +967,7 @@ public class MainActivity extends Activity
               NOTIFICATION_PERMISSION_REQUEST);
           }
 
-          // 2. Exact-alarm capability. With USE_EXACT_ALARM this is
-          //    auto-granted on Android 13+; on Android 14+ the user can
-          //    revoke it. Prompt only on the off→on transition so we don't
-          //    nag on every app launch.
+          // 2. Exact-alarm capability.
           if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
           {
             AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
