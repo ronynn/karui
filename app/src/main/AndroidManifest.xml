@@ -93,7 +93,8 @@
     <service
       android:name=".KaruiVoiceInteractionService"
       android:exported="true"
-      android:permission="android.permission.BIND_VOICE_INTERACTION">
+      android:permission="android.permission.BIND_VOICE_INTERACTION"
+      android:process=":interactor">
       <meta-data
         android:name="android.voice_interaction"
         android:resource="@xml/interaction_service" />
