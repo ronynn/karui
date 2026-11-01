@@ -2,6 +2,9 @@ package io.github.ronynn.karui;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.service.voice.VoiceInteractionSession;
 
 /**
@@ -21,9 +24,9 @@ public class KaruiSession extends VoiceInteractionSession
   }
 
   @Override
-  public void onShow(ShowArgs args)
+  public void onShow(Bundle args, int showFlags)
   {
-    super.onShow(args);
+    super.onShow(args, showFlags);
 
     Intent intent = new Intent(getContext(), OverlayService.class);
     try
@@ -35,7 +38,7 @@ public class KaruiSession extends VoiceInteractionSession
     // Hide immediately — the overlay is now responsible for UI.
     // A tiny delay avoids a 1-frame flicker of the session window
     // before the overlay has been attached.
-    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+    new Handler(Looper.getMainLooper()).postDelayed(
         new Runnable()
         {
           @Override
