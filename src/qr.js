@@ -1,5 +1,3 @@
-
-
 import { nextTick } from './petite-vue.es.js'
 
 const QR_CDN = './qrcode.min.js'
@@ -131,54 +129,51 @@ export function parseTabPayload(input)
   if (obj.v === 1 && typeof obj.t === 'string' && Array.isArray(obj.n))
   {
     const notes = obj.n.map(item =>
-      {
-        if (!item || typeof item.x !== 'string') return null
-        const note = {
-          id: item.i,
-          text: item.x,
-          completed: !!item.c,
-          category: obj.t,
-          pinned: !!item.p,
-          updatedAt: item.u || Date.now()
-        }
-        if (item.g) note.groupId = item.g
-        if (item.s) note.scheduledDate = item.s
-        if (item.r) note.recurrence = item.r
-        if (item.tm) note.reminderTime = item.tm
-        return note
-      }).filter(Boolean)
+    {
+      if (!item || typeof item.x !== 'string') return null
+      const note = {
+        id: item.i,
+        text: item.x,
+        completed: !!item.c,
+        category: obj.t,
+        pinned: !!item.p,
+        updatedAt: item.u || Date.now()
+      }
+      if (item.g) note.groupId = item.g
+      if (item.s) note.scheduledDate = item.s
+      if (item.r) note.recurrence = item.r
+      if (item.tm) note.reminderTime = item.tm
+      return note
+    }).filter(Boolean)
     return { tab: obj.t, meta: obj.m || null, notes }
   }
 
   if (Array.isArray(obj.notes))
   {
     const notes = obj.notes.map(item =>
-      {
-        if (typeof item === 'string') return { text: item }
-        return item
-      })
+    {
+      if (typeof item === 'string') return { text: item }
+      return item
+    })
     return { tab: null, meta: null, notes, categories: obj.noteCategories || null }
   }
 
   if (Array.isArray(obj))
   {
     const notes = obj.map(item =>
-      {
-        if (typeof item === 'string') return { text: item }
-        return item
-      })
+    {
+      if (typeof item === 'string') return { text: item }
+      return item
+    })
     return { tab: null, meta: null, notes }
   }
 
   return null
 }
 
-// --- Module: state + methods ---
-
 export function createQrModule()
 {
   return {
-    // --- QR share state ---
     qrModalVisible: false,
     qrTabName: '',
     qrFrames: [],
@@ -186,7 +181,6 @@ export function createQrModule()
     qrCurrentImage: '',
     qrBusy: false,
 
-    // --- Paste JSON state ---
     pasteJsonVisible: false,
     pasteJsonText: '',
 
@@ -197,6 +191,13 @@ export function createQrModule()
       const tab = this.contextTab
       this.closeAllMenus()
       if (!tab) return
+
+      // Locked tabs are excluded from QR share (casual-snooping guard).
+      if (typeof this.isTabLocked === 'function' && this.isTabLocked(tab))
+      {
+        this.showToast('Tab is locked')
+        return
+      }
 
       this.qrTabName = tab
       this.qrFrames = []
@@ -231,7 +232,8 @@ export function createQrModule()
       const note = this.notes.find(n => n.id === id)
       if (!note) return
 
-      this.qrTabName = note.text.length > 40 ? note.text.slice(0, 40) + '…' : note.text
+      // Show the full note; the CSS clamps the title to 2 lines, left-aligned.
+      this.qrTabName = note.text
       this.qrFrames = []
       this.qrFrameIdx = 0
       this.qrCurrentImage = ''
@@ -240,7 +242,6 @@ export function createQrModule()
 
       try
       {
-        // Plaintext — raw note text goes into the QR.
         this.qrFrames = chunkPayload(note.text)
         await this.renderQrFrame(0)
       }
@@ -297,10 +298,10 @@ export function createQrModule()
       this.pasteJsonVisible = true
       this.pasteJsonText = ''
       nextTick(() =>
-        {
-          const el = document.getElementById('paste-json-input')
-          if (el) el.focus()
-        })
+      {
+        const el = document.getElementById('paste-json-input')
+        if (el) el.focus()
+      })
     },
 
     closePasteJson()
@@ -314,14 +315,12 @@ export function createQrModule()
       const raw = this.pasteJsonText.trim()
       if (!raw) { this.showToast('Nothing to paste'); return }
 
-      // Direct JSON
       if (raw[0] === '{' || raw[0] === '[')
       {
         this._qrImportPayload(raw)
         return
       }
 
-      // Multi-frame collection?
       const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
       const batches = {}
       let hasFrames = false
@@ -355,33 +354,52 @@ export function createQrModule()
         return
       }
 
-      // Plaintext
       this._qrImportPayload(raw)
+    },
+
+    // Message fix: report "N imported, M updated" instead of claiming
+    // "Already in sync" when the merge actually updated existing notes.
+    _reportMerge(result)
+    {
+      const added = (result && typeof result.added === 'number') ? result.added : 0
+      const updated = (result && typeof result.updated === 'number') ? result.updated : 0
+      if (added > 0 && updated > 0) this.showToast(`Imported ${added}, updated ${updated}`)
+      else if (added > 0) this.showToast(`Imported ${added} note${added === 1 ? '' : 's'}`)
+      else if (updated > 0) this.showToast(`Updated ${updated} note${updated === 1 ? '' : 's'}`)
+      else this.showToast('Already in sync — no new notes')
     },
 
     _qrImportPayload(raw)
     {
-      // 1) JSON envelope (tab QR or export)
       const parsed = parseTabPayload(raw)
       if (parsed && parsed.notes && parsed.notes.length)
       {
+        // Reject imports whose destination tab is currently locked — data
+        // would land hidden and the user couldn't verify it. Simple and
+        // predictable.
+        const destTabs = new Set(parsed.notes.map(n => n.category).filter(Boolean))
+        for (const cat of destTabs)
+        {
+          if (typeof this.isTabLocked === 'function' && this.isTabLocked(cat))
+          {
+            this.showToast(`Unlock "${cat}" before importing`)
+            return
+          }
+        }
+
         if (parsed.categories)
         {
           parsed.categories.forEach(c =>
-            {
-              if (!this.noteCategories.includes(c)) this.noteCategories.push(c)
-            })
+          {
+            if (!this.noteCategories.includes(c)) this.noteCategories.push(c)
+          })
         }
         const result = this.mergeNotes(parsed.notes)
-        const added = (result && typeof result.added === 'number') ? result.added : 0
-        this.showToast(added > 0
-                       ? `Imported ${added} note${added === 1 ? '' : 's'}`
-                       : 'Already in sync — no new notes')
+        this._reportMerge(result)
         this.closePasteJson()
         return
       }
 
-      // 2) Plaintext (with optional markdown checkboxes)
       const notes = this._parsePlaintextNotes(raw)
       if (!notes.length)
       {
@@ -389,10 +407,7 @@ export function createQrModule()
         return
       }
       const result = this.mergeNotes(notes)
-      const added = (result && typeof result.added === 'number') ? result.added : 0
-      this.showToast(added > 0
-                     ? `Imported ${added} note${added === 1 ? '' : 's'}`
-                     : 'Already in sync — no new notes')
+      this._reportMerge(result)
       this.closePasteJson()
     },
 
@@ -401,7 +416,6 @@ export function createQrModule()
       const lines = raw.split(/\r?\n/)
       const hasCheckboxes = lines.some(l => /^-\s*\[[ xX]\]/.test(l.trim()))
 
-      // No checkboxes → whole text is one note (preserves multiline)
       if (!hasCheckboxes)
       {
         const text = raw.trim()
@@ -416,7 +430,6 @@ export function createQrModule()
         }]
       }
 
-      // Checkbox list → line-by-line into current tab
       const notes = []
       const cat = this.activeCategory
       let idx = 0

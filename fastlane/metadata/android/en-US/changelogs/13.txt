@@ -1,2 +1,11 @@
 - Fix: FOUC of expand bar in armeable7 architecture
 - Added Themes: Things, CRT-Amber
+- Smaller note menu, edit button over show qr button
+- Custom theme import just a modal that only takes values for color variables and a name, like custom font buttons they can be deleted with a cross they show
+- Search support, use %s search_term syntax
+- When inputting big note main input bar expands, but as soon as note been saved it should revert to original shape (be reactive to amount of text its holding)
+- Make Tab two column
+- Support locking a tab with a pin
+- Save cancel direction change (previous flow led me to delete many edits accidentally)
+- Karui if statusbar input has been toggle, everytime  on app open check if its in statusbar, if not create it
+- Set Karui as Digital assitant app

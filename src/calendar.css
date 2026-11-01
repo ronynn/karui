@@ -42,3 +42,5 @@
 .calendar-add-form-actions button { flex: 1; padding: 0.5rem; background: var(--accent); color: var(--accent-txt); border: none; font-weight: bold; cursor: pointer; box-sizing: border-box; }
 .calendar-add-form-actions button:last-child { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 
+.event-dot.done,
+.event-dot.recurring.done { background: var(--gray); }

@@ -97,6 +97,9 @@ button:active { filter: brightness(0.8); }
   padding-bottom: 4px;
 }
 
+
+
+
 .ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0; }
 .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
 .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
@@ -283,4 +286,149 @@ button:active { filter: brightness(0.8); }
 }
 .note-expand-bar:active {
   --background: var(--surface);
+}
+
+
+
+
+
+
+
+/* ============================================================
+   Compact note menu
+   ============================================================ */
+#note-dropdown {
+  padding: 6px;
+  min-width: 120px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+#note-dropdown button {
+  margin-bottom: 5px;
+  padding: 7px 9px;
+  font-size: calc(12px * var(--ui-scale));
+}
+#note-dropdown button:last-of-type { margin-bottom: 0; }
+#note-dropdown .note-menu-stats {
+  font-size: calc(12px * var(--ui-scale));
+  opacity: 0.6;
+}
+
+/* ============================================================
+   Two-column tab context menu (long-press on tab)
+   ============================================================ */
+.menu-2col {
+  min-width: 220px;
+  padding: 8px;
+}
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.menu-grid button {
+  margin-bottom: 0 !important;
+  padding: 8px 4px;
+  font-size: calc(12px * var(--ui-scale));
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ============================================================
+   Ghost line — search no-results / locked-tab placeholder
+   ============================================================ */
+.ghost-line {
+  padding: calc(18px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  color: var(--gray);
+  text-align: center;
+  font-style: italic;
+  font-size: calc(14px * var(--ui-scale));
+  opacity: 0.7;
+  border-bottom: 2px dashed color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+/* ============================================================
+   Custom theme delete glyph (mirrors custom font pattern)
+   ============================================================ */
+#theme-btns .theme-btn { position: relative; }
+.theme-delete-glyph {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  padding: 0 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* ============================================================
+   Theme import modal
+   ============================================================ */
+#theme-import-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 5500;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18vh 25px 25px;
+  overflow-y: auto;
+}
+.theme-format-hint {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  padding: 8px;
+  font-size: calc(11px * var(--ui-scale));
+  font-family: monospace;
+  color: var(--gray);
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.4;
+  max-height: 200px;
+  margin: 0;
+}
+#theme-import-input {
+  font-family: monospace;
+  font-size: calc(12px * var(--ui-scale));
+  min-height: 120px;
+  max-height: 40vh;
+}
+
+/* ============================================================
+   PIN entry (password variant of modal input)
+   ============================================================ */
+#modal-pin-input {
+  width: 100%;
+  padding: calc(12px * var(--ui-scale));
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--border);
+  font-size: calc(20px * var(--ui-scale));
+  letter-spacing: 6px;
+  text-align: center;
+  font-family: monospace;
+  outline: none;
+}
+#modal-pin-input:focus { border-color: var(--accent); }
+
+/* ============================================================
+   QR note title — 2 lines max, left aligned
+   (overrides earlier .qr-modal-title rule; safe to leave both)
+   ============================================================ */
+.qr-modal-title {
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.3;
+  max-height: calc(2 * 1.3em + 4px);
+  width: 100%;
+  padding: 0 4px;
+  white-space: pre-wrap;
 }

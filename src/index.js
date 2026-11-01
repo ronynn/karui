@@ -51,10 +51,7 @@ if (typeof window.confetti !== 'function')
 // --- VANILLA DOM HELPER ---
 export function autoExpandTextarea(el)
 {
-  if (!el)
-  {
-    return
-  }
+  if (!el) return
   el.style.height = 'auto'
   let calculatedHeight = el.scrollHeight
   let maxHeight = window.innerHeight * 0.45
@@ -63,7 +60,6 @@ export function autoExpandTextarea(el)
   el.style.height = targetHeight + 'px'
 }
 
-// Preserve getters when merging module objects into one reactive store.
 function mergeModules(...mods)
 {
   const result = {}
@@ -92,13 +88,8 @@ function hydrateStore(store)
   store.notes = ls('notes') || []
   store.recycleBin = ls('recycleBin') || []
   store.categoryMeta = ls('categoryMeta') || {}
+  store.customThemes = ls('customThemes') || []
 
-  // Normalize IDs/timestamps BEFORE mount so the very first render has
-  // stable :key values and the overflow measurement is keyed correctly.
-  // Without this, notes loaded from older versions (or imports) that lack
-  // an `id` produce `data-id="undefined"` on the first render, and the
-  // measurement can mis-key results, briefly flagging every note as
-  // overflowing on slower WebViews.
   const seedTime = Date.now()
   store.notes.forEach((n, idx) =>
   {
@@ -127,10 +118,15 @@ function hydrateStore(store)
   store.enterNewLine = bool('enterNewLine')
 
   store.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
-  store.calendarTabName = str('calendarTabName', 'Calendar')
+  store.calendarTabName = str('calendarTabName', 'Calkarui')
   store.calendarNotificationsEnabled = bool('calendarNotificationsEnabled')
 
   store.activeCategory = store.noteCategories[0] || 'Inbox'
+
+  // Session-only state — reset on every cold start.
+  store._unlockedTabs = {}
+  store.searchTerm = ''
+  store.modalIsPassword = false
 }
 
 const appStore = reactive(mergeModules(
@@ -151,6 +147,8 @@ const appStore = reactive(mergeModules(
     modalTitle: '',
     modalInput: '',
     modalCb: null,
+    // modalIsPassword lives in notes.js; endState here for clarity:
+    // it is set by openPrompt() below.
 
     // --- toast ---
     toastVisible: false,
@@ -191,56 +189,39 @@ const appStore = reactive(mergeModules(
 
       let now = Date.now()
       this.noteCategories.forEach((cat, idx) =>
+      {
+        if (!this.categoryMeta[cat])
         {
-          if (!this.categoryMeta[cat])
-          {
-            this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
-          }
-        })
+          this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+        }
+      })
 
-      // IDs are already normalized in hydrateStore; keep this as a safety net.
       this.notes.forEach((n, idx) =>
-        {
-          if (!n.id)
-          {
-            n.id = now + idx
-          }
-          if (!n.updatedAt)
-          {
-            n.updatedAt = now
-          }
-        })
+      {
+        if (!n.id) n.id = now + idx
+        if (!n.updatedAt) n.updatedAt = now
+      })
 
       if (!this.noteCategories.includes(this.activeCategory))
       {
         this.activeCategory = this.noteCategories[0] || 'Inbox'
       }
 
-      applyTheme(this.currentTheme)
+      // Custom theme vars must be applied AFTER customThemes hydrated.
+      applyTheme(this.currentTheme, this.customThemes)
       applyFont(this.currentFont)
       applyUiScale(this.uiScale)
 
-      // Attach the overflow observer. This also schedules a delayed
-      // double-rAF re-measure (used for later layout changes).
       this.initNoteOverflowObserver()
 
-      // Defer the FIRST measurement until fonts are ready AND the browser
-      // has produced at least one frame of final layout. The previous code
-      // called this synchronously here, which on slower WebViews measured
-      // stale (near-zero) client heights and briefly flagged EVERY note as
-      // overflowing — the visible "all bars for a split second" flash.
       const fontReady = (document.fonts && document.fonts.ready)
         ? document.fonts.ready
         : Promise.resolve()
       fontReady.then(() => requestAnimationFrame(() =>
       {
-        if (typeof this._measureNoteOverflow === 'function')
-        {
-          this._measureNoteOverflow()
-        }
+        if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
       }))
 
-      // Non-critical / async work follows.
       this.customFonts = await initFontSystem()
 
       if (typeof getRandomQuote === 'function')
@@ -274,9 +255,9 @@ const appStore = reactive(mergeModules(
       if (this.calendarEnabled)
       {
         setTimeout(() =>
-          {
-            this.calendarRef = initCalendar(this)
-          }, 50)
+        {
+          this.calendarRef = initCalendar(this)
+        }, 50)
       }
     },
 
@@ -287,6 +268,7 @@ const appStore = reactive(mergeModules(
       localStorage.setItem('notes', JSON.stringify(this.notes))
       localStorage.setItem('recycleBin', JSON.stringify(this.recycleBin))
       localStorage.setItem('categoryMeta', JSON.stringify(this.categoryMeta))
+      localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
       localStorage.setItem('theme', this.currentTheme)
       localStorage.setItem('font', this.currentFont)
       localStorage.setItem('uiScale', this.uiScale)
@@ -350,10 +332,7 @@ const appStore = reactive(mergeModules(
     // --- gestures / navigation ---
     handleTouchStart(e)
     {
-      if (this.disableSwipe)
-      {
-        return
-      }
+      if (this.disableSwipe) return
       this.touchStartX = e.touches[0].clientX
       this.touchStartY = e.touches[0].clientY
       this.touchEndX = this.touchStartX
@@ -362,20 +341,14 @@ const appStore = reactive(mergeModules(
 
     handleTouchMove(e)
     {
-      if (this.disableSwipe)
-      {
-        return
-      }
+      if (this.disableSwipe) return
       this.touchEndX = e.touches[0].clientX
       this.touchEndY = e.touches[0].clientY
     },
 
     handleTouchEnd()
     {
-      if (this.disableSwipe)
-      {
-        return
-      }
+      if (this.disableSwipe) return
       let deltaX = this.touchEndX - this.touchStartX
       let deltaY = this.touchEndY - this.touchStartY
 
@@ -383,14 +356,8 @@ const appStore = reactive(mergeModules(
       {
         let screens = this.screenOrder
         let idx = screens.indexOf(this.currentScreen)
-        if (deltaX < 0 && idx < screens.length - 1)
-        {
-          this.switchScreen(screens[idx + 1])
-        }
-        else if (deltaX > 0 && idx > 0)
-        {
-          this.switchScreen(screens[idx - 1])
-        }
+        if (deltaX < 0 && idx < screens.length - 1) this.switchScreen(screens[idx + 1])
+        else if (deltaX > 0 && idx > 0) this.switchScreen(screens[idx - 1])
       }
       this.touchStartX = 0
       this.touchStartY = 0
@@ -404,10 +371,7 @@ const appStore = reactive(mergeModules(
       this.closeAllMenus()
       const screens = document.querySelectorAll('.screen')
       const idx = this.currentScreenIdx
-      if (screens[idx])
-      {
-        this.isScrolled = screens[idx].scrollTop > 10
-      }
+      if (screens[idx]) this.isScrolled = screens[idx].scrollTop > 10
     },
 
     handleScroll(e)
@@ -416,15 +380,12 @@ const appStore = reactive(mergeModules(
       {
         let scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
-          {
-            let scrolled = scrollTop > 10
-            if (this.isScrolled !== scrolled)
-            {
-              this.isScrolled = scrolled
-            }
-            this.closeAllMenus()
-            this.scrollTicking = false
-          })
+        {
+          let scrolled = scrollTop > 10
+          if (this.isScrolled !== scrolled) this.isScrolled = scrolled
+          this.closeAllMenus()
+          this.scrollTicking = false
+        })
         this.scrollTicking = true
       }
     },
@@ -434,42 +395,26 @@ const appStore = reactive(mergeModules(
     {
       clearTimeout(this.tabTouchTimer)
       this.tabTouchTimer = setTimeout(() =>
-        {
-          this.openContextMenu(e, tab)
-        }, 500)
+      {
+        this.openContextMenu(e, tab)
+      }, 500)
     },
 
-    handleTabTouchEnd()
-    {
-      clearTimeout(this.tabTouchTimer)
-    },
-
-    handleTabTouchCancel()
-    {
-      clearTimeout(this.tabTouchTimer)
-    },
+    handleTabTouchEnd() { clearTimeout(this.tabTouchTimer) },
+    handleTabTouchCancel() { clearTimeout(this.tabTouchTimer) },
 
     // --- FAB ---
     handleFabClick(e)
     {
-      if (e && typeof e.preventDefault === 'function')
-      {
-        e.preventDefault()
-      }
+      if (e && typeof e.preventDefault === 'function') e.preventDefault()
       this.focusNoteInput()
     },
 
     focusNoteInput()
     {
-      if (this.currentScreen !== 'home')
-      {
-        this.switchScreen('home')
-      }
+      if (this.currentScreen !== 'home') this.switchScreen('home')
       let inp = document.getElementById('note-in')
-      if (inp)
-      {
-        inp.focus()
-      }
+      if (inp) inp.focus()
     },
 
     // --- menus / modal / toast ---
@@ -479,34 +424,48 @@ const appStore = reactive(mergeModules(
       this.noteMenuVisible = false
     },
 
-    openPrompt(title, defaultVal, cb)
+    openPrompt(title, defaultVal, cb, isPassword)
     {
       this.closeAllMenus()
       this.modalTitle = title
       this.modalInput = defaultVal
       this.modalCb = cb
+      this.modalIsPassword = !!isPassword
       this.modalVisible = true
       nextTick(() =>
+      {
+        if (this.modalIsPassword)
         {
-          let el = document.getElementById('modal-input')
-          if (el)
-          {
-            autoExpandTextarea(el)
-            if (this.keepKeyboard)
-            {
-              el.focus()
-            }
-          }
-        })
+          const el = document.getElementById('modal-pin-input')
+          if (el) el.focus()
+          return
+        }
+        const el = document.getElementById('modal-input')
+        if (el)
+        {
+          // Reset height every open, so a previous expanded state is gone.
+          el.style.height = 'auto'
+          autoExpandTextarea(el)
+          if (this.keepKeyboard) el.focus()
+        }
+      })
     },
 
     closeModal(saveAction)
     {
       this.modalVisible = false
-      if (saveAction && this.modalCb)
+      const cb = this.modalCb
+      this.modalCb = null
+      this.modalIsPassword = false
+      // Fire cb even on cancel (with null) so promise-based callers
+      // (`_promptPin`) always resolve. Existing callers already guard
+      // `if (!val) return`, so this is safe.
+      if (cb) cb(saveAction ? this.modalInput.trim() : null)
+      nextTick(() =>
       {
-        this.modalCb(this.modalInput.trim())
-      }
+        const el = document.getElementById('modal-input')
+        if (el) el.style.height = ''
+      })
     },
 
     showToast(msg)
@@ -515,9 +474,9 @@ const appStore = reactive(mergeModules(
       this.toastVisible = true
       clearTimeout(this.toastTimer)
       this.toastTimer = setTimeout(() =>
-        {
-          this.toastVisible = false
-        }, 2000)
+      {
+        this.toastVisible = false
+      }, 2000)
     },
 
     handleGlobalClick(e)
@@ -526,36 +485,29 @@ const appStore = reactive(mergeModules(
       if (this.buttonRipples)
       {
         let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
-        if (targetBtn)
-        {
-          createRipple(e, targetBtn)
-        }
+        if (targetBtn) createRipple(e, targetBtn)
       }
-      if (!e.target.closest('.menu'))
-      {
-        this.closeAllMenus()
-      }
+      if (!e.target.closest('.menu')) this.closeAllMenus()
     },
 
     // --- data export / import / sync ---
+    // All export paths exclude locked tabs. Locked tab data can still be
+    // backed up if the user unlocks the tab, saves, then re-locks — but
+    // never silently leaks through a share/sync/QR path.
+
     exportDataCall()
     {
-      exportData(this.notes)
+      const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
+      exportData(safeNotes)
     },
 
     triggerImport()
     {
-      if (window.Android && window.Android.importJsonFile)
-      {
-        window.Android.importJsonFile()
-      }
+      if (window.Android && window.Android.importJsonFile) window.Android.importJsonFile()
       else
       {
         let el = document.getElementById('import-json-input')
-        if (el)
-        {
-          el.click()
-        }
+        if (el) el.click()
       }
     },
 
@@ -567,27 +519,25 @@ const appStore = reactive(mergeModules(
 
     exportMarkdownCall()
     {
-      exportMarkdown(this.noteCategories, this.notes, this.categoryMeta)
+      const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
+      const safeCats = this.noteCategories.filter(t => !this.isTabLocked(t))
+      exportMarkdown(safeCats, safeNotes, this.categoryMeta)
     },
 
     exportCleanMarkdownCall()
     {
-      exportCleanMarkdown(this.noteCategories, this.notes, this.categoryMeta)
+      const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
+      const safeCats = this.noteCategories.filter(t => !this.isTabLocked(t))
+      exportCleanMarkdown(safeCats, safeNotes, this.categoryMeta)
     },
 
     triggerImportMD()
     {
-      if (window.Android && window.Android.importMarkdownFile)
-      {
-        window.Android.importMarkdownFile()
-      }
+      if (window.Android && window.Android.importMarkdownFile) window.Android.importMarkdownFile()
       else
       {
         let el = document.getElementById('import-md-input')
-        if (el)
-        {
-          el.click()
-        }
+        if (el) el.click()
       }
     },
 
@@ -601,19 +551,21 @@ const appStore = reactive(mergeModules(
     {
       if (window.Android && window.Android.setupSyncFile)
       {
-        window.Android.setupSyncFile('file.md', generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta))
+        const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
+        const safeCats = this.noteCategories.filter(t => !this.isTabLocked(t))
+        window.Android.setupSyncFile('file.md', generateMarkdownString(safeCats, safeNotes, this.categoryMeta))
       }
       else
       {
         this.openPrompt('Sync File Path', this.syncFilePath, val =>
+        {
+          if (val !== null)
           {
-            if (val !== null)
-            {
-              this.syncFilePath = val
-              this.saveData()
-              this.showToast('Sync target saved')
-            }
-          })
+            this.syncFilePath = val
+            this.saveData()
+            this.showToast('Sync target saved')
+          }
+        })
       }
     },
 
@@ -634,19 +586,12 @@ const appStore = reactive(mergeModules(
 
     exportMarkdownSilent()
     {
-      if (!this.syncFilePath)
-      {
-        return
-      }
+      if (!this.syncFilePath) return
       let now = Date.now()
-      this.notes.forEach(n =>
-        {
-          if (!n.updatedAt)
-          {
-            n.updatedAt = now
-          }
-        })
-      let mdStr = generateMarkdownString(this.noteCategories, this.notes, this.categoryMeta)
+      const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
+      const safeCats = this.noteCategories.filter(t => !this.isTabLocked(t))
+      safeNotes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
+      let mdStr = generateMarkdownString(safeCats, safeNotes, this.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(this.syncFilePath, mdStr)

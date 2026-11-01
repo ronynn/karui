@@ -1,5 +1,16 @@
 // --- SECTION: DATA SYNCHRONISATION & FILE I/O HANDLERS ---
-
+//
+// Locked-tab policy (matches notes.js):
+//   * READ / EXPORT / SYNC paths must exclude locked tabs. Their notes are
+//     never written to a markdown file, never reach Android's calendar sync,
+//     and never appear in an export JSON.
+//   * WRITE paths (Android quick-capture, share-sheet intent) are allowed
+//     into locked tabs. The user is present when they share, so appending is
+//     fine; the content is simply hidden behind the PIN on next read.
+//   * MERGE / IMPORT into a locked tab is skipped: silently overwriting
+//     hidden notes with imported data the user cannot verify is worse than
+//     refusing the merge. The caller reports "skipped" counts.
+//
 // `clean = true` emits a metadata-free markdown file: just category headers
 // and `- [ ] text` / `- [x] text` lines. Useful for sharing / QR payloads.
 export function generateMarkdownString(noteCategories, notes, categoryMeta = {}, clean = false)
@@ -34,7 +45,6 @@ export function generateMarkdownString(noteCategories, notes, categoryMeta = {},
         let pin = n.pinned ? ' pinned:true' : ''
         let updated = n.updatedAt || Date.now()
 
-        // Recurring metadata is emitted ONLY when present, keeping clean notes clean.
         let extra = ''
         if (n.groupId) extra += ` gid:${n.groupId}`
         if (n.scheduledDate) extra += ` sd:${n.scheduledDate}`
@@ -94,7 +104,6 @@ export function parseMarkdownAndMerge(text, appStore)
         let scheduledDate = null
         let recurrence = null
 
-        // extended meta: id, u, pinned, gid, sd, rec
         let metaMatch = content.match(
           /<!--\s*id:(\d+)(?:\s+u:(\d+))?(?:\s+pinned:(true|false))?(?:\s+gid:(\d+))?(?:\s+sd:(\d{4}-\d{2}-\d{2}))?(?:\s+rec:([a-z0-9-]+))?\s*-->/i
         )
@@ -152,8 +161,14 @@ export function parseMarkdownAndMerge(text, appStore)
     let noteMap = new Map()
     appStore.notes.forEach(n => { noteMap.set(n.id, n) })
 
+    // Locked-tab import guard: merging into a locked tab overwrites notes
+    // the user cannot verify. Skip those categories entirely on import.
+    const locked = (cat) => typeof appStore.isTabLocked === 'function' && appStore.isTabLocked(cat)
+    let skippedLocked = 0
+
     importedNotes.forEach(imp =>
     {
+      if (imp.category && locked(imp.category)) { skippedLocked++; return }
       if (noteMap.has(imp.id))
       {
         let existing = noteMap.get(imp.id)
@@ -168,6 +183,7 @@ export function parseMarkdownAndMerge(text, appStore)
 
     importedCategories.forEach(catObj =>
     {
+      if (locked(catObj.name)) return
       if (!appStore.noteCategories.includes(catObj.name)) appStore.noteCategories.push(catObj.name)
       let existingMeta = appStore.categoryMeta[catObj.name]
       if (!existingMeta || (catObj.updatedAt >= (existingMeta.updatedAt || 0)))
@@ -180,7 +196,7 @@ export function parseMarkdownAndMerge(text, appStore)
     })
 
     appStore.saveData()
-    appStore.showToast('Synced!')
+    appStore.showToast(skippedLocked > 0 ? `Synced (${skippedLocked} skipped, locked tab)` : 'Synced!')
   }
   catch (err)
   {
@@ -252,8 +268,15 @@ export function importJsonFile(file, appStore)
         return
       }
 
-      appStore.mergeNotes(validNotes)
-      appStore.showToast('Synced!')
+      const result = appStore.mergeNotes(validNotes)
+      if (result && result.skipped > 0)
+      {
+        appStore.showToast(`Synced (${result.skipped} skipped, locked tab)`)
+      }
+      else
+      {
+        appStore.showToast('Synced!')
+      }
     }
     catch (err)
     {
@@ -286,6 +309,14 @@ export function importMarkdownFile(file, appStore)
 
 export function setupNativeHooks(appStore)
 {
+  // ==========================================================================
+  // WRITE path — Android quick-capture / share intent.
+  //
+  // Locked tabs are ALLOWED here: the user is physically present when they
+  // share into Karui, so appending to a locked tab is fine. The note will
+  // simply be hidden behind the PIN on the next read. This was a deliberate
+  // call (see policy comment at top of file).
+  // ==========================================================================
   window.syncNotesArrayFromAndroid = (jsonInput) =>
   {
     try
@@ -312,9 +343,22 @@ export function setupNativeHooks(appStore)
     window.syncNotesArrayFromAndroid([{ text: text, tab: tabName }])
   }
 
+  // ==========================================================================
+  // MERGE path — Android bulk-set. Goes through mergeNotes so the locked-tab
+  // merge guard in notes.js applies (skips locked tabs, reports count).
+  // ==========================================================================
   window.setAndroidNotes = (jsonString) =>
   {
-    try { appStore.mergeNotes(JSON.parse(jsonString)) } catch (err) {}
+    try
+    {
+      const parsed = JSON.parse(jsonString)
+      const result = appStore.mergeNotes(parsed)
+      if (result && result.skipped > 0)
+      {
+        appStore.showToast(`Synced (${result.skipped} skipped, locked tab)`)
+      }
+    }
+    catch (err) {}
   }
 
   window.onSyncFileSelected = (fileUri) =>
@@ -326,19 +370,22 @@ export function setupNativeHooks(appStore)
 
   window.syncCalendarEventsToAndroid = () => { appStore.syncCalendarEventsToAndroid() }
 
-
-
-  
-
   window.importMarkdownFromAndroid = (mdText) => { parseMarkdownAndMerge(mdText, appStore) }
 
+  // ==========================================================================
+  // READ path — beforeunload silent sync. Locked-tab notes MUST be excluded,
+  // otherwise closing the app would happily write hidden notes into the
+  // sync file on disk.
+  // ==========================================================================
   window.addEventListener('beforeunload', () =>
   {
     if (appStore.syncFilePath)
     {
       let now = Date.now()
-      appStore.notes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
-      let mdStr = generateMarkdownString(appStore.noteCategories, appStore.notes, appStore.categoryMeta)
+      const safeNotes = appStore.notes.filter(n => !(appStore.isTabLocked && appStore.isTabLocked(n.category)))
+      const safeCats = appStore.noteCategories.filter(t => !(appStore.isTabLocked && appStore.isTabLocked(t)))
+      safeNotes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
+      let mdStr = generateMarkdownString(safeCats, safeNotes, appStore.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(appStore.syncFilePath, mdStr)

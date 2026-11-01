@@ -1,9 +1,36 @@
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 
-// --- pure DOM appliers ---
-export function applyTheme(theme)
+// Whitelist — only these vars are honoured. Anything else in a custom
+// theme JSON is silently dropped, so a malformed paste can't nuke layout.
+const THEME_VARS = ['--bg', '--surface', '--border', '--text', '--accent', '--accent-txt', '--gray']
+
+function clearInlineThemeVars()
 {
-  document.documentElement.setAttribute('data-theme', theme);
+  THEME_VARS.forEach(v => document.documentElement.style.removeProperty(v))
+}
+
+export function applyCustomThemeVars(vars)
+{
+  clearInlineThemeVars()
+  for (const k in vars)
+  {
+    if (THEME_VARS.includes(k)) document.documentElement.style.setProperty(k, vars[k])
+  }
+}
+
+export function applyTheme(theme, customThemes)
+{
+  const ct = (customThemes || []).find(t => t.key === theme)
+  if (ct)
+  {
+    document.documentElement.removeAttribute('data-theme')
+    applyCustomThemeVars(ct.vars)
+  }
+  else
+  {
+    clearInlineThemeVars()
+    document.documentElement.setAttribute('data-theme', theme)
+  }
 }
 
 export function applyFont(font)
@@ -33,77 +60,47 @@ export function createSettingsModule()
     notificationEnabled: false,
     inboxTabName: 'Inbox',
     customFonts: [],
+    customThemes: [],
     syncFilePath: '',
     calendarEnabled: true,
     calendarTabName: 'Calkarui',
     calendarRef: null,
     enterNewLine: false,
 
+    // --- theme import modal ---
+    themeImportVisible: false,
+    themeImportText: '',
 
-
-
-
-
-
-
-
-
-themes : [
-  { key: 'gruvbox', label: 'GRUVBOX' },
-  { key: 'crt-amber', label: 'CRT-AMBER' },
-  { key: 'sepia-terminal', label: 'SEPIA-TERMINAL' },
-  { key: 'sepia', label: 'SEPIA' },
-  { key: 'wheat', label: 'WHEAT' },
-  { key: 'paper', label: 'PAPER' },
-  { key: 'gruvbox-light', label: 'GRUVBOX-LIGHT' },
-
-
-  { key: 'monokai', label: 'MONOKAI' },
-  { key: 'monokai-pro', label: 'MONOKAI-PRO' },
-  { key: 'zenburn', label: 'ZENBURN' },
-
-  
-  { key: 'gruvbox-material', label: 'GRUVBOX-MATERIAL' },
-  { key: 'everforest', label: 'EVERFOREST' },
-  { key: 'everforest-light', label: 'FOREST-LIGHT' },
-  { key: 'sol-dark', label: 'SOL-DARK' },
-  { key: 'sol-light', label: 'SOL-LIGHT' },
-  { key: 'papercolor-light', label: 'PAPERCOLOR-LIGHT' },
-
-  { key: 'tokyo-night', label: 'TOKYO-NIGHT' },
-  { key: 'things', label: 'THINGS' },
-
-  { key: 'nord', label: 'NORD' },
-  { key: 'rose-pine', label: 'ROSE-PINE' },
-  { key: 'sakura', label: 'SAKURA' },
-
-  { key: 'amoled', label: 'AMOLED' },
-  { key: 'charcoal', label: 'CHARCOAL' },
-
-  { key: 'slate', label: 'SLATE' },
-
-  { key: 'newsprint', label: 'NEWSPRINT' },
-
-
-
-  { key: 'catppuccin', label: 'CATPPUCCIN' },
-  { key: 'catppuccin-frappe', label: 'FRAPPE' },
-  { key: 'purple', label: 'PURPLE' },
-
-],
-
-
-
-
-
-
-
-
-
-
-
-
-    
+    themes: [
+      { key: 'gruvbox', label: 'GRUVBOX' },
+      { key: 'crt-amber', label: 'CRT-AMBER' },
+      { key: 'sepia-terminal', label: 'SEPIA-TERM' },
+      { key: 'sepia', label: 'SEPIA' },
+      { key: 'wheat', label: 'WHEAT' },
+      { key: 'paper', label: 'PAPER' },
+      { key: 'gruvbox-light', label: 'GRUV-LIGHT' },
+      { key: 'monokai', label: 'MONOKAI' },
+      { key: 'monokai-pro', label: 'KAI-PRO' },
+      { key: 'zenburn', label: 'ZENBURN' },
+      { key: 'gruvbox-material', label: 'GMATERIAL' },
+      { key: 'everforest', label: 'EVERFOREST' },
+      { key: 'everforest-light', label: 'FOREST-LIGHT' },
+      { key: 'sol-dark', label: 'SOL-DARK' },
+      { key: 'sol-light', label: 'SOL-LIGHT' },
+      { key: 'papercolor-light', label: 'PAPER' },
+      { key: 'tokyo-night', label: 'TOKYO-NIGHT' },
+      { key: 'things', label: 'THINGS' },
+      { key: 'nord', label: 'NORD' },
+      { key: 'rose-pine', label: 'ROSE-PINE' },
+      { key: 'sakura', label: 'SAKURA' },
+      { key: 'amoled', label: 'AMOLED' },
+      { key: 'charcoal', label: 'CHARCOAL' },
+      { key: 'slate', label: 'SLATE' },
+      { key: 'newsprint', label: 'NEWSPRINT' },
+      { key: 'catppuccin', label: 'CATPPUCCIN' },
+      { key: 'catppuccin-frappe', label: 'FRAPPE' },
+      { key: 'purple', label: 'PURPLE' }
+    ],
 
     defaultFonts: [
       { name: 'SYSTEM', val: 'system-ui' },
@@ -122,7 +119,7 @@ themes : [
     setTheme(t)
     {
       this.currentTheme = t
-      applyTheme(t)
+      applyTheme(t, this.customThemes)
       this.saveData()
     },
 
@@ -140,6 +137,80 @@ themes : [
       this.saveData()
     },
 
+    // --- custom themes ---
+    openThemeImport()
+    {
+      this.themeImportVisible = true
+      this.themeImportText = JSON.stringify({
+        name: "My Theme",
+        vars: {
+          "--bg": "#1d2021",
+          "--surface": "#282828",
+          "--border": "#3c3836",
+          "--text": "#ebdbb2",
+          "--accent": "#fabd2f",
+          "--accent-txt": "#1d2021",
+          "--gray": "#928374"
+        }
+      }, null, 2)
+    },
+
+    closeThemeImport()
+    {
+      this.themeImportVisible = false
+      this.themeImportText = ''
+    },
+
+    importTheme()
+    {
+      try
+      {
+        const raw = this.themeImportText.trim()
+        if (!raw) throw new Error('empty')
+        const obj = JSON.parse(raw)
+        if (!obj || typeof obj.name !== 'string' || !obj.name.trim()) throw new Error('name')
+        if (!obj.vars || typeof obj.vars !== 'object') throw new Error('vars')
+
+        const cleaned = {}
+        for (const k of THEME_VARS)
+        {
+          if (typeof obj.vars[k] === 'string' && obj.vars[k].trim())
+          {
+            cleaned[k] = obj.vars[k].trim()
+          }
+        }
+        if (!Object.keys(cleaned).length) throw new Error('no vars')
+
+        const slug = obj.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'theme'
+        const key = 'custom_' + slug
+        const theme = { key, name: obj.name.trim(), vars: cleaned }
+
+        this.customThemes = this.customThemes.filter(t => t.key !== key).concat(theme)
+        localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
+        this.setTheme(key)
+        this.showToast('Theme imported')
+        this.closeThemeImport()
+      }
+      catch (e)
+      {
+        this.showToast('Invalid theme format')
+      }
+    },
+
+    deleteCustomTheme(key)
+    {
+      this.customThemes = this.customThemes.filter(t => t.key !== key)
+      localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
+      if (this.currentTheme === key)
+      {
+        this.setTheme('gruvbox')
+      }
+      else
+      {
+        this.saveData()
+      }
+    },
+
     // --- calendar ---
     toggleCalendarEnabled()
     {
@@ -152,19 +223,16 @@ themes : [
       }
       else
       {
-        if (this.currentScreen === 'calendar')
-        {
-          this.currentScreen = 'home'
-        }
+        if (this.currentScreen === 'calendar') this.currentScreen = 'home'
       }
       this.saveData()
       setTimeout(() =>
+      {
+        if (this.calendarEnabled && !this.calendarRef)
         {
-          if (this.calendarEnabled && !this.calendarRef)
-          {
-            this.calendarRef = initCalendar(this)
-          }
-        }, 50)
+          this.calendarRef = initCalendar(this)
+        }
+      }, 50)
     },
 
     renameCalendarTab(newName)
@@ -216,10 +284,7 @@ themes : [
     triggerFontUpload()
     {
       let el = document.getElementById('font-file-input')
-      if (el)
-      {
-        el.click()
-      }
+      if (el) el.click()
     },
 
     async loadCustomFont(e)
@@ -247,20 +312,14 @@ themes : [
     {
       await deleteFontFromDB(fontName)
       this.customFonts = this.customFonts.filter(f => f.name !== fontName)
-      if (this.currentFont === fontName)
-      {
-        this.setFont('system-ui')
-      }
+      if (this.currentFont === fontName) this.setFont('system-ui')
     },
 
-    startFontHold(fontName)
-    {
-      startFontLongPress(fontName, this, 1000)
-    },
-
-    cancelFontHold()
-    {
-      clearFontLongPress()
-    }
+    startFontHold(fontName) { startFontLongPress(fontName, this, 1000) },
+    cancelFontHold() { clearFontLongPress() }
   }
 }
+
+// These were referenced in the original but not imported — add the guard
+// here so `startFontHold` doesn't throw if you trim imports later.
+import { startFontLongPress, clearFontLongPress } from './fonts.js'

@@ -5,24 +5,36 @@ import { playSound, tryRunGame } from './extras.js'
 const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+([\s\S]+)$/i
 const FUTURE_BUFFER = 3
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
+const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})([ap])?(?=\s|$)/
+// Reserved prefixes — a note whose *trimmed* text starts with `%s` (either
+// followed by whitespace or nothing at all) is search syntax, never a note.
+const SEARCH_PREFIX_RE = /^%s(?:\s|$)/
+const SEARCH_ACTIVE_RE = /^%s\s/
 
-// Single supported reminder-time syntax: `@HHMM` (exactly 4 digits).
-// Not `@HMM`, not `@HH:MM`, not `@HHMM` glued to a word.
-const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})(?=\s|$)/
-
-// Extract "HH:MM" from text, or null if absent / invalid. Exported so
-// calendar.js can reuse the exact same rule when building Android payloads.
 export function parseReminderTime(text)
 {
   const m = (text || '').match(TIME_TOKEN_RE)
   if (!m) return null
-  const h = parseInt(m[1], 10)
+  let h = parseInt(m[1], 10)
   const mi = parseInt(m[2], 10)
-  if (h > 23 || mi > 59) return null
-  return m[1] + ':' + m[2]
+  const suffix = m[3]   // 'a' | 'p' | undefined
+  if (mi > 59) return null
+
+  if (suffix)
+  {
+    // 12h mode: hour must be 1–12. Convert to 24h.
+    if (h < 1 || h > 12) return null
+    if (suffix === 'p' && h !== 12) h += 12
+    if (suffix === 'a' && h === 12) h = 0     // 12am → 00:00
+  }
+  else
+  {
+    if (h > 23) return null
+  }
+
+  return String(h).padStart(2, '0') + ':' + m[2]
 }
 
-// Remove a `@HHMM` token. Used only when producing notification-facing text.
 export function stripReminderTime(text)
 {
   return (text || '')
@@ -56,16 +68,64 @@ export function createNotesModule()
     _cacheKey: '',
     _dirtyNotes: true,
 
-    // --- expand/collapse state (in-memory only, resets on hard restart) ---
+    // --- expand/collapse state (in-memory only) ---
     _expandedNotes: {},
     _noteNeedsExpand: {},
     _noteOverflowObserver: null,
     _noteOverflowMeasurePending: false,
     _resizeDebounce: null,
 
-    // --- getters ---
+    // --- tab locking (session-only unlock state; PIN hashes live in categoryMeta) ---
+    _unlockedTabs: {},
+    modalIsPassword: false,
+
+    // ==================== GETTERS ====================
+
+    // True when the input begins with `%s` + whitespace. Empty term still
+    // counts as active (user is composing) — displayedNotes falls back to
+    // the normal activeCategory view while the term is empty.
+    get searchActive()
+    {
+      return SEARCH_ACTIVE_RE.test(this.noteInput || '')
+    },
+
+    // The term after `%s `. Recomputes on every noteInput change, so the
+    // filtered view updates live. Setter exists so any stray write
+    // (e.g. hydrateStore) round-trips through noteInput rather than throwing.
+    get searchTerm()
+    {
+      return this.searchActive ? (this.noteInput || '').slice(2).trim() : ''
+    },
+    set searchTerm(v)
+    {
+      if (!v) { this.noteInput = ''; return }
+      this.noteInput = '%s ' + v
+    },
+
     get displayedNotes()
     {
+      // Live search: filter across all unlocked tabs, ignore activeCategory.
+      if (this.searchTerm)
+      {
+        const q = this.searchTerm.toLowerCase()
+        const filtered = []
+        for (const n of this.notes)
+        {
+          if (this.isTabLocked(n.category)) continue
+          if (n.text.toLowerCase().includes(q)) filtered.push(n)
+        }
+        filtered.sort((a, b) =>
+        {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+          if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+          if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+          return 0
+        })
+        return filtered
+      }
+
+      if (this.isTabLocked(this.activeCategory)) return []
+
       let key = `${this.activeCategory}_${this.sortAlphabetical}_${this.moveCompletedBottom}_${this.notes.length}`
       if (this._cacheKey === key && !this._dirtyNotes) return this._displayedCache
 
@@ -77,17 +137,30 @@ export function createNotesModule()
       }
 
       result.sort((a, b) =>
-        {
-          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-          if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
-          if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
-          return 0
-        })
+      {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+        if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+        return 0
+      })
 
       this._cacheKey = key
       this._dirtyNotes = false
       this._displayedCache = result
       return result
+    },
+
+    get visibleTabs()
+    {
+      if (!this.searchTerm) return this.noteCategories
+      const q = this.searchTerm.toLowerCase()
+      const matched = new Set()
+      for (const n of this.notes)
+      {
+        if (this.isTabLocked(n.category)) continue
+        if (n.text.toLowerCase().includes(q)) matched.add(n.category)
+      }
+      return this.noteCategories.filter(t => matched.has(t))
     },
 
     get statsText()
@@ -172,7 +245,138 @@ export function createNotesModule()
       return { display: this.noteMenuVisible ? 'block' : 'none', left: `${this.noteMenuPos.x}px`, top: `${this.noteMenuPos.y}px` }
     },
 
-    // --- EXPAND/COLLAPSE ---
+    // ==================== TAB LOCKING ====================
+
+    hasLock(tab)
+    {
+      return !!(this.categoryMeta[tab] && this.categoryMeta[tab].lock)
+    },
+
+    isTabLocked(tab)
+    {
+      return this.hasLock(tab) && !this._unlockedTabs[tab]
+    },
+
+    async _hashPin(pin, salt)
+    {
+      const data = new TextEncoder().encode(pin + ':' + salt)
+      const buf = await crypto.subtle.digest('SHA-256', data)
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+    },
+
+    _generateSalt()
+    {
+      const arr = new Uint8Array(16)
+      crypto.getRandomValues(arr)
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('')
+    },
+
+    _promptPin(title)
+    {
+      return new Promise(resolve =>
+      {
+        this.openPrompt(title, '', (val) => resolve(val), true)
+      })
+    },
+
+    async lockTabFlow()
+    {
+      const tab = this.contextTab
+      if (!tab) return
+      if (tab === this.calendarTabName) { this.showToast('Cannot lock calendar tab'); this.closeAllMenus(); return }
+      if (this.hasLock(tab)) { this.showToast('Tab already has lock'); this.closeAllMenus(); return }
+      this.closeAllMenus()
+
+      const pin1 = await this._promptPin('Set PIN')
+      if (!pin1 || pin1.length < 4) { this.showToast('PIN must be 4+ chars'); return }
+
+      const pin2 = await this._promptPin('Confirm PIN')
+      if (pin2 !== pin1) { this.showToast('PINs don\'t match'); return }
+
+      await this.setTabLock(tab, pin1)
+      this.showToast('Tab locked')
+    },
+
+    async setTabLock(tab, pin)
+    {
+      const salt = this._generateSalt()
+      const hash = await this._hashPin(pin, salt)
+      if (!this.categoryMeta[tab]) this.categoryMeta[tab] = { id: Date.now(), updatedAt: Date.now() }
+      this.categoryMeta[tab].lock = { salt, hash }
+      this.categoryMeta[tab].updatedAt = Date.now()
+      this._unlockedTabs[tab] = true
+      if (this.activeCategory === tab)
+      {
+        const firstOther = this.noteCategories.find(t => t !== tab)
+        if (firstOther) this.activeCategory = firstOther
+      }
+      this._dirtyNotes = true
+      this.saveData()
+    },
+
+    async unlockTabFlow()
+    {
+      const tab = this.contextTab
+      if (!tab) return
+      if (!this.isTabLocked(tab)) { this.closeAllMenus(); return }
+      this.closeAllMenus()
+
+      const pin = await this._promptPin('Enter PIN')
+      if (!pin) return
+      const ok = await this.tryUnlockTab(tab, pin)
+      if (ok) this.showToast('Unlocked')
+      else this.showToast('Wrong PIN')
+    },
+
+    async tryUnlockTab(tab, pin)
+    {
+      const lock = this.categoryMeta[tab] && this.categoryMeta[tab].lock
+      if (!lock) return false
+      const hash = await this._hashPin(pin, lock.salt)
+      if (hash === lock.hash)
+      {
+        this._unlockedTabs[tab] = true
+        this.activeCategory = tab
+        this._dirtyNotes = true
+        return true
+      }
+      return false
+    },
+
+    lockAgainFlow()
+    {
+      const tab = this.contextTab
+      if (!tab) return
+      this.closeAllMenus()
+      if (!this.hasLock(tab)) return
+      delete this._unlockedTabs[tab]
+      if (this.activeCategory === tab)
+      {
+        const firstOther = this.noteCategories.find(t => t !== tab)
+        if (firstOther) this.activeCategory = firstOther
+      }
+      this._dirtyNotes = true
+      this.showToast('Locked')
+    },
+
+    // ==================== SEARCH ====================
+
+    // Clearing search = clearing noteInput. Called by the search pill's ×
+    // (if you keep one) or manually by the user.
+    clearSearch()
+    {
+      this.noteInput = ''
+      this._resetNoteInputHeight()
+    },
+
+    _resetNoteInputHeight()
+    {
+      const el = document.getElementById('note-in')
+      if (el) el.style.height = ''
+    },
+
+    // ==================== EXPAND / COLLAPSE ====================
+
     toggleNoteExpand(id)
     {
       const next = { ...this._expandedNotes }
@@ -190,31 +394,25 @@ export function createNotesModule()
 
       const wasExpanded = []
       wraps.forEach(el =>
+      {
+        if (el.classList.contains('expanded'))
         {
-          if (el.classList.contains('expanded'))
-          {
-            el.classList.remove('expanded')
-            wasExpanded.push(el)
-          }
-        })
+          el.classList.remove('expanded')
+          wasExpanded.push(el)
+        }
+      })
 
       const newNeedsExpand = {}
       wraps.forEach(el =>
-        {
-          const item = el.closest('.note-item')
-          if (!item) return
-          const id = item.dataset.id
-          if (!id) return
-          // Skip elements that look "not laid out yet". On slower WebViews
-          // (e.g. Ablemark 7) right after mount, a flex ancestor can report a
-          // near-zero clientHeight even though the text node has full height,
-          // which made EVERY note look overflowing for one frame. A real line
-          // of text is ~20px at ui-scale 1, so anything below 5px is
-          // almost certainly a collapsed ancestor, not a real note.
-          if (el.clientHeight < 5) return
-          if (el.scrollHeight < 5) return
-          if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
-        })
+      {
+        const item = el.closest('.note-item')
+        if (!item) return
+        const id = item.dataset.id
+        if (!id) return
+        if (el.clientHeight < 5) return
+        if (el.scrollHeight < 5) return
+        if (el.scrollHeight > el.clientHeight + 2) newNeedsExpand[id] = true
+      })
 
       wasExpanded.forEach(el => el.classList.add('expanded'))
 
@@ -230,22 +428,18 @@ export function createNotesModule()
       if (!list) return
 
       const obs = new MutationObserver(() =>
+      {
+        if (this._noteOverflowMeasurePending) return
+        this._noteOverflowMeasurePending = true
+        requestAnimationFrame(() => requestAnimationFrame(() =>
         {
-          if (this._noteOverflowMeasurePending) return
-          this._noteOverflowMeasurePending = true
-          requestAnimationFrame(() => requestAnimationFrame(() =>
-            {
-              this._noteOverflowMeasurePending = false
-              this._measureNoteOverflow()
-            }))
-        })
+          this._noteOverflowMeasurePending = false
+          this._measureNoteOverflow()
+        }))
+      })
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
 
-      // Wait for fonts to be ready, THEN double-rAF. On slower WebViews the
-      // very first measurement used to run before custom/web fonts had been
-      // applied, so the boxes were measured at the fallback font's metrics
-      // and briefly flagged every note as overflowing.
       const fontReady = (document.fonts && document.fonts.ready)
         ? document.fonts.ready
         : Promise.resolve()
@@ -254,7 +448,8 @@ export function createNotesModule()
       )))
     },
 
-    // --- RECURRENCE HELPERS ---
+    // ==================== RECURRENCE ====================
+
     parseRecurrence(text)
     {
       if (!text) return null
@@ -424,7 +619,8 @@ export function createNotesModule()
       else this.notes.unshift(newNote)
     },
 
-    // --- UNIVERSAL NOTE ADDER ---
+    // ==================== ADD NOTE ====================
+
     addNote(rawText, category, anchorDateStr)
     {
       const v = (rawText || '').trim()
@@ -445,6 +641,11 @@ export function createNotesModule()
       const rec = this.parseRecurrence(v)
       if (rec)
       {
+        if (this.hasLock(cat))
+        {
+          this.showToast('Cannot add recurring note to locked tab')
+          return false
+        }
         const group = this.buildRecurrenceGroup(rec.body, rec.token, cat, anchorDateStr || null)
         if (group.length > 0)
         {
@@ -469,7 +670,8 @@ export function createNotesModule()
       return true
     },
 
-    // --- tab/list actions ---
+    // ==================== TAB / LIST ACTIONS ====================
+
     toggleSortAlphabetical()
     {
       this.sortAlphabetical = !this.sortAlphabetical
@@ -478,33 +680,56 @@ export function createNotesModule()
 
     getTabLabel(t)
     {
+      let label = t
       if (t.includes('%'))
       {
         let catNotes = this.notes.filter(n => n.category === t)
         let tot = catNotes.length
         let comp = catNotes.filter(n => n.completed).length
         let pct = tot > 0 ? Math.round((comp / tot) * 100) : 0
-        return t.replace('%', `${pct}%`)
+        label = t.replace('%', `${pct}%`)
       }
-      return t
+      if (this.isTabLocked(t)) label = '🔒 ' + label
+      return label
     },
 
     selectTab(tab)
     {
+      if (this.isTabLocked(tab))
+      {
+        this.contextTab = tab
+        this.unlockTabFlow()
+        return
+      }
       this.closeAllMenus()
       this.activeCategory = tab
       if (!this.keepKeyboard && document.activeElement) document.activeElement.blur()
     },
 
-    // --- note CRUD ---
+    // ==================== NOTE SUBMIT ====================
+
     submitNote()
     {
       const v = this.noteInput.trim()
       if (!v) return
+
+      // %s is reserved for live search (see searchTerm getter). Never
+      // saveable — Enter is a no-op so the user can keep browsing results.
+      if (SEARCH_PREFIX_RE.test(v)) return
+
+      if (this.isTabLocked(this.activeCategory))
+      {
+        this.showToast('Unlock tab first')
+        return
+      }
+
       this.addNote(v, this.activeCategory, null)
       this.noteInput = ''
+      this._resetNoteInputHeight()
       this.saveData()
     },
+
+    // ==================== NOTE CRUD ====================
 
     toggleNote(n, e)
     {
@@ -581,7 +806,8 @@ export function createNotesModule()
       this.saveData()
     },
 
-    // --- note dropdown menu ---
+    // ==================== NOTE MENU ====================
+
     openNoteMenu(e, id)
     {
       if (this.activeNoteMenuId === id && this.noteMenuVisible) { this.closeAllMenus(); return }
@@ -595,16 +821,16 @@ export function createNotesModule()
       this.noteMenuVisible = true
 
       setTimeout(() =>
-        {
-          const el = document.getElementById('note-dropdown')
-          if (!el) return
-          const rect = el.getBoundingClientRect()
-          const w = rect.width || 160
-          const h = rect.height || 260
-          const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
-          const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
-          this.noteMenuPos = { x, y }
-        }, 0)
+      {
+        const el = document.getElementById('note-dropdown')
+        if (!el) return
+        const rect = el.getBoundingClientRect()
+        const w = rect.width || 160
+        const h = rect.height || 260
+        const x = Math.max(12, Math.min(clientX, window.innerWidth - w - 12))
+        const y = Math.max(12, Math.min(clientY, window.innerHeight - h - 12))
+        this.noteMenuPos = { x, y }
+      }, 0)
     },
 
     actionDeleteNote()
@@ -663,14 +889,15 @@ export function createNotesModule()
       if (n)
       {
         this.openPrompt('Edit Note', n.text, val =>
-          {
-            if (val) { n.text = val; n.updatedAt = Date.now(); this.saveData() }
-          })
+        {
+          if (val) { n.text = val; n.updatedAt = Date.now(); this.saveData() }
+        })
       }
       this.closeAllMenus()
     },
 
-    // --- tab context menu ---
+    // ==================== TAB CONTEXT MENU ====================
+
     openContextMenu(e, tab)
     {
       this.closeAllMenus()
@@ -693,7 +920,8 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // --- tab lifecycle ---
+    // ==================== TAB LIFECYCLE ====================
+
     addTab(n)
     {
       if (n && !this.noteCategories.includes(n))
@@ -752,10 +980,16 @@ export function createNotesModule()
       this.categoryMeta[trimmed] = meta
       if (oldName !== trimmed) delete this.categoryMeta[oldName]
 
+      if (this._unlockedTabs[oldName])
+      {
+        this._unlockedTabs[trimmed] = true
+        delete this._unlockedTabs[oldName]
+      }
+
       this.notes.forEach(n =>
-        {
-          if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
-        })
+      {
+        if (n.category === oldName) { n.category = trimmed; n.updatedAt = now }
+      })
 
       if (this.activeCategory === oldName) this.activeCategory = trimmed
       this._dirtyNotes = true
@@ -764,16 +998,23 @@ export function createNotesModule()
     deleteTabClick()
     {
       let t = this.contextTab || this.activeCategory
+      if (this.isTabLocked(t))
+      {
+        this.showToast('Unlock tab first')
+        this.closeAllMenus()
+        return
+      }
       if (this.noteCategories.length > 1)
       {
         this.noteCategories = this.noteCategories.filter(x => x !== t)
         let now = Date.now()
         this.notes = this.notes.filter(note =>
-          {
-            if (note.category === t) { note.updatedAt = now; this.recycleBin.push(note); return false }
-            return true
-          })
+        {
+          if (note.category === t) { note.updatedAt = now; this.recycleBin.push(note); return false }
+          return true
+        })
         if (this.activeCategory === t) this.activeCategory = this.noteCategories[0]
+        delete this._unlockedTabs[t]
         this.saveData()
       }
       this.closeAllMenus()
@@ -782,6 +1023,8 @@ export function createNotesModule()
     mergeTabNotes()
     {
       let cat = this.contextTab || this.activeCategory
+      if (this.isTabLocked(cat)) { this.showToast('Unlock tab first'); this.closeAllMenus(); return }
+
       let catNotes = this.notes.filter(n => n.category === cat)
 
       if (!catNotes.length)
@@ -792,12 +1035,12 @@ export function createNotesModule()
       }
 
       catNotes.sort((a, b) =>
-        {
-          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-          if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
-          if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
-          return 0
-        })
+      {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        if (this.moveCompletedBottom && a.completed !== b.completed) return a.completed ? 1 : -1
+        if (this.sortAlphabetical) return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+        return 0
+      })
 
       let mergedText = catNotes.map(n => n.text).join('\n')
       let now = Date.now()
@@ -824,6 +1067,7 @@ export function createNotesModule()
     puffCompleted()
     {
       let cat = this.contextTab || this.activeCategory
+      if (this.isTabLocked(cat)) { this.showToast('Unlock tab first'); this.closeAllMenus(); return }
       let targets = this.notes.filter(n => n.category === cat && n.completed && !n.groupId)
       if (!targets.length) { this.showToast('Nothing to puff'); this.closeAllMenus(); return }
       let now = Date.now()
@@ -836,61 +1080,64 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // --- import merge ---
+    // ==================== IMPORT MERGE ====================
+
     mergeNotes(imported)
     {
-      if (!Array.isArray(imported)) return { added: 0, updated: 0 }
+      if (!Array.isArray(imported)) return { added: 0, updated: 0, skipped: 0 }
       let now = Date.now()
       let added = 0
       let updated = 0
+      let skipped = 0
       imported.forEach((n, idx) =>
+      {
+        if (!n || typeof n.text !== 'string') return
+        let cat = n.category || 'Main'
+        if (this.isTabLocked(cat)) { skipped++; return }
+        if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
+        if (!this.categoryMeta) this.categoryMeta = {}
+        if (!this.categoryMeta[cat]) this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+
+        let noteId = (typeof n.id === 'number' && !isNaN(n.id)) ? n.id : null
+        let existing = null
+        if (noteId) existing = this.notes.find(x => x.id === noteId)
+        if (!existing) existing = this.notes.find(x => x.text === n.text && x.category === cat)
+
+        let itemUpdatedAt = (typeof n.updatedAt === 'number' && !isNaN(n.updatedAt)) ? n.updatedAt : now
+        let itemPinned = typeof n.pinned === 'boolean' ? n.pinned : false
+        let itemCompleted = Boolean(n.completed)
+
+        if (existing)
         {
-          if (!n || typeof n.text !== 'string') return
-          let cat = n.category || 'Main'
-          if (!this.noteCategories.includes(cat)) this.noteCategories.push(cat)
-          if (!this.categoryMeta) this.categoryMeta = {}
-          if (!this.categoryMeta[cat]) this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
-
-          let noteId = (typeof n.id === 'number' && !isNaN(n.id)) ? n.id : null
-          let existing = null
-          if (noteId) existing = this.notes.find(x => x.id === noteId)
-          if (!existing) existing = this.notes.find(x => x.text === n.text && x.category === cat)
-
-          let itemUpdatedAt = (typeof n.updatedAt === 'number' && !isNaN(n.updatedAt)) ? n.updatedAt : now
-          let itemPinned = typeof n.pinned === 'boolean' ? n.pinned : false
-          let itemCompleted = Boolean(n.completed)
-
-          if (existing)
+          if (itemUpdatedAt >= (existing.updatedAt || 0))
           {
-            if (itemUpdatedAt >= (existing.updatedAt || 0))
-            {
-              existing.text = n.text
-              existing.completed = itemCompleted
-              existing.category = cat
-              existing.pinned = itemPinned
-              existing.updatedAt = itemUpdatedAt
-              if (n.groupId) existing.groupId = n.groupId
-              if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
-              if (n.recurrence) existing.recurrence = n.recurrence
-              updated++
-            }
+            existing.text = n.text
+            existing.completed = itemCompleted
+            existing.category = cat
+            existing.pinned = itemPinned
+            existing.updatedAt = itemUpdatedAt
+            if (n.groupId) existing.groupId = n.groupId
+            if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
+            if (n.recurrence) existing.recurrence = n.recurrence
+            updated++
           }
-          else
-          {
-            let newNote = {
-              id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
-              text: n.text, completed: itemCompleted, category: cat,
-              pinned: itemPinned, updatedAt: itemUpdatedAt
-            }
-            if (n.groupId) newNote.groupId = n.groupId
-            if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
-            if (n.recurrence) newNote.recurrence = n.recurrence
-            this.notes.push(newNote)
-            added++
+        }
+        else
+        {
+          let newNote = {
+            id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
+            text: n.text, completed: itemCompleted, category: cat,
+            pinned: itemPinned, updatedAt: itemUpdatedAt
           }
-        })
+          if (n.groupId) newNote.groupId = n.groupId
+          if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
+          if (n.recurrence) newNote.recurrence = n.recurrence
+          this.notes.push(newNote)
+          added++
+        }
+      })
       this.saveData()
-      return { added, updated }
+      return { added, updated, skipped }
     }
   }
 }

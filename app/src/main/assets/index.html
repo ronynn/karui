@@ -7,23 +7,32 @@
     <link rel="modulepreload" href="petite-vue.es.js">
     <link rel="modulepreload" href="index.js">
     <script src="quotes.js" defer></script>
+
+
+
+
     <script>
-      (function() {
-        try {
-          var theme = localStorage.getItem('theme') || 'gruvbox';
-          document.documentElement.setAttribute('data-theme', theme);
-          var font = localStorage.getItem('font');
-          if (font) {
-            document.documentElement.style.fontFamily = font.startsWith('CustomFont_')
-              ? "'" + font + "', system-ui, sans-serif"
-              : font;
-          }
-          var scale = localStorage.getItem('uiScale');
-          if (scale) document.documentElement.style.setProperty('--ui-scale', scale);
-        } catch (e) {}
-      })();
+      (function(){try{
+        var t=localStorage.getItem('theme')||'gruvbox';
+        var cts=JSON.parse(localStorage.getItem('customThemes')||'[]');
+        var ct=null;
+        for(var i=0;i<cts.length;i++){if(cts[i].key===t){ct=cts[i];break;}}
+        if(ct){for(var k in ct.vars){document.documentElement.style.setProperty(k,ct.vars[k]);}}
+        else{document.documentElement.setAttribute('data-theme',t);}
+        var f=localStorage.getItem('font');
+        if(f){document.documentElement.style.fontFamily=f.indexOf('CustomFont_')===0?"'"+f+"', system-ui, sans-serif":f;}
+        var s=localStorage.getItem('uiScale');
+        if(s){document.documentElement.style.setProperty('--ui-scale',s);}
+      }catch(e){}})();
     </script>
+
+
+
+
+
+
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="calendar.css">
     <link rel="stylesheet" href="games.css">
   </head>
@@ -57,11 +66,17 @@
         <div class="box">
           <span class="box-title">Box 2: Notes List</span>
           <div class="tabs-container" id="tabs-bar">
-            <div v-for="t in noteCategories" :key="t" :data-tab="t" class="tab" :class="{ active: activeCategory === t }" @click="selectTab(t)" @touchstart="handleTabTouchStart($event, t)" @touchend="handleTabTouchEnd" @touchmove="handleTabTouchCancel" @contextmenu.prevent="openContextMenu($event, t)">
+            <div v-for="t in visibleTabs" :key="t" :data-tab="t" class="tab" :class="{ active: activeCategory === t }" @click="selectTab(t)" @touchstart="handleTabTouchStart($event, t)" @touchend="handleTabTouchEnd" @touchmove="handleTabTouchCancel" @contextmenu.prevent="openContextMenu($event, t)">
               {{ getTabLabel(t) }}
             </div>
           </div>
           <div id="notes-list">
+            <div v-if="searchTerm && displayedNotes.length === 0" class="ghost-line">
+              No notes contain "{{ searchTerm }}"
+            </div>
+            <div v-if="!searchTerm && isTabLocked(activeCategory)" class="ghost-line">
+              Locked — long-press tab → Unlock
+            </div>
             <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
               <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
                 <div class="note-content-wrap" :class="{ expanded: _expandedNotes[n.id] }">
@@ -98,6 +113,11 @@
             <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
               {{ t.label }}
             </button>
+            <button v-for="ct in customThemes" :key="ct.key" class="theme-btn" :class="{ active: currentTheme === ct.key }" @click="setTheme(ct.key)">
+              <span style="overflow:hidden; text-overflow:ellipsis;">{{ ct.name.toUpperCase() }}</span>
+              <span v-if="currentTheme !== ct.key" class="theme-delete-glyph" @click.stop="deleteCustomTheme(ct.key)">&times;</span>
+            </button>
+            <button class="theme-btn" style="border-style: dashed;" @click="openThemeImport">+ THEME</button>
           </div>
 
           <p style="padding-top: 10px;padding-bottom:5px;">Fonts</p>
@@ -154,6 +174,13 @@
               <span>Move Marked Notes To Bottom</span>
               <label class="switch">
                 <input type="checkbox" v-model="moveCompletedBottom" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Always sort notes alphabetically</span>
+              <label class="switch">
+                <input type="checkbox" v-model="sortAlphabetical" @change="saveData">
                 <span class="slider"></span>
               </label>
             </div>
@@ -297,23 +324,32 @@
 
     <div id="fab-btn" v-if="showFab && currentScreen === 'home' && !modalVisible" @click="handleFabClick">&gt;_</div>
 
-    <div id="context-menu" class="menu" :style="contextMenuStyle">
+    <div id="context-menu" class="menu menu-2col" :style="contextMenuStyle">
       <div class="menu-title">{{ contextTab }}</div>
-      <button v-if="canMoveTabLeft" @click="moveTab(-1)">Move Left</button>
-      <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
-      <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
-      <button @click="deleteTabClick">Delete</button>
-      <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
-      <button v-if="mergeableCount > 0" @click="mergeTabNotes">Merge Items</button>
-      <button @click="showTabQr">Show QR</button>
-      <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
+      <div class="menu-grid">
+        <button v-if="canMoveTabLeft" @click="moveTab(-1)">Move Left</button>
+        <button v-if="canMoveTabRight" @click="moveTab(1)">Move Right</button>
+        <button @click="openPrompt('Rename Tab', contextTab, renameTab)">Rename</button>
+        <button @click="deleteTabClick">Delete</button>
+        <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
+        <button v-if="mergeableCount > 0" @click="mergeTabNotes">Merge</button>
+        <button @click="showTabQr">Show QR</button>
+        <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
+
+        <button v-if="!hasLock(contextTab) && contextTab !== calendarTabName" @click="lockTabFlow">Lock Tab</button>
+        <button v-if="hasLock(contextTab) && isTabLocked(contextTab)" @click="unlockTabFlow">Unlock</button>
+        <button v-if="hasLock(contextTab) && !isTabLocked(contextTab)" @click="lockAgainFlow">Lock Again</button>
+      </div>
     </div>
+
+
 
     <div id="note-dropdown" class="menu" :style="noteMenuStyle">
       <div class="note-menu-stats note-menu-stats-top">WC:{{ activeNoteWordCount }}</div>
       <button @click="actionCopyNote">Copy</button>
-      <button @click="showNoteQr">Show QR</button>
       <button @click="actionEditNote">Edit</button>
+
+      <button @click="showNoteQr">Show QR</button>
       <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
       <button @click="actionDeleteNote">Delete</button>
       <div class="note-menu-stats note-menu-stats-bottom">CH: {{ activeNoteCharCount }}</div>
@@ -322,10 +358,11 @@
     <div id="modal-overlay" v-if="modalVisible">
       <div class="modal-box">
         <div style="font-weight: bold;">{{ modalTitle }}</div>
-        <textarea id="modal-input" v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
+        <textarea v-if="!modalIsPassword" id="modal-input" v-model="modalInput" rows="1" @input="autoExpandTextarea($event.target)"></textarea>
+        <input v-else id="modal-pin-input" type="password" inputmode="numeric" autocomplete="off" v-model="modalInput" @keydown.enter="closeModal(true)">
         <div style="display: flex; gap: 10px;">
+          <button class="btn-subtle" @click="closeModal(false)">Cancel</button>
           <button @click="closeModal(true)">Save</button>
-          <button @click="closeModal(false)">Cancel</button>
         </div>
       </div>
     </div>
@@ -365,6 +402,35 @@
     </div>
 
     <div id="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
+
+
+    <div id="theme-import-overlay" v-if="themeImportVisible">
+      <div class="modal-box" style="max-width: 480px;">
+        <div style="font-weight: bold;">Import Custom Theme</div>
+        <pre class="theme-format-hint">{
+          "name": "My Theme",
+          "vars": {
+          "--bg": "#1d2021",
+          "--surface": "#282828",
+          "--border": "#3c3836",
+          "--text": "#ebdbb2",
+          "--accent": "#fabd2f",
+          "--accent-txt": "#1d2021",
+          "--gray": "#928374"
+          }
+          }</pre>
+        <textarea id="theme-import-input" v-model="themeImportText" rows="10" spellcheck="false"></textarea>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-subtle" @click="closeThemeImport">Cancel</button>
+          <button @click="importTheme">Save</button>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
 
     <script type="module" src="index.js"></script>
     <script>

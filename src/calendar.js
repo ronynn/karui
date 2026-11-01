@@ -26,8 +26,6 @@ export function createCalendarModule()
       const dateRe = /^(\d{4}-\d{2}-\d{2})\s+([\s\S]+)$/
       const events = []
 
-      // Strips the visible `@HHMM` from the text sent to Android so the
-      // notification body reads cleanly; the original note keeps it.
       const push = (date, rawText, note) =>
       {
         const time = parseReminderTime(rawText)
@@ -65,31 +63,91 @@ export function createCalendarModule()
       try { window.Android.updateCalendarEvents(json) } catch (e) {}
     },
 
-    toggleCalendarNotifications()
+    // ---------- system notification permission ----------
+    // Tries the Android bridge first, falls back to the web Notification API.
+    // Returns true when we may proceed (granted, or no permission API exists
+    // at all — in which case the native side owns this and we shouldn't block).
+    async _ensureNotificationPermission()
     {
-      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
-
-      if (this.calendarNotificationsEnabled && !this.notificationEnabled)
+      // 1. Android native bridge
+      if (window.Android)
       {
-        this.notificationEnabled = true
-        if (window.Android && typeof window.Android.toggleNotification === 'function')
+        if (typeof window.Android.hasNotificationPermission === 'function')
         {
-          window.Android.toggleNotification(true)
+          try
+          {
+            if (window.Android.hasNotificationPermission()) return true
+          }
+          catch (e) {}
+        }
+        if (typeof window.Android.requestNotificationPermission === 'function')
+        {
+          try
+          {
+            const granted = await window.Android.requestNotificationPermission()
+            return !!granted
+          }
+          catch (e) { return false }
+        }
+        // Android present but no permission API — assume native handles it.
+        return true
+      }
+
+      // 2. Standard web Notification API
+      if (typeof Notification !== 'undefined' && Notification.permission !== undefined)
+      {
+        if (Notification.permission === 'granted') return true
+        if (Notification.permission === 'denied') return false
+        try
+        {
+          const result = await Notification.requestPermission()
+          return result === 'granted'
+        }
+        catch (e) { return false }
+      }
+
+      // 3. Unknown environment — permit, caller/native will handle.
+      return true
+    },
+
+    // ---------- toggle ----------
+    // Does NOT touch `notificationEnabled` (statusbar quick-note toggle).
+    // Those two user preferences are independent.
+    async toggleCalendarNotifications()
+    {
+      const wanted = this.calendarNotificationsEnabled
+
+      if (wanted)
+      {
+        const granted = await this._ensureNotificationPermission()
+        if (!granted)
+        {
+          // v-model already flipped the checkbox; revert it and inform.
+          this.calendarNotificationsEnabled = false
+          localStorage.setItem('calendarNotificationsEnabled', 'false')
+          this.showToast('Enable system notifications for this app first')
+          return
         }
       }
 
+      localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
+
       this.syncCalendarEventsToAndroid()
 
-      if (window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
+      const hasApi = !!(window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
+      if (hasApi)
       {
-        window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled)
-        this.showToast(this.calendarNotificationsEnabled
-                       ? 'Daily calendar reminder enabled'
-                       : 'Daily calendar reminder disabled')
+        try { window.Android.setCalendarNotificationsEnabled(this.calendarNotificationsEnabled) } catch (e) {}
       }
-      else if (this.calendarNotificationsEnabled)
+
+      if (this.calendarNotificationsEnabled)
       {
-        this.showToast('Calendar notifications only work in the Android app')
+        if (hasApi) this.showToast('Daily calendar reminder enabled')
+        else this.showToast('Calendar notifications only work in the Android app')
+      }
+      else if (hasApi)
+      {
+        this.showToast('Daily calendar reminder disabled')
       }
     }
   }
@@ -124,8 +182,8 @@ export function initCalendar(appStore)
     return appStore.notes.filter(n => n.category === cat)
   }
 
-  // Note: this keeps the `@HHMM` token in the returned `text` — the calendar
-  // list, day modal and "recurring today" strip all display it intentionally.
+  // Keeps the `@HHMM` token in the returned `text` — the calendar list,
+  // day modal and "recurring today" strip all display it intentionally.
   function parseNoteDateAndText(note)
   {
     if (note.scheduledDate)
@@ -256,21 +314,20 @@ export function initCalendar(appStore)
     const firstDay = new Date(year, month, 1)
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     const startWeekday = firstDay.getDay()
+    const todayS = todayStr()
 
+    // Parse once, bucket by date in a single pass.
     const calNotes = getCalendarNotes()
-    const eventsCount = {}
-    const recurringCount = {}
+    const allParsed = calNotes.map(parseNoteDateAndText)
+    const dayNoteMap = {}
     const monthlyEvents = []
-
-    for (let d = 1; d <= daysInMonth; d++)
+    for (const item of allParsed)
     {
-      const dateStr = toDateString(year, month, d)
-      const dayNotes = calNotes.map(parseNoteDateAndText).filter(item => item.date === dateStr)
-      eventsCount[dateStr] = dayNotes.length
-      recurringCount[dateStr] = dayNotes.filter(x => x.isRecurring).length
-      dayNotes.forEach(item => { if (!item.isRecurring) monthlyEvents.push(item) })
+      if (!item.date) continue
+      if (!dayNoteMap[item.date]) dayNoteMap[item.date] = []
+      dayNoteMap[item.date].push(item)
+      if (!item.isRecurring) monthlyEvents.push(item)
     }
-
     monthlyEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
     const monthNames = ["January", "February", "March", "April", "May", "June",
@@ -298,18 +355,36 @@ export function initCalendar(appStore)
     for (let d = 1; d <= daysInMonth; d++)
     {
       const dateStr = toDateString(year, month, d)
-      const todayS = todayStr()
       const isToday = dateStr === todayS
       const isSelected = dateStr === selectedDateStr
-      const recurring = recurringCount[dateStr] || 0
-      const oneOff = (eventsCount[dateStr] || 0) - recurring
 
-      let dotsHtml = ''
-      if (recurring > 0) dotsHtml += `<span class="event-dot recurring"></span>`
-      if (oneOff > 0)
+      const dayNotes = dayNoteMap[dateStr] || []
+      let recPending = 0, recDone = 0, offPending = 0, offDone = 0
+      for (const x of dayNotes)
       {
-        for (let i = 0; i < Math.min(oneOff, 3); i++) dotsHtml += `<span class="event-dot"></span>`
+        if (x.isRecurring)
+        {
+          if (x.note.completed) recDone++
+          else recPending++
+        }
+        else
+        {
+          if (x.note.completed) offDone++
+          else offPending++
+        }
       }
+
+      // Recurring indicator: diamond. Pending → border color,
+      // done → gray (matches one-off done dots).
+      let dotsHtml = ''
+      if (recPending > 0) dotsHtml += `<span class="event-dot recurring"></span>`
+      else if (recDone > 0) dotsHtml += `<span class="event-dot recurring done"></span>`
+
+      // One-off dots: pending first (accent), then done (gray), capped at 3.
+      const pendingShow = Math.min(offPending, 3)
+      const doneShow = Math.min(offDone, Math.max(0, 3 - pendingShow))
+      for (let i = 0; i < pendingShow; i++) dotsHtml += `<span class="event-dot"></span>`
+      for (let i = 0; i < doneShow; i++) dotsHtml += `<span class="event-dot done"></span>`
 
       dayCells += `
         <div class="calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-date="${dateStr}">
@@ -331,10 +406,7 @@ export function initCalendar(appStore)
         `).join('')
       : '<div class="monthly-event-item"><span class="monthly-event-text">No events this month</span></div>'
 
-    const todayS = todayStr()
-    const recurringToday = calNotes
-      .map(parseNoteDateAndText)
-      .filter(item => item.isRecurring && item.date === todayS)
+    const recurringToday = allParsed.filter(item => item.isRecurring && item.date === todayS)
 
     const recurringTodayHtml = recurringToday.length > 0
       ? recurringToday.map(item => `
