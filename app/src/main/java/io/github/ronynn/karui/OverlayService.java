@@ -8,6 +8,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -15,16 +16,19 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
@@ -41,13 +45,10 @@ public class OverlayService extends Service
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
 
-  /**
-   * Background colour used to prevent the WebView's white flash on first
-   * paint. Change this if your web app uses a different theme colour.
-   */
   private static final String PANEL_BG_COLOR = "#1A1A1A";
-  private static final String HANDLE_BG_COLOR = "#2A2A2A";
+  private static final String HANDLE_BG_COLOR = "#242424";
   private static final String PILL_COLOR = "#7A7A7A";
+  private static final String CLOSE_COLOR = "#BBBBBB";
 
   private WindowManager mWindowManager;
   private View mOverlayView;
@@ -104,34 +105,45 @@ public class OverlayService extends Service
     mMinHeight = (int) (screenHeight * 0.25);
     mMaxHeight = screenHeight;
 
-    LinearLayout rootLayout = new LinearLayout(this);
+    // Root layout that intercepts the BACK key before the WebView sees it.
+    BackInterceptLayout rootLayout = new BackInterceptLayout(this);
+    rootLayout.setOnBackPressed(() -> dismissOverlay());
     rootLayout.setOrientation(LinearLayout.VERTICAL);
-    // Fill with the eventual panel colour so the very first paint is not
-    // the default white that WebView shows before HTML loads.
     rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
+    rootLayout.setFocusableInTouchMode(true);
+    rootLayout.requestFocus();
 
     // --- Drag handle (thin) ---
-    FrameLayout dragHandle = new FrameLayout(this);
-    dragHandle.setBackgroundColor(Color.parseColor(HANDLE_BG_COLOR));
-    LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, dp(28));
-    dragHandle.setLayoutParams(handleParams);
+    FrameLayout handle = new FrameLayout(this);
+    handle.setBackgroundColor(Color.parseColor(HANDLE_BG_COLOR));
+    handle.setLayoutParams(new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(28)));
 
     View pill = new View(this);
+    GradientDrawable pillShape = new GradientDrawable();
+    pillShape.setColor(Color.parseColor(PILL_COLOR));
+    pillShape.setCornerRadius(dp(2));
+    pill.setBackground(pillShape);
     FrameLayout.LayoutParams pillParams = new FrameLayout.LayoutParams(
-        dp(48), dp(4));
-    pillParams.gravity = Gravity.CENTER;
-    pill.setLayoutParams(pillParams);
-    pill.setBackgroundColor(Color.parseColor(PILL_COLOR));
-    dragHandle.addView(pill);
+        dp(32), dp(3), Gravity.CENTER);
+    handle.addView(pill, pillParams);
+
+    TextView closeBtn = new TextView(this);
+    closeBtn.setText("×");
+    closeBtn.setTextSize(22);
+    closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
+    closeBtn.setGravity(Gravity.CENTER);
+    FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(
+        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END);
+    closeBtn.setLayoutParams(closeParams);
+    closeBtn.setOnClickListener(v -> dismissOverlay());
+    handle.addView(closeBtn);
 
     // --- WebView ---
     mWebView = new WebView(this);
     mWebView.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
     mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
-    // Keep it invisible until the page has actually rendered, so the user
-    // sees the panel colour, then the content fades in — no white flash.
     mWebView.setVisibility(View.INVISIBLE);
 
     WebSettings settings = mWebView.getSettings();
@@ -160,18 +172,20 @@ public class OverlayService extends Service
     mWebView.addJavascriptInterface(new OverlayWebAppInterface(), "Android");
     mWebView.loadUrl("file:///android_asset/index.html");
 
-    rootLayout.addView(dragHandle);
+    rootLayout.addView(handle);
     rootLayout.addView(mWebView);
 
     // --- LayoutParams ---
+    // NOT_TOUCH_MODAL: outside touches pass through to apps below.
+    // NO WATCH_OUTSIDE_TOUCH: we don't care about outside touches.
+    // NO NOT_FOCUSABLE: needed for IME to work inside the WebView.
     mParams = new WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         mInitialHeight,
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE,
-        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-            | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
         PixelFormat.TRANSLUCENT);
 
     mParams.gravity = Gravity.BOTTOM | Gravity.START;
@@ -181,9 +195,7 @@ public class OverlayService extends Service
     mOverlayView = rootLayout;
     mWindowManager.addView(mOverlayView, mParams);
 
-    // --- Slide-in animation ---
-    // Start translated down by the full panel height (fully off-screen),
-    // then animate to the natural position.
+    // Slide-in animation from bottom
     mOverlayView.setTranslationY(mInitialHeight);
     mOverlayView.setAlpha(0f);
     mOverlayView.animate()
@@ -194,48 +206,59 @@ public class OverlayService extends Service
         .start();
 
     // --- Drag-to-resize on the handle ---
-    dragHandle.setOnTouchListener(new View.OnTouchListener()
+    handle.setOnTouchListener(new View.OnTouchListener()
     {
       private int initialHeight;
       private float initialTouchY;
+      private boolean dragging;
 
       @Override
       public boolean onTouch(View v, MotionEvent event)
       {
-        switch (event.getAction())
+        switch (event.getActionMasked())
         {
           case MotionEvent.ACTION_DOWN:
             initialHeight = mParams.height;
             initialTouchY = event.getRawY();
+            dragging = false;
             return true;
           case MotionEvent.ACTION_MOVE:
             float deltaY = event.getRawY() - initialTouchY;
-            int newHeight = (int) (initialHeight - deltaY);
-            newHeight = Math.max(mMinHeight, Math.min(mMaxHeight, newHeight));
-            mParams.height = newHeight;
-            mWindowManager.updateViewLayout(mOverlayView, mParams);
+            if (Math.abs(deltaY) > dp(2)) dragging = true;
+            if (dragging)
+            {
+              int newHeight = (int) (initialHeight - deltaY);
+              newHeight = Math.max(mMinHeight, Math.min(mMaxHeight, newHeight));
+              mParams.height = newHeight;
+              mWindowManager.updateViewLayout(mOverlayView, mParams);
+            }
             return true;
           case MotionEvent.ACTION_UP:
+          case MotionEvent.ACTION_CANCEL:
             return true;
         }
         return false;
       }
     });
+  }
 
-    // --- Tap outside to dismiss ---
-    mOverlayView.setOnTouchListener(new View.OnTouchListener()
+  /**
+   * Hide IME (if up), then stop the service.
+   * Called from both the X button and the BACK key.
+   */
+  private void dismissOverlay()
+  {
+    try
     {
-      @Override
-      public boolean onTouch(View v, MotionEvent event)
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+      if (imm != null && mWebView != null)
       {
-        if (event.getAction() == MotionEvent.ACTION_OUTSIDE)
-        {
-          stopSelf();
-          return true;
-        }
-        return false;
+        imm.hideSoftInputFromWindow(mWebView.getWindowToken(), 0);
       }
-    });
+    }
+    catch (Exception ignored) {}
+    stopSelf();
   }
 
   // --- Data injection ---------------------------------------------------
@@ -300,6 +323,8 @@ public class OverlayService extends Service
     }
   }
 
+  // --- Lifecycle -------------------------------------------------------
+
   @Override
   public int onStartCommand(Intent intent, int flags, int startId)
   {
@@ -355,6 +380,44 @@ public class OverlayService extends Service
     return null;
   }
 
+  // --- BACK-key interceptor --------------------------------------------
+
+  /**
+   * LinearLayout subclass that catches KEYCODE_BACK before it reaches
+   * any focused child (i.e., the WebView). Without this, pressing back
+   * while the WebView has focus would just go nowhere useful (or to
+   * the app below), because overlay windows aren't in an activity
+   * back stack.
+   */
+  private static class BackInterceptLayout extends LinearLayout
+  {
+    private Runnable mOnBack;
+
+    BackInterceptLayout(Context context)
+    {
+      super(context);
+    }
+
+    void setOnBackPressed(Runnable r)
+    {
+      mOnBack = r;
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event)
+    {
+      if (event.getKeyCode() == KeyEvent.KEYCODE_BACK)
+      {
+        if (event.getAction() == KeyEvent.ACTION_UP && mOnBack != null)
+        {
+          mOnBack.run();
+        }
+        return true; // consume both DOWN and UP for BACK
+      }
+      return super.dispatchKeyEvent(event);
+    }
+  }
+
   // --- JS bridge -------------------------------------------------------
 
   public class OverlayWebAppInterface
@@ -407,7 +470,7 @@ public class OverlayService extends Service
     @JavascriptInterface
     public void closeOverlay()
     {
-      stopSelf();
+      dismissOverlay();
     }
 
     @JavascriptInterface
