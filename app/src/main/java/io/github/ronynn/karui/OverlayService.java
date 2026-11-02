@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -45,10 +46,17 @@ public class OverlayService extends Service
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
 
-  private static final String PANEL_BG_COLOR = "#1A1A1A";
-  private static final String HANDLE_BG_COLOR = "#242424";
-  private static final String PILL_COLOR = "#7A7A7A";
-  private static final String CLOSE_COLOR = "#BBBBBB";
+  // ── Gruvbox Dark palette ──────────────────────────────────────────
+  // The panel bg matches the drag-handle family so no seams appear
+  // while the WebView is loading, and any space the HTML leaves
+  // transparent blends into the same palette.
+  private static final String PANEL_BG_COLOR   = "#282828"; // gruvbox bg0 (hard)
+  private static final String HANDLE_BG_COLOR  = "#3C3836"; // gruvbox bg1
+  private static final String PILL_COLOR       = "#928374"; // gruvbox gray
+  private static final String CLOSE_COLOR      = "#EBDBB2"; // gruvbox fg1
+
+  private static final int INJECT_RETRY_COUNT = 10;
+  private static final long INJECT_RETRY_DELAY_MS = 300L;
 
   private WindowManager mWindowManager;
   private View mOverlayView;
@@ -98,20 +106,40 @@ public class OverlayService extends Service
         TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics());
   }
 
+  private int navBarHeightPx()
+  {
+    int navResId = getResources().getIdentifier(
+        "navigation_bar_height", "dimen", "android");
+    if (navResId > 0)
+    {
+      return getResources().getDimensionPixelSize(navResId);
+    }
+    return 0;
+  }
+
   private void createOverlay()
   {
-    int screenHeight = getResources().getDisplayMetrics().heightPixels;
+    // Full screen height, INCLUDING status bar and nav bar. Using
+    // getRealMetrics (not getMetrics) is what makes the panel extend
+    // behind the nav bar when combined with FLAG_LAYOUT_IN_SCREEN.
+    DisplayMetrics realMetrics = new DisplayMetrics();
+    mWindowManager.getDefaultDisplay().getRealMetrics(realMetrics);
+    int screenHeight = realMetrics.heightPixels;
+
     mInitialHeight = (int) (screenHeight * 0.75);
     mMinHeight = (int) (screenHeight * 0.25);
     mMaxHeight = screenHeight;
 
-    // Root layout that intercepts the BACK key before the WebView sees it.
     BackInterceptLayout rootLayout = new BackInterceptLayout(this);
     rootLayout.setOnBackPressed(() -> dismissOverlay());
     rootLayout.setOrientation(LinearLayout.VERTICAL);
     rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
     rootLayout.setFocusableInTouchMode(true);
     rootLayout.requestFocus();
+    // NOTE: no padding here. The WebView extends to the physical bottom,
+    // so its content flows behind the transparent nav bar. If the HTML
+    // needs to keep a bottom input un-occluded, it should use the
+    // Android.getNavBarHeight() bridge to add its own bottom padding.
 
     // --- Drag handle (thin) ---
     FrameLayout handle = new FrameLayout(this);
@@ -143,8 +171,12 @@ public class OverlayService extends Service
     mWebView = new WebView(this);
     mWebView.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+    // Matches panel bg so the pre-load paint blends with the handle
+    // instead of flashing white.
     mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
     mWebView.setVisibility(View.INVISIBLE);
+    mWebView.setVerticalScrollBarEnabled(false);
+    mWebView.setHorizontalScrollBarEnabled(false);
 
     WebSettings settings = mWebView.getSettings();
     settings.setJavaScriptEnabled(true);
@@ -176,16 +208,19 @@ public class OverlayService extends Service
     rootLayout.addView(mWebView);
 
     // --- LayoutParams ---
-    // NOT_TOUCH_MODAL: outside touches pass through to apps below.
-    // NO WATCH_OUTSIDE_TOUCH: we don't care about outside touches.
-    // NO NOT_FOCUSABLE: needed for IME to work inside the WebView.
+    // FLAG_LAYOUT_IN_SCREEN: layout coords are the physical screen, so
+    //   gravity=BOTTOM sticks the panel to the physical bottom edge —
+    //   behind the nav bar area. With FLAG_NOT_TOUCH_MODAL, touches
+    //   outside the panel flow to the app underneath; touches ON the
+    //   nav bar always go to the system nav bar regardless.
     mParams = new WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         mInitialHeight,
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE,
-        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT);
 
     mParams.gravity = Gravity.BOTTOM | Gravity.START;
@@ -242,10 +277,6 @@ public class OverlayService extends Service
     });
   }
 
-  /**
-   * Hide IME (if up), then stop the service.
-   * Called from both the X button and the BACK key.
-   */
   private void dismissOverlay()
   {
     try
@@ -261,21 +292,47 @@ public class OverlayService extends Service
     stopSelf();
   }
 
-  // --- Data injection ---------------------------------------------------
+  // --- Data injection (note-safe) -------------------------------------
 
   private void injectPendingNotes()
   {
+    injectPendingNotes(0);
+  }
+
+  private void injectPendingNotes(final int attempt)
+  {
     if (!mPageLoaded || mWebView == null) return;
 
-    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    String jsonStr = prefs.getString("pending_notes_json", "[]");
+    final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    final String jsonStr = prefs.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
 
-    prefs.edit().remove("pending_notes_json").apply();
+    String js = "(function(){"
+        + "if (!window.syncNotesArrayFromAndroid) return 'missing';"
+        + "try { window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + "); return 'ok'; }"
+        + "catch(e) { return 'error'; }"
+        + "})()";
 
-    String js = "if(window.syncNotesArrayFromAndroid) window.syncNotesArrayFromAndroid("
-      + JSONObject.quote(jsonStr) + ");";
-    mWebView.evaluateJavascript(js, null);
+    mWebView.evaluateJavascript(js, value ->
+    {
+      if ("\"ok\"".equals(value))
+      {
+        String current = prefs.getString("pending_notes_json", "[]");
+        if (current.equals(jsonStr))
+        {
+          prefs.edit().remove("pending_notes_json").apply();
+        }
+        else
+        {
+          injectPendingNotes(0);
+        }
+      }
+      else if (attempt < INJECT_RETRY_COUNT)
+      {
+        new Handler(Looper.getMainLooper()).postDelayed(
+            () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
+      }
+    });
   }
 
   private void readSyncFileAndInject()
@@ -322,8 +379,6 @@ public class OverlayService extends Service
         "if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
     }
   }
-
-  // --- Lifecycle -------------------------------------------------------
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId)
@@ -380,15 +435,6 @@ public class OverlayService extends Service
     return null;
   }
 
-  // --- BACK-key interceptor --------------------------------------------
-
-  /**
-   * LinearLayout subclass that catches KEYCODE_BACK before it reaches
-   * any focused child (i.e., the WebView). Without this, pressing back
-   * while the WebView has focus would just go nowhere useful (or to
-   * the app below), because overlay windows aren't in an activity
-   * back stack.
-   */
   private static class BackInterceptLayout extends LinearLayout
   {
     private Runnable mOnBack;
@@ -412,7 +458,7 @@ public class OverlayService extends Service
         {
           mOnBack.run();
         }
-        return true; // consume both DOWN and UP for BACK
+        return true;
       }
       return super.dispatchKeyEvent(event);
     }
@@ -471,6 +517,20 @@ public class OverlayService extends Service
     public void closeOverlay()
     {
       dismissOverlay();
+    }
+
+    /**
+     * Pixel height of the system navigation bar. Exposed so the HTML
+     * can add its own bottom padding (e.g. on the text-input row)
+     * while letting the note list itself flow behind the nav bar.
+     *    document.body.style.paddingBottom = Android.getNavBarHeight() + 'px';
+     * Or, safer — pad only the input container:
+     *    inputBar.style.paddingBottom = Android.getNavBarHeight() + 'px';
+     */
+    @JavascriptInterface
+    public int getNavBarHeight()
+    {
+      return navBarHeightPx();
     }
 
     @JavascriptInterface

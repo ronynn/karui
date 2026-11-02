@@ -21,6 +21,8 @@ import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
 import android.view.View;
@@ -55,6 +57,9 @@ public class MainActivity extends Activity
   private static final int IMPORT_MD_FILE_REQUEST_CODE = 5;
   private static final int NOTIFICATION_PERMISSION_REQUEST = 100;
   private static final int OVERLAY_PERMISSION_REQUEST = 101;
+
+  private static final int INJECT_RETRY_COUNT = 10;
+  private static final long INJECT_RETRY_DELAY_MS = 300L;
 
   private static final String CHANNEL_ID = "note_reply_channel";
   private static final int NOTIFICATION_ID = 1;
@@ -103,16 +108,16 @@ public class MainActivity extends Activity
       && Intent.ACTION_ASSIST.equals(launchIntent.getAction());
 
     // ── ASSIST fast path ────────────────────────────────────────────
-    // If the user long-pressed home and we already have overlay
-    // permission, launch the floating panel and bail out before
-    // inflating the full-screen UI at all.
+    // If the user long-pressed home and overlay permission is granted,
+    // launch the floating panel and bail out before inflating the
+    // full-screen UI.
     if (assistLaunch && canDrawOverlays())
     {
       startOverlayAndExit();
       return;
     }
 
-    // ── Full-screen UI setup (normal launch, or ASSIST fallback) ────
+    // ── Full-screen UI setup (normal launch or ASSIST fallback) ─────
     setContentView(R.layout.activity_main);
 
     mWebView = findViewById(R.id.activity_main_webview);
@@ -166,7 +171,6 @@ public class MainActivity extends Activity
         injectPendingNotes();
         readSyncFileAndInject();
 
-        // Legacy hook — retained in case the JS side still listens for it.
         Intent launch = getIntent();
         if (launch != null && Intent.ACTION_ASSIST.equals(launch.getAction()))
         {
@@ -223,10 +227,7 @@ public class MainActivity extends Activity
       CalendarNotificationReceiver.scheduleEventReminders(this);
     }
 
-    // ── ASSIST without overlay permission: onboard the user ─────────
-    // We stay in the full-screen app as a fallback; if the user grants
-    // permission in Settings and comes back, onActivityResult will
-    // swap us into the floating overlay.
+    // ── ASSIST without overlay permission: onboard once ─────────────
     if (assistLaunch && !canDrawOverlays())
     {
       requestOverlayPermissionOnboarding();
@@ -243,17 +244,9 @@ public class MainActivity extends Activity
     {
       return Settings.canDrawOverlays(this);
     }
-    // Pre-Marshmallow: SYSTEM_ALERT_WINDOW is auto-granted at install.
     return true;
   }
 
-  /**
-   * Starts the overlay and hides the full-screen activity.
-   *
-   * We use moveTaskToBack(true) so the user's previous task (the game
-   * or app they were using) is revealed underneath the overlay, instead
-   * of leaving them looking at a blank home screen.
-   */
   private void startOverlayAndExit()
   {
     try
@@ -265,19 +258,12 @@ public class MainActivity extends Activity
     {
       Toast.makeText(this, "Could not open floating window: " + e.getMessage(),
                      Toast.LENGTH_LONG).show();
-      // Fall through — don't finish; the user is left in the full app.
       return;
     }
     moveTaskToBack(true);
     finish();
   }
 
-  /**
-   * Called when ASSIST arrives but overlay permission is missing.
-   * The first time, we push the user to the system settings page;
-   * subsequent times we just show a toast so we don't hijack them
-   * into Settings every time they long-press home.
-   */
   private void requestOverlayPermissionOnboarding()
   {
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
@@ -311,7 +297,6 @@ public class MainActivity extends Activity
     }
     catch (Exception e)
     {
-      // Fallback for OEMs that don't expose the per-app overlay page.
       try
       {
         startActivityForResult(
@@ -514,18 +499,61 @@ public class MainActivity extends Activity
 
   // Section: Data Injection & Sync
 
+  /**
+   * Delivers pending notes to the WebView and only removes them from
+   * the queue once JS confirms the delivery. If JS hasn't defined
+   * `syncNotesArrayFromAndroid` yet, we retry a few times; if the
+   * WebView is gone entirely, the notes stay queued and will be
+   * delivered on the next onResume / broadcast / cold start.
+   *
+   * Never loses a note, which was the bug in the previous version.
+   */
   private void injectPendingNotes()
   {
-    if (!isPageLoaded) return;
+    injectPendingNotes(0);
+  }
 
-    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    String jsonStr = prefs.getString("pending_notes_json", "[]");
+  private void injectPendingNotes(final int attempt)
+  {
+    if (!isPageLoaded || mWebView == null) return;
+
+    final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    final String jsonStr = prefs.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
 
-    prefs.edit().remove("pending_notes_json").apply();
+    String js = "(function(){"
+        + "if (!window.syncNotesArrayFromAndroid) return 'missing';"
+        + "try { window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + "); return 'ok'; }"
+        + "catch(e) { return 'error'; }"
+        + "})()";
 
-    String js = "if(window.syncNotesArrayFromAndroid) window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + ");";
-    mWebView.evaluateJavascript(js, null);
+    mWebView.evaluateJavascript(js, value ->
+    {
+      // evaluateJavascript wraps string results in JSON quotes: 'ok'
+      // comes back as the Java string "\"ok\"".
+      if ("\"ok\"".equals(value))
+      {
+        // Only clear the queue if nothing new arrived during delivery.
+        String current = prefs.getString("pending_notes_json", "[]");
+        if (current.equals(jsonStr))
+        {
+          prefs.edit().remove("pending_notes_json").apply();
+        }
+        else
+        {
+          // A new note landed while we were delivering. Redeliver
+          // the augmented queue immediately.
+          injectPendingNotes(0);
+        }
+      }
+      else if (attempt < INJECT_RETRY_COUNT)
+      {
+        new Handler(Looper.getMainLooper()).postDelayed(
+            () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
+      }
+      // else: give up for now; the queue is untouched and will retry
+      // on the next trigger.
+    });
   }
 
   private void readSyncFileAndInject()
@@ -602,7 +630,6 @@ public class MainActivity extends Activity
     super.onNewIntent(intent);
     setIntent(intent);
 
-    // ASSIST fired while the activity already exists (singleTask).
     if (intent != null && Intent.ACTION_ASSIST.equals(intent.getAction()))
     {
       if (canDrawOverlays())
@@ -611,7 +638,6 @@ public class MainActivity extends Activity
       }
       else
       {
-        // Full-screen app is already up — don't kill it, just nudge the user.
         Toast.makeText(this,
           "Enable 'Display over other apps' for floating mode.",
           Toast.LENGTH_LONG).show();
@@ -631,15 +657,12 @@ public class MainActivity extends Activity
   {
     super.onActivityResult(requestCode, resultCode, data);
 
-    // ── Overlay permission round-trip ───────────────────────────────
     if (requestCode == OVERLAY_PERMISSION_REQUEST)
     {
       if (canDrawOverlays())
       {
         startOverlayAndExit();
       }
-      // If denied: user stays in the full-screen app. No extra message;
-      // we already showed the rationale toast above.
       return;
     }
 
@@ -991,24 +1014,14 @@ public class MainActivity extends Activity
       });
     }
 
-    // ── Overlay permission bridge for the web UI ────────────────────
+    // ── Overlay permission bridge ──────────────────────────────────
 
-    /**
-     * True if the floating overlay permission is granted.
-     * Use in the web settings UI to show/hide an "Enable floating mode"
-     * banner or toggle.
-     */
     @JavascriptInterface
     public boolean isOverlayPermissionGranted()
     {
       return canDrawOverlays();
     }
 
-    /**
-     * Opens the system "Display over other apps" settings page so the
-     * user can grant overlay permission without being told about it
-     * only via a toast on long-press-home.
-     */
     @JavascriptInterface
     public void requestOverlayPermission()
     {
