@@ -5,11 +5,7 @@ import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlarmManager;
-import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.RemoteInput;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -17,14 +13,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.service.notification.StatusBarNotification;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
@@ -61,14 +55,14 @@ public class MainActivity extends Activity
   private static final int INJECT_RETRY_COUNT = 10;
   private static final long INJECT_RETRY_DELAY_MS = 300L;
 
-  private static final String CHANNEL_ID = "note_reply_channel";
-  private static final int NOTIFICATION_ID = 1;
   private static final String PREFS_SYNC = "sync_prefs";
   private static final String KEY_SYNC_URI = "sync_file_uri";
-
   private static final String PREFS_NOTE_QUEUE = "note_queue";
-  private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
+  // Mirrors OverlayService.KEY_OVERLAY_ACTIVE ("overlay_active"). Kept
+  // as its own constant so MainActivity compiles even against an older
+  // OverlayService that doesn't expose the symbol.
+  private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
   private WebView mWebView;
   private View splashScreen;
@@ -79,10 +73,8 @@ public class MainActivity extends Activity
 
   private ValueCallback<Uri[]> mFilePathCallback;
 
-  private boolean isNotificationActive = false;
   private boolean isPageLoaded = false;
-  private String inboxTabName = "Inbox";
-
+  private boolean mInjecting = false;
   private boolean pendingQuickNoteEnable = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
@@ -108,9 +100,6 @@ public class MainActivity extends Activity
       && Intent.ACTION_ASSIST.equals(launchIntent.getAction());
 
     // ── ASSIST fast path ────────────────────────────────────────────
-    // If the user long-pressed home and overlay permission is granted,
-    // launch the floating panel and bail out before inflating the
-    // full-screen UI.
     if (assistLaunch && canDrawOverlays())
     {
       startOverlayAndExit();
@@ -206,10 +195,7 @@ public class MainActivity extends Activity
 
     mWebView.loadUrl("file:///android_asset/index.html");
 
-    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    inboxTabName = prefs.getString("inbox_tab_name", "Inbox");
-
-    createNotificationChannel();
+    NotificationHelper.createChannel(this);
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
     {
@@ -227,7 +213,6 @@ public class MainActivity extends Activity
       CalendarNotificationReceiver.scheduleEventReminders(this);
     }
 
-    // ── ASSIST without overlay permission: onboard once ─────────────
     if (assistLaunch && !canDrawOverlays())
     {
       requestOverlayPermissionOnboarding();
@@ -307,207 +292,10 @@ public class MainActivity extends Activity
     }
   }
 
-  // Section: Notification Handling
+  // ────────────────────────────────────────────────────────────────
+  //  Data injection (note-safe, dedupe-aware)
+  // ────────────────────────────────────────────────────────────────
 
-  private void createNotificationChannel()
-  {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-    {
-      NotificationChannel channel = new NotificationChannel(
-        CHANNEL_ID, "Quick Note", NotificationManager.IMPORTANCE_LOW);
-      channel.setDescription("Add notes from status bar");
-      NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-      if (manager != null)
-      {
-        manager.createNotificationChannel(channel);
-      }
-    }
-  }
-
-  private void showNotification(boolean silent)
-  {
-    createNotificationChannel();
-
-    NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    if (manager == null)
-    {
-      if (!silent) Toast.makeText(this, "Notification service unavailable", Toast.LENGTH_SHORT).show();
-      return;
-    }
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !manager.areNotificationsEnabled())
-    {
-      if (!silent)
-      {
-        Toast.makeText(this, "Notifications are disabled. Please enable them in system settings.", Toast.LENGTH_LONG).show();
-        try
-        {
-          Intent intent = new Intent();
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-          {
-            intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-            intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
-          }
-          else
-          {
-            intent.setAction(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
-          }
-          startActivity(intent);
-        }
-        catch (Exception ignored) {}
-      }
-      return;
-    }
-
-    try
-    {
-      Intent openAppIntent = new Intent(this, MainActivity.class);
-      int openFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        openFlags |= PendingIntent.FLAG_IMMUTABLE;
-      }
-      PendingIntent openPendingIntent = PendingIntent.getActivity(this, 0, openAppIntent, openFlags);
-
-      RemoteInput remoteInput = new RemoteInput.Builder(NoteReplyReceiver.KEY_TEXT_REPLY)
-        .setLabel("Add Note")
-        .build();
-
-      Intent replyIntent = new Intent(this, NoteReplyReceiver.class);
-      int replyFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-      {
-        replyFlags |= PendingIntent.FLAG_MUTABLE;
-      }
-      else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        replyFlags |= 0;
-      }
-      PendingIntent replyPendingIntent = PendingIntent.getBroadcast(this, 1, replyIntent, replyFlags);
-
-      Notification.Action replyAction;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        replyAction = new Notification.Action.Builder(
-          Icon.createWithResource(this, R.drawable.ic_note),
-          "Add Note",
-          replyPendingIntent)
-          .addRemoteInput(remoteInput)
-          .build();
-      }
-      else
-      {
-        replyAction = new Notification.Action.Builder(
-          R.drawable.ic_note,
-          "Add Note",
-          replyPendingIntent)
-          .addRemoteInput(remoteInput)
-          .build();
-      }
-
-      Notification.Builder builder;
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-      {
-        builder = new Notification.Builder(this, CHANNEL_ID);
-      }
-      else
-      {
-        builder = new Notification.Builder(this);
-      }
-
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
-        builder.setSmallIcon(Icon.createWithResource(this, R.drawable.ic_note));
-      }
-      else
-      {
-        builder.setSmallIcon(R.drawable.ic_note);
-      }
-
-      builder.setContentTitle("Karui Quick Note")
-        .setContentText("Swipe down to add a note")
-        .setContentIntent(openPendingIntent)
-        .addAction(replyAction)
-        .setOngoing(true)
-        .setOnlyAlertOnce(true);
-
-      Notification notification = builder.build();
-      manager.notify(NOTIFICATION_ID, notification);
-      isNotificationActive = true;
-    }
-    catch (Exception e)
-    {
-      if (!silent)
-      {
-        String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-        if (e.getCause() != null)
-        {
-          msg += "\nCause: " + e.getCause().toString();
-        }
-        Toast.makeText(this, "Couldn't show notification:\n" + msg, Toast.LENGTH_LONG).show();
-      }
-      e.printStackTrace();
-    }
-  }
-
-  private void cancelNotification()
-  {
-    NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    if (manager != null)
-    {
-      manager.cancel(NOTIFICATION_ID);
-    }
-    isNotificationActive = false;
-  }
-
-  // --- Quick-note state reconciliation -------------------------------------
-
-  private void setNotificationEnabled(boolean enabled)
-  {
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_NOTIFICATION_ENABLED, enabled).apply();
-  }
-
-  private boolean isNotificationShowing()
-  {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
-    NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    if (manager == null) return false;
-    for (StatusBarNotification sbn : manager.getActiveNotifications())
-    {
-      if (sbn.getId() == NOTIFICATION_ID) return true;
-    }
-    return false;
-  }
-
-  private void ensureNotificationMatchesPreference()
-  {
-    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    if (!prefs.getBoolean(KEY_NOTIFICATION_ENABLED, false)) return;
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-           != PackageManager.PERMISSION_GRANTED)
-    {
-      return;
-    }
-
-    if (isNotificationShowing()) return;
-    showNotification(true);
-  }
-
-  // Section: Data Injection & Sync
-
-  /**
-   * Delivers pending notes to the WebView and only removes them from
-   * the queue once JS confirms the delivery. If JS hasn't defined
-   * `syncNotesArrayFromAndroid` yet, we retry a few times; if the
-   * WebView is gone entirely, the notes stay queued and will be
-   * delivered on the next onResume / broadcast / cold start.
-   *
-   * Never loses a note, which was the bug in the previous version.
-   */
   private void injectPendingNotes()
   {
     injectPendingNotes(0);
@@ -515,11 +303,24 @@ public class MainActivity extends Activity
 
   private void injectPendingNotes(final int attempt)
   {
+    // Guard #1 — when the overlay is active, it is the sole injector.
+    // This prevents the same note being consumed by both MainActivity's
+    // WebView and the overlay's WebView (the duplication bug).
+    SharedPreferences queuePrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    if (queuePrefs.getBoolean(KEY_OVERLAY_ACTIVE, false))
+    {
+      return;
+    }
+
+    // Guard #2 — no concurrent injections within this instance.
+    if (mInjecting) return;
     if (!isPageLoaded || mWebView == null) return;
 
-    final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    final SharedPreferences prefs = queuePrefs;
     final String jsonStr = prefs.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
+
+    mInjecting = true;
 
     String js = "(function(){"
         + "if (!window.syncNotesArrayFromAndroid) return 'missing';"
@@ -529,11 +330,9 @@ public class MainActivity extends Activity
 
     mWebView.evaluateJavascript(js, value ->
     {
-      // evaluateJavascript wraps string results in JSON quotes: 'ok'
-      // comes back as the Java string "\"ok\"".
+      mInjecting = false;
       if ("\"ok\"".equals(value))
       {
-        // Only clear the queue if nothing new arrived during delivery.
         String current = prefs.getString("pending_notes_json", "[]");
         if (current.equals(jsonStr))
         {
@@ -541,8 +340,7 @@ public class MainActivity extends Activity
         }
         else
         {
-          // A new note landed while we were delivering. Redeliver
-          // the augmented queue immediately.
+          // New note arrived mid-delivery. Redeliver augmented queue.
           injectPendingNotes(0);
         }
       }
@@ -551,8 +349,7 @@ public class MainActivity extends Activity
         new Handler(Looper.getMainLooper()).postDelayed(
             () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
       }
-      // else: give up for now; the queue is untouched and will retry
-      // on the next trigger.
+      // else: give up for now; queue untouched, next trigger will retry.
     });
   }
 
@@ -602,17 +399,29 @@ public class MainActivity extends Activity
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  //  Lifecycle
+  // ────────────────────────────────────────────────────────────────
+
   @Override
   protected void onResume()
   {
     super.onResume();
 
-    ensureNotificationMatchesPreference();
+    NotificationHelper.ensureMatchesPreference(this);
 
     if (isPageLoaded)
     {
+      // If the overlay just closed, its WebView wrote the latest state
+      // to the sync file — re-read before injecting anything so we don't
+      // operate on stale in-memory state and export it back over the
+      // overlay's work.
+      SharedPreferences queuePrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+      if (!queuePrefs.getBoolean(KEY_OVERLAY_ACTIVE, false))
+      {
+        readSyncFileAndInject();
+      }
       injectPendingNotes();
-      readSyncFileAndInject();
     }
 
     SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
@@ -850,7 +659,9 @@ public class MainActivity extends Activity
     }
   }
 
-  // Section: JavaScript Interface
+  // ────────────────────────────────────────────────────────────────
+  //  JavaScript bridge
+  // ────────────────────────────────────────────────────────────────
 
   public class WebAppInterface
   {
@@ -969,13 +780,13 @@ public class MainActivity extends Activity
               NOTIFICATION_PERMISSION_REQUEST);
             return;
           }
-          setNotificationEnabled(true);
-          showNotification(false);
+          NotificationHelper.setEnabled(MainActivity.this, true);
+          NotificationHelper.show(MainActivity.this, false);
         }
         else
         {
-          setNotificationEnabled(false);
-          cancelNotification();
+          NotificationHelper.setEnabled(MainActivity.this, false);
+          NotificationHelper.cancel(MainActivity.this);
         }
       });
     }
@@ -983,8 +794,7 @@ public class MainActivity extends Activity
     @JavascriptInterface
     public boolean isNotificationEnabled()
     {
-      return getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-        .getBoolean(KEY_NOTIFICATION_ENABLED, false);
+      return NotificationHelper.isEnabled(MainActivity.this);
     }
 
     @JavascriptInterface
@@ -994,9 +804,8 @@ public class MainActivity extends Activity
       {
         tabName = "Inbox";
       }
-      inboxTabName = tabName.trim();
       getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-        .edit().putString("inbox_tab_name", inboxTabName).apply();
+        .edit().putString("inbox_tab_name", tabName.trim()).apply();
     }
 
     @JavascriptInterface
@@ -1028,9 +837,7 @@ public class MainActivity extends Activity
       runOnUiThread(() -> openOverlaySettings());
     }
 
-    // ---------------------------------------------------------------
-    //  Calendar-event bridge
-    // ---------------------------------------------------------------
+    // ── Calendar-event bridge ──────────────────────────────────────
 
     @JavascriptInterface
     public void updateCalendarEvents(String json)
@@ -1132,6 +939,10 @@ public class MainActivity extends Activity
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  //  Permission result routing (quick-note vs calendar)
+  // ────────────────────────────────────────────────────────────────
+
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
   {
@@ -1147,12 +958,12 @@ public class MainActivity extends Activity
     {
       if (granted)
       {
-        setNotificationEnabled(true);
-        showNotification(false);
+        NotificationHelper.setEnabled(this, true);
+        NotificationHelper.show(this, false);
       }
       else
       {
-        setNotificationEnabled(false);
+        NotificationHelper.setEnabled(this, false);
         Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
       }
     }
