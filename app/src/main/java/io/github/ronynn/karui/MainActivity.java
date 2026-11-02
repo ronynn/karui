@@ -59,9 +59,9 @@ public class MainActivity extends Activity
   private static final String KEY_SYNC_URI = "sync_file_uri";
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
-  // Mirrors OverlayService.KEY_OVERLAY_ACTIVE ("overlay_active"). Kept
-  // as its own constant so MainActivity compiles even against an older
-  // OverlayService that doesn't expose the symbol.
+  // Mirrors OverlayService.KEY_OVERLAY_ACTIVE. Kept as a local constant
+  // so MainActivity compiles even against an older OverlayService that
+  // doesn't expose the symbol.
   private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
   private WebView mWebView;
@@ -100,6 +100,9 @@ public class MainActivity extends Activity
       && Intent.ACTION_ASSIST.equals(launchIntent.getAction());
 
     // ── ASSIST fast path ────────────────────────────────────────────
+    // Launch overlay, evict this task from recents, and return before
+    // the full-screen UI ever exists. The user goes straight back to
+    // whatever they were using, with the overlay floating on top.
     if (assistLaunch && canDrawOverlays())
     {
       startOverlayAndExit();
@@ -232,6 +235,13 @@ public class MainActivity extends Activity
     return true;
   }
 
+  /**
+   * Starts the overlay service and takes this activity out of the user's
+   * way. Uses finishAndRemoveTask() (not moveTaskToBack + finish) so the
+   * task is evicted from the recents list — otherwise a ghost entry for
+   * Karui lingers in recents after every assistant invocation, and
+   * tapping it drops the user into the full-screen app.
+   */
   private void startOverlayAndExit()
   {
     try
@@ -245,8 +255,16 @@ public class MainActivity extends Activity
                      Toast.LENGTH_LONG).show();
       return;
     }
-    moveTaskToBack(true);
-    finish();
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+    {
+      finishAndRemoveTask();
+    }
+    else
+    {
+      moveTaskToBack(true);
+      finish();
+    }
   }
 
   private void requestOverlayPermissionOnboarding()
@@ -304,8 +322,6 @@ public class MainActivity extends Activity
   private void injectPendingNotes(final int attempt)
   {
     // Guard #1 — when the overlay is active, it is the sole injector.
-    // This prevents the same note being consumed by both MainActivity's
-    // WebView and the overlay's WebView (the duplication bug).
     SharedPreferences queuePrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     if (queuePrefs.getBoolean(KEY_OVERLAY_ACTIVE, false))
     {
@@ -340,7 +356,6 @@ public class MainActivity extends Activity
         }
         else
         {
-          // New note arrived mid-delivery. Redeliver augmented queue.
           injectPendingNotes(0);
         }
       }
@@ -349,7 +364,6 @@ public class MainActivity extends Activity
         new Handler(Looper.getMainLooper()).postDelayed(
             () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
       }
-      // else: give up for now; queue untouched, next trigger will retry.
     });
   }
 
@@ -412,10 +426,6 @@ public class MainActivity extends Activity
 
     if (isPageLoaded)
     {
-      // If the overlay just closed, its WebView wrote the latest state
-      // to the sync file — re-read before injecting anything so we don't
-      // operate on stale in-memory state and export it back over the
-      // overlay's work.
       SharedPreferences queuePrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
       if (!queuePrefs.getBoolean(KEY_OVERLAY_ACTIVE, false))
       {
@@ -443,6 +453,8 @@ public class MainActivity extends Activity
     {
       if (canDrawOverlays())
       {
+        // Same path as fresh launch: evict from recents so no ghost
+        // entry lingers after the overlay is dismissed.
         startOverlayAndExit();
       }
       else
@@ -823,8 +835,6 @@ public class MainActivity extends Activity
       });
     }
 
-    // ── Overlay permission bridge ──────────────────────────────────
-
     @JavascriptInterface
     public boolean isOverlayPermissionGranted()
     {
@@ -836,8 +846,6 @@ public class MainActivity extends Activity
     {
       runOnUiThread(() -> openOverlaySettings());
     }
-
-    // ── Calendar-event bridge ──────────────────────────────────────
 
     @JavascriptInterface
     public void updateCalendarEvents(String json)
@@ -938,10 +946,6 @@ public class MainActivity extends Activity
       });
     }
   }
-
-  // ────────────────────────────────────────────────────────────────
-  //  Permission result routing (quick-note vs calendar)
-  // ────────────────────────────────────────────────────────────────
 
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
