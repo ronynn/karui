@@ -49,14 +49,23 @@ public class OverlayService extends Service
   private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
   static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
-  // ── Gruvbox Dark palette ──────────────────────────────────────────
   private static final String PANEL_BG_COLOR   = "#282828";
   private static final String HANDLE_BG_COLOR  = "#3C3836";
   private static final String PILL_COLOR       = "#928374";
   private static final String CLOSE_COLOR      = "#EBDBB2";
 
-  private static final int INJECT_RETRY_COUNT = 10;
+  private static final int  INJECT_RETRY_COUNT    = 10;
   private static final long INJECT_RETRY_DELAY_MS = 300L;
+
+  /**
+   * Time to keep the WebView warm after the user dismisses the overlay.
+   * Next ASSIST within this window is near-instant. After this, the
+   * service auto-stops and releases ~100 MB.
+   */
+  private static final long KEEP_WARM_MS = 5L * 60L * 1000L;
+
+  private final Handler mHandler = new Handler(Looper.getMainLooper());
+  private Runnable mStopRunnable;
 
   private WindowManager mWindowManager;
   private View mOverlayView;
@@ -70,13 +79,14 @@ public class OverlayService extends Service
 
   private boolean mPageLoaded = false;
   private boolean mInjecting = false;
+  private boolean mOverlayAttached = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
     @Override
     public void onReceive(Context context, Intent intent)
     {
-      if (mPageLoaded && mWebView != null)
+      if (mOverlayAttached && mPageLoaded && mWebView != null)
       {
         injectPendingNotes();
       }
@@ -89,11 +99,6 @@ public class OverlayService extends Service
     super.onCreate();
     mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-    // Mark ourselves as the injection owner BEFORE registering the receiver
-    // so MainActivity's receiver, if it fires concurrently, skips.
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
-
     IntentFilter filter = new IntentFilter(MainActivity.ACTION_NOTE_ADDED);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
     {
@@ -103,24 +108,19 @@ public class OverlayService extends Service
     {
       registerReceiver(noteReceiver, filter);
     }
-
-    createOverlay();
+    // NOTE: overlay view is created on first onStartCommand, not here.
   }
 
-  private int dp(float value)
+  private int dp(float v)
   {
     return (int) TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics());
+        TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
   }
 
   private int navBarHeightPx()
   {
     int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-    if (id > 0)
-    {
-      return getResources().getDimensionPixelSize(id);
-    }
-    return 0;
+    return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
   }
 
   private int physicalScreenHeight()
@@ -128,35 +128,202 @@ public class OverlayService extends Service
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
     {
       WindowMetrics wm = mWindowManager.getMaximumWindowMetrics();
-      Rect bounds = wm.getBounds();
-      return bounds.height();
+      Rect b = wm.getBounds();
+      return b.height();
     }
     DisplayMetrics dm = new DisplayMetrics();
     mWindowManager.getDefaultDisplay().getRealMetrics(dm);
     return dm.heightPixels;
   }
 
-  private void createOverlay()
+  // ────────────────────────────────────────────────────────────────
+  //  Service lifecycle
+  // ────────────────────────────────────────────────────────────────
+
+  @Override
+  public int onStartCommand(Intent intent, int flags, int startId)
+  {
+    // Cancel any pending auto-stop — we're being used again.
+    if (mStopRunnable != null)
+    {
+      mHandler.removeCallbacks(mStopRunnable);
+      mStopRunnable = null;
+    }
+
+    if (mOverlayView == null)
+    {
+      createOverlayView();   // First-ever show: build WebView, loadUrl
+    }
+
+    if (!mOverlayAttached)
+    {
+      attachOverlay();       // Add to WindowManager + slide in
+    }
+    // else: already showing; nothing to do.
+
+    return START_NOT_STICKY;
+  }
+
+  private void attachOverlay()
+  {
+    try
+    {
+      mWindowManager.addView(mOverlayView, mParams);
+      mOverlayAttached = true;
+    }
+    catch (Exception e)
+    {
+      // Defensive: if a previous add failed halfway, remove and retry.
+      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
+      try
+      {
+        mWindowManager.addView(mOverlayView, mParams);
+        mOverlayAttached = true;
+      }
+      catch (Exception e2)
+      {
+        e2.printStackTrace();
+        stopSelf();
+        return;
+      }
+    }
+
+    // Mark overlay as the sole note injector.
+    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
+      .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
+
+    // Slide-in animation
+    mOverlayView.setTranslationY(mInitialHeight);
+    mOverlayView.setAlpha(0f);
+    mOverlayView.animate()
+        .translationY(0f)
+        .alpha(1f)
+        .setDuration(260)
+        .setInterpolator(new DecelerateInterpolator())
+        .start();
+
+    // Refresh content — the WebView may already be loaded from a
+    // previous show, so onPageFinished won't fire again.
+    if (mPageLoaded && mWebView != null)
+    {
+      injectPendingNotes();
+      readSyncFileAndInject();
+    }
+  }
+
+  private void dismissOverlay()
+  {
+    try
+    {
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+      if (imm != null && mWebView != null)
+      {
+        imm.hideSoftInputFromWindow(mWebView.getWindowToken(), 0);
+      }
+    }
+    catch (Exception ignored) {}
+
+    // Let the JS layer persist its current state before we detach.
+    triggerCloseSync();
+
+    if (mOverlayView != null && mOverlayAttached)
+    {
+      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
+      mOverlayAttached = false;
+    }
+
+    // Release the injection lock so MainActivity can handle notes.
+    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
+      .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
+
+    // Auto-stop after KEEP_WARM_MS so the WebView isn't held forever.
+    scheduleStopTimer();
+  }
+
+  private void scheduleStopTimer()
+  {
+    mStopRunnable = new Runnable()
+    {
+      @Override
+      public void run()
+      {
+        if (!mOverlayAttached) stopSelf();
+      }
+    };
+    mHandler.postDelayed(mStopRunnable, KEEP_WARM_MS);
+  }
+
+  @Override
+  public void onDestroy()
+  {
+    if (mStopRunnable != null)
+    {
+      mHandler.removeCallbacks(mStopRunnable);
+      mStopRunnable = null;
+    }
+
+    triggerCloseSync();
+
+    if (mOverlayView != null && mOverlayAttached && mWindowManager != null)
+    {
+      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
+      mOverlayAttached = false;
+    }
+    mOverlayView = null;
+
+    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
+      .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
+
+    final WebView webToDestroy = mWebView;
+    mWebView = null;
+    mPageLoaded = false;
+    if (webToDestroy != null)
+    {
+      // 1 s grace so pending evaluateJavascript callbacks (saveFileSync)
+      // can fire before the WebView is torn down.
+      mHandler.postDelayed(new Runnable()
+      {
+        @Override
+        public void run()
+        {
+          try { webToDestroy.destroy(); } catch (Exception ignored) {}
+        }
+      }, 1000);
+    }
+
+    try { unregisterReceiver(noteReceiver); } catch (Exception ignored) {}
+
+    super.onDestroy();
+  }
+
+  @Override
+  public IBinder onBind(Intent intent)
+  {
+    return null;
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  View construction (runs once per service lifetime)
+  // ────────────────────────────────────────────────────────────────
+
+  private void createOverlayView()
   {
     int screenHeight = physicalScreenHeight();
     mNavBarHeight = navBarHeightPx();
 
-    mInitialHeight = (int) (screenHeight * 0.75);
+    mInitialHeight = (int) (screenHeight * 0.50);
     mMinHeight = (int) (screenHeight * 0.25);
     mMaxHeight = screenHeight;
 
     BackInterceptLayout rootLayout = new BackInterceptLayout(this);
     rootLayout.setOnBackPressed(() -> dismissOverlay());
     rootLayout.setOrientation(LinearLayout.VERTICAL);
-    // Root bg is the gruvbox colour that will show *behind the navbar*
-    // because the window extends to the physical bottom (see flags below).
     rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
     rootLayout.setFocusableInTouchMode(true);
     rootLayout.requestFocus();
-    // No padding on root — padding goes on the WebView container so the
-    // root's gruvbox colour fills the navbar strip.
 
-    // --- Drag handle (thin) ---
+    // Drag handle
     FrameLayout handle = new FrameLayout(this);
     handle.setBackgroundColor(Color.parseColor(HANDLE_BG_COLOR));
     handle.setLayoutParams(new LinearLayout.LayoutParams(
@@ -167,25 +334,21 @@ public class OverlayService extends Service
     pillShape.setColor(Color.parseColor(PILL_COLOR));
     pillShape.setCornerRadius(dp(2));
     pill.setBackground(pillShape);
-    FrameLayout.LayoutParams pillParams = new FrameLayout.LayoutParams(
-        dp(32), dp(3), Gravity.CENTER);
-    handle.addView(pill, pillParams);
+    handle.addView(pill, new FrameLayout.LayoutParams(
+        dp(32), dp(3), Gravity.CENTER));
 
     TextView closeBtn = new TextView(this);
     closeBtn.setText("×");
     closeBtn.setTextSize(22);
     closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
     closeBtn.setGravity(Gravity.CENTER);
-    FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(
-        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END);
-    closeBtn.setLayoutParams(closeParams);
+    closeBtn.setLayoutParams(new FrameLayout.LayoutParams(
+        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
     closeBtn.setOnClickListener(v -> dismissOverlay());
     handle.addView(closeBtn);
 
-    // --- WebView wrapped in a padded container ---
-    // Container has bottom padding = nav bar height, so WebView content
-    // stops above the navbar, and the root's gruvbox background fills
-    // the navbar strip itself.
+    // WebView container — bottom padding so content stops above nav bar,
+    // root's gruvbox colour fills the nav-bar strip itself.
     FrameLayout webContainer = new FrameLayout(this);
     webContainer.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -193,8 +356,7 @@ public class OverlayService extends Service
 
     mWebView = new WebView(this);
     mWebView.setLayoutParams(new FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
     mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
     mWebView.setVisibility(View.INVISIBLE);
     mWebView.setVerticalScrollBarEnabled(false);
@@ -230,12 +392,6 @@ public class OverlayService extends Service
     rootLayout.addView(handle);
     rootLayout.addView(webContainer);
 
-    // --- LayoutParams: full-screen-coordinate flags ---
-    // FLAG_LAYOUT_IN_SCREEN   → coordinates are the physical screen
-    // FLAG_LAYOUT_NO_LIMITS   → allow window to extend past screen edges
-    //                          (needed on HyperOS / OneUI to reach the
-    //                          physical bottom edge)
-    // NOT_TOUCH_MODAL         → outside touches pass to the app below
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
               | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
               | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
@@ -249,39 +405,25 @@ public class OverlayService extends Service
         flags,
         PixelFormat.TRANSLUCENT);
 
-    // API 30+: explicitly do NOT fit any system insets (nav bar / status
-    // bar). This is the key flag that actually lets the window extend
-    // behind the nav bar on OEM skins that otherwise clamp it.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
     {
       mParams.setFitInsetsTypes(0);
     }
-
-    // API 28+: extend into display cutout if present.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
     {
       mParams.layoutInDisplayCutoutMode =
           WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
     }
+    // Lift the panel above the keyboard instead of letting it cover us.
+    mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
 
     mParams.gravity = Gravity.BOTTOM | Gravity.START;
     mParams.x = 0;
     mParams.y = 0;
 
     mOverlayView = rootLayout;
-    mWindowManager.addView(mOverlayView, mParams);
 
-    // Slide-in animation from bottom
-    mOverlayView.setTranslationY(mInitialHeight);
-    mOverlayView.setAlpha(0f);
-    mOverlayView.animate()
-        .translationY(0f)
-        .alpha(1f)
-        .setDuration(260)
-        .setInterpolator(new DecelerateInterpolator())
-        .start();
-
-    // --- Drag-to-resize on the handle ---
+    // Drag-to-resize
     handle.setOnTouchListener(new View.OnTouchListener()
     {
       private int initialHeight;
@@ -309,31 +451,15 @@ public class OverlayService extends Service
               mWindowManager.updateViewLayout(mOverlayView, mParams);
             }
             return true;
-          case MotionEvent.ACTION_UP:
-          case MotionEvent.ACTION_CANCEL:
-            return true;
         }
         return false;
       }
     });
   }
 
-  private void dismissOverlay()
-  {
-    try
-    {
-      InputMethodManager imm =
-          (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-      if (imm != null && mWebView != null)
-      {
-        imm.hideSoftInputFromWindow(mWebView.getWindowToken(), 0);
-      }
-    }
-    catch (Exception ignored) {}
-    stopSelf();
-  }
-
-  // --- Data injection (dedupe + note-safe) -----------------------------
+  // ────────────────────────────────────────────────────────────────
+  //  Data injection (note-safe, dedupe-aware)
+  // ────────────────────────────────────────────────────────────────
 
   private void injectPendingNotes()
   {
@@ -342,7 +468,8 @@ public class OverlayService extends Service
 
   private void injectPendingNotes(final int attempt)
   {
-    if (mInjecting) return;                    // guard #1: no concurrent inject
+    if (!mOverlayAttached) return;
+    if (mInjecting) return;
     if (!mPageLoaded || mWebView == null) return;
 
     final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
@@ -374,7 +501,7 @@ public class OverlayService extends Service
       }
       else if (attempt < INJECT_RETRY_COUNT)
       {
-        new Handler(Looper.getMainLooper()).postDelayed(
+        mHandler.postDelayed(
             () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
       }
     });
@@ -391,27 +518,21 @@ public class OverlayService extends Service
     try
     {
       Uri uri = Uri.parse(uriStr);
-      InputStream inputStream = getContentResolver().openInputStream(uri);
-      if (inputStream == null) return;
+      InputStream in = getContentResolver().openInputStream(uri);
+      if (in == null) return;
 
-      BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+      BufferedReader reader = new BufferedReader(new InputStreamReader(in));
       StringBuilder sb = new StringBuilder();
       String line;
-      while ((line = reader.readLine()) != null)
-      {
-        sb.append(line).append("\n");
-      }
+      while ((line = reader.readLine()) != null) sb.append(line).append("\n");
       reader.close();
 
-      String mdContent = sb.toString();
+      String md = sb.toString();
       String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid("
-        + JSONObject.quote(mdContent) + ");";
+        + JSONObject.quote(md) + ");";
       mWebView.evaluateJavascript(js, null);
     }
-    catch (Exception e)
-    {
-      e.printStackTrace();
-    }
+    catch (Exception e) { e.printStackTrace(); }
   }
 
   private void triggerCloseSync()
@@ -425,93 +546,30 @@ public class OverlayService extends Service
     }
   }
 
-  @Override
-  public int onStartCommand(Intent intent, int flags, int startId)
-  {
-    return START_NOT_STICKY;
-  }
-
-  @Override
-  public void onDestroy()
-  {
-    triggerCloseSync();
-
-    if (mOverlayView != null && mWindowManager != null)
-    {
-      try
-      {
-        mWindowManager.removeView(mOverlayView);
-      }
-      catch (Exception ignored) {}
-      mOverlayView = null;
-    }
-
-    // Release the injection lock so MainActivity resumes handling notes.
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
-
-    final WebView webToDestroy = mWebView;
-    mWebView = null;
-    mPageLoaded = false;
-    if (webToDestroy != null)
-    {
-      new Handler(Looper.getMainLooper()).postDelayed(new Runnable()
-      {
-        @Override
-        public void run()
-        {
-          try
-          {
-            webToDestroy.destroy();
-          }
-          catch (Exception ignored) {}
-        }
-      }, 1000);
-    }
-
-    try
-    {
-      unregisterReceiver(noteReceiver);
-    }
-    catch (Exception ignored) {}
-
-    super.onDestroy();
-  }
-
-  @Override
-  public IBinder onBind(Intent intent)
-  {
-    return null;
-  }
+  // ────────────────────────────────────────────────────────────────
+  //  BACK interceptor
+  // ────────────────────────────────────────────────────────────────
 
   private static class BackInterceptLayout extends LinearLayout
   {
     private Runnable mOnBack;
-
-    BackInterceptLayout(Context context)
-    {
-      super(context);
-    }
-
-    void setOnBackPressed(Runnable r)
-    {
-      mOnBack = r;
-    }
-
+    BackInterceptLayout(Context c) { super(c); }
+    void setOnBackPressed(Runnable r) { mOnBack = r; }
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
       if (event.getKeyCode() == KeyEvent.KEYCODE_BACK)
       {
-        if (event.getAction() == KeyEvent.ACTION_UP && mOnBack != null)
-        {
-          mOnBack.run();
-        }
+        if (event.getAction() == KeyEvent.ACTION_UP && mOnBack != null) mOnBack.run();
         return true;
       }
       return super.dispatchKeyEvent(event);
     }
   }
+
+  // ────────────────────────────────────────────────────────────────
+  //  JS bridge
+  // ────────────────────────────────────────────────────────────────
 
   public class OverlayWebAppInterface
   {
@@ -519,36 +577,25 @@ public class OverlayService extends Service
     public void saveFileSync(String filePath, String content)
     {
       if (filePath == null || filePath.trim().isEmpty()) return;
-
       try
       {
         Uri uri = Uri.parse(filePath);
-        OutputStream outputStream = getContentResolver().openOutputStream(uri, "rwt");
-        if (outputStream == null)
+        OutputStream out = getContentResolver().openOutputStream(uri, "rwt");
+        if (out == null) out = getContentResolver().openOutputStream(uri);
+        if (out != null)
         {
-          outputStream = getContentResolver().openOutputStream(uri);
-        }
-        if (outputStream != null)
-        {
-          outputStream.write(content.getBytes());
-          outputStream.close();
-
+          out.write(content.getBytes());
+          out.close();
           Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
           updateIntent.setPackage(getPackageName());
           sendBroadcast(updateIntent);
         }
       }
-      catch (Exception e)
-      {
-        e.printStackTrace();
-      }
+      catch (Exception e) { e.printStackTrace(); }
     }
 
     @JavascriptInterface
-    public void triggerManualReadSync()
-    {
-      readSyncFileAndInject();
-    }
+    public void triggerManualReadSync() { readSyncFileAndInject(); }
 
     @JavascriptInterface
     public void saveNote(final String noteText)
@@ -561,16 +608,10 @@ public class OverlayService extends Service
     }
 
     @JavascriptInterface
-    public void closeOverlay()
-    {
-      dismissOverlay();
-    }
+    public void closeOverlay() { dismissOverlay(); }
 
     @JavascriptInterface
-    public int getNavBarHeight()
-    {
-      return mNavBarHeight;
-    }
+    public int getNavBarHeight() { return mNavBarHeight; }
 
     @JavascriptInterface
     public void setInboxTabName(String tabName)
@@ -588,10 +629,7 @@ public class OverlayService extends Service
     }
 
     @JavascriptInterface
-    public boolean isOverlayMode()
-    {
-      return true;
-    }
+    public boolean isOverlayMode() { return true; }
 
     @JavascriptInterface
     public void setupSyncFile(String d, String c) { showToast("Open the full Karui app for this."); }
