@@ -23,6 +23,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -63,14 +64,8 @@ public class MainActivity extends Activity
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
   private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
-  /** Must match android:windowBackground in styles.xml (#000000). The
-   *  splash layout is also #000000, so the whole launch is one colour
-   *  until real content fades in. */
+  /** Match styles.xml windowBackground (#000000). */
   private static final int THEME_BG_COLOR = 0xFF000000;
-
-  /** Match the note-list background so the fade from splash to content
-   *  is invisible even before JS applies the user's theme. Gruvbox
-   *  dark-0 is a safe default. */
   private static final int WEBVIEW_BG_COLOR = 0xFF000000;
 
   private WebView mWebView;
@@ -111,27 +106,24 @@ public class MainActivity extends Activity
     // ── ASSIST fast path ────────────────────────────────────────────
     if (assistLaunch && canDrawOverlays())
     {
-      // Transparent window so the brief moment this activity exists
-      // before finishAndRemoveTask() is invisible.
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
       startOverlayAndExit();
       return;
     }
 
     // ── Normal launch ───────────────────────────────────────────────
-    // Do NOT override windowBackground here. styles.xml already sets
-    // #000000 which matches the splash layout's #000000. No colour flip.
     setContentView(R.layout.activity_main);
+
+    // Must run after setContentView so we override theme attributes.
+    applyTransparentSystemBars();
 
     mWebView = findViewById(R.id.activity_main_webview);
     splashScreen = findViewById(R.id.splash_screen);
 
-    // WebView is visible from the start (behind splash). Give it the
-    // same background as the splash so nothing light flashes through
-    // if content is briefly empty.
     mWebView.setBackgroundColor(WEBVIEW_BG_COLOR);
-
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    mWebView.setVerticalScrollBarEnabled(false);
+    mWebView.setHorizontalScrollBarEnabled(false);
 
     WebSettings webSettings = mWebView.getSettings();
     webSettings.setJavaScriptEnabled(true);
@@ -141,8 +133,6 @@ public class MainActivity extends Activity
     webSettings.setAllowFileAccessFromFileURLs(true);
     webSettings.setAllowUniversalAccessFromFileURLs(true);
 
-    // Set WebViewClient and JS bridge BEFORE loadUrl, or the initial
-    // load will go to the system browser.
     mWebView.addJavascriptInterface(new WebAppInterface(), "Android");
 
     mWebView.setWebViewClient(new WebViewClient()
@@ -167,14 +157,13 @@ public class MainActivity extends Activity
       {
         isPageLoaded = true;
 
-        // Deliver any queued notes / sync-file content to the already-
-        // running JS layer. These run against a warm page; no latency
-        // impact on first paint.
         injectPendingNotes();
         readSyncFileAndInject();
 
-        // Fade the splash out. When the animator ends, we GONE it so
-        // it stops consuming compositing resources.
+        // Re-apply bar transparency — some WebView interaction can reset
+        // systemUiVisibility on certain OEM skins.
+        applyTransparentSystemBars();
+
         splashScreen.animate()
             .alpha(0f)
             .setDuration(150)
@@ -221,20 +210,13 @@ public class MainActivity extends Activity
       }
     });
 
-    // Prioritize this WebView's renderer when the system is under
-    // memory pressure — helps responsiveness on mid-tier devices.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       mWebView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
     }
 
-    // Start the load NOW, before doing non-critical setup (cookie
-    // manager, receiver registration, calendar scheduling). The load
-    // happens on a background thread, so this lets it overlap with
-    // our remaining onCreate work. Saves 30–60 ms off cold start.
     mWebView.loadUrl("file:///android_asset/index.html");
 
-    // Cookie manager — needed before JS runs, but setup cost is minor.
     CookieManager cookieManager = CookieManager.getInstance();
     cookieManager.setAcceptCookie(true);
     cookieManager.setAcceptThirdPartyCookies(mWebView, true);
@@ -250,9 +232,6 @@ public class MainActivity extends Activity
       registerReceiver(noteReceiver, new IntentFilter(ACTION_NOTE_ADDED));
     }
 
-    // Defer calendar scheduling until after the first layout pass.
-    // Saves ~50–100 ms of prefs + JSON + AlarmManager work from the
-    // critical path to first paint.
     mWebView.post(() ->
     {
       SharedPreferences calPrefs = getSharedPreferences(CalendarNotificationReceiver.PREFS, MODE_PRIVATE);
@@ -266,6 +245,56 @@ public class MainActivity extends Activity
     if (assistLaunch && !canDrawOverlays())
     {
       requestOverlayPermissionOnboarding();
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  System bar transparency
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Makes status + navigation bars truly transparent so app content shows
+   * through. Works around three Android quirks:
+   *
+   *  1. windowTranslucent*=true in the theme silently overrides
+   *     statusBarColor/navigationBarColor — clear those flags.
+   *  2. Without LAYOUT_FULLSCREEN + LAYOUT_HIDE_NAVIGATION, content
+   *     doesn't extend under the bars, so a transparent bar would just
+   *     show the window bg (the "black bar" the user sees now).
+   *  3. Android 10+ enforces a contrast scrim behind the nav bar unless
+   *     explicitly disabled. That scrim is why the bar looks "not
+   *     transparent" on 3-button nav.
+   */
+  private void applyTransparentSystemBars()
+  {
+    // 1. Clear legacy translucent flags set by the theme.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+    {
+      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+      getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+
+      // 2. Explicit colours — belt-and-suspenders, in case a theme
+      //    somewhere else overrode them.
+      getWindow().setStatusBarColor(Color.TRANSPARENT);
+      getWindow().setNavigationBarColor(Color.TRANSPARENT);
+    }
+
+    // 3. Android 10+: disable the automatic contrast scrim that the
+    //    system draws behind transparent nav bars (3-button nav).
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+    {
+      getWindow().setStatusBarContrastEnforced(false);
+      getWindow().setNavigationBarContrastEnforced(false);
+    }
+
+    // 4. Extend content under the bars. Without this, transparent bar
+    //    colour has nothing but the window bg behind it.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+    {
+      getWindow().getDecorView().setSystemUiVisibility(
+          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
   }
 
@@ -472,6 +501,10 @@ public class MainActivity extends Activity
 
     NotificationHelper.ensureMatchesPreference(this);
 
+    // Some OEM ROMs reset systemUiVisibility when the activity resumes.
+    // Re-apply so bars stay transparent.
+    applyTransparentSystemBars();
+
     if (isPageLoaded)
     {
       SharedPreferences queuePrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
@@ -517,6 +550,28 @@ public class MainActivity extends Activity
   {
     super.onStop();
     triggerAppCloseSync();
+
+    // Drop WebView memory once we're backgrounded. Deferred 300 ms so
+    // the pending saveFileSync JS call (from triggerAppCloseSync above)
+    // has time to complete its disk write. If the activity is destroyed
+    // in the meantime, mWebView becomes null and the cleanup is skipped.
+    final WebView wv = mWebView;
+    if (wv != null)
+    {
+      new Handler(Looper.getMainLooper()).postDelayed(() ->
+      {
+        if (mWebView == wv)
+        {
+          try
+          {
+            wv.clearFormData();
+            wv.clearCache(false);
+            wv.freeMemory();
+          }
+          catch (Exception ignored) {}
+        }
+      }, 300);
+    }
   }
 
   @Override
@@ -705,6 +760,7 @@ public class MainActivity extends Activity
   {
     triggerAppCloseSync();
     super.onDestroy();
+
     try
     {
       unregisterReceiver(noteReceiver);
@@ -713,7 +769,20 @@ public class MainActivity extends Activity
 
     if (mWebView != null)
     {
-      mWebView.destroy();
+      // Full teardown — missing any of these steps is the #1 cause of
+      // WebView memory leaks that survive activity destruction.
+      try
+      {
+        mWebView.stopLoading();
+        mWebView.clearHistory();
+        if (mWebView.getParent() instanceof ViewGroup)
+        {
+          ((ViewGroup) mWebView.getParent()).removeView(mWebView);
+        }
+        mWebView.destroy();
+      }
+      catch (Exception ignored) {}
+      mWebView = null;
     }
   }
 
@@ -721,9 +790,24 @@ public class MainActivity extends Activity
   public void onTrimMemory(int level)
   {
     super.onTrimMemory(level);
-    if (level >= TRIM_MEMORY_RUNNING_LOW && mWebView != null)
+    if (mWebView == null) return;
+
+    if (level >= TRIM_MEMORY_RUNNING_CRITICAL)
     {
-      mWebView.clearCache(false);
+      try
+      {
+        mWebView.clearCache(false);
+        mWebView.freeMemory();
+      }
+      catch (Exception ignored) {}
+    }
+    else if (level >= TRIM_MEMORY_RUNNING_LOW)
+    {
+      try
+      {
+        mWebView.clearCache(false);
+      }
+      catch (Exception ignored) {}
     }
   }
 
@@ -901,6 +985,26 @@ public class MainActivity extends Activity
     public void requestOverlayPermission()
     {
       runOnUiThread(() -> openOverlaySettings());
+    }
+
+    /**
+     * Pixel height of the status bar. Lets the HTML add top padding so
+     * content isn't hidden under the now-transparent status bar. Only
+     * needed if the HTML doesn't already account for it — the app
+     * currently extends under via SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN.
+     */
+    @JavascriptInterface
+    public int getStatusBarHeight()
+    {
+      int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+      return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    @JavascriptInterface
+    public int getNavBarHeight()
+    {
+      int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+      return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
     }
 
     @JavascriptInterface

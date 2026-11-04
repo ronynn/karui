@@ -1,13 +1,24 @@
 <resources>
 
     <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
-    </style>
+    <!-- Tell the system this app draws edge-to-edge -->
+    <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    
+    <!-- Kill the legacy translucent flags — they fight transparency 
+    <item name="android:windowTranslucentStatus">false</item>
+    <item name="android:windowTranslucentNavigation">false</item> -->
+    
+    <!-- Transparent bars -->
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    
+    <!-- Android 10+ : disable the system contrast scrim -->
+    <item name="android:enforceStatusBarContrast">false</item>
+    <item name="android:enforceNavigationBarContrast">false</item>
+    
+    <!-- Icon colors (light icons on dark content) -->
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowLightNavigationBar">false</item>
+</style>
 
 </resources>
