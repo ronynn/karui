@@ -5,6 +5,14 @@ const ECC = 'M'
 const MAX_CHUNK_BYTES = 1500
 const PREFIX = 'KARUI1'
 
+// Signature used to diff notes around a merge. Deliberately excludes
+// `updatedAt` — a timestamp bump with unchanged content is NOT a user-visible
+// update and must not be reported as one.
+function _noteSig(n)
+{
+  return `${n.text}\x00${n.completed ? 1 : 0}\x00${n.pinned ? 1 : 0}\x00${n.category || ''}`
+}
+
 let qrLibPromise = null
 
 export function loadQrLib()
@@ -192,7 +200,6 @@ export function createQrModule()
       this.closeAllMenus()
       if (!tab) return
 
-      // Locked tabs are excluded from QR share (casual-snooping guard).
       if (typeof this.isTabLocked === 'function' && this.isTabLocked(tab))
       {
         this.showToast('Tab is locked')
@@ -232,7 +239,6 @@ export function createQrModule()
       const note = this.notes.find(n => n.id === id)
       if (!note) return
 
-      // Show the full note; the CSS clamps the title to 2 lines, left-aligned.
       this.qrTabName = note.text
       this.qrFrames = []
       this.qrFrameIdx = 0
@@ -357,8 +363,8 @@ export function createQrModule()
       this._qrImportPayload(raw)
     },
 
-    // Message fix: report "N imported, M updated" instead of claiming
-    // "Already in sync" when the merge actually updated existing notes.
+    // ---------- Merge + accurate reporting ----------
+
     _reportMerge(result)
     {
       const added = (result && typeof result.added === 'number') ? result.added : 0
@@ -369,14 +375,40 @@ export function createQrModule()
       else this.showToast('Already in sync — no new notes')
     },
 
+    // Snapshots `notes` by ID + content signature, runs mergeNotes, then
+    // counts what actually changed. Immune to mergeNotes returning stale
+    // counts or future changes to its return shape.
+    _mergeWithReport(notes)
+    {
+      const beforeSig = new Map()
+      for (const n of this.notes) beforeSig.set(n.id, _noteSig(n))
+
+      try
+      {
+        this.mergeNotes(notes)
+      }
+      catch (e)
+      {
+        this.showToast('Import failed')
+        return
+      }
+
+      let added = 0, updated = 0
+      for (const n of this.notes)
+      {
+        const prev = beforeSig.get(n.id)
+        if (prev === undefined) { added++; continue }
+        if (prev !== _noteSig(n)) updated++
+      }
+
+      this._reportMerge({ added, updated })
+    },
+
     _qrImportPayload(raw)
     {
       const parsed = parseTabPayload(raw)
       if (parsed && parsed.notes && parsed.notes.length)
       {
-        // Reject imports whose destination tab is currently locked — data
-        // would land hidden and the user couldn't verify it. Simple and
-        // predictable.
         const destTabs = new Set(parsed.notes.map(n => n.category).filter(Boolean))
         for (const cat of destTabs)
         {
@@ -394,8 +426,8 @@ export function createQrModule()
             if (!this.noteCategories.includes(c)) this.noteCategories.push(c)
           })
         }
-        const result = this.mergeNotes(parsed.notes)
-        this._reportMerge(result)
+
+        this._mergeWithReport(parsed.notes)
         this.closePasteJson()
         return
       }
@@ -406,8 +438,8 @@ export function createQrModule()
         this.showToast('No notes found')
         return
       }
-      const result = this.mergeNotes(notes)
-      this._reportMerge(result)
+
+      this._mergeWithReport(notes)
       this.closePasteJson()
     },
 

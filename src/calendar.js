@@ -1,5 +1,4 @@
 // --- SECTION: CALENDAR COMPONENT ---
-// --- Calendar notification module (moved out of index.js) ---
 import { parseReminderTime, stripReminderTime } from './notes.js'
 
 export function createCalendarModule()
@@ -63,56 +62,29 @@ export function createCalendarModule()
       try { window.Android.updateCalendarEvents(json) } catch (e) {}
     },
 
-    // ---------- system notification permission ----------
-    // Tries the Android bridge first, falls back to the web Notification API.
-    // Returns true when we may proceed (granted, or no permission API exists
-    // at all — in which case the native side owns this and we shouldn't block).
     async _ensureNotificationPermission()
     {
-      // 1. Android native bridge
       if (window.Android)
       {
         if (typeof window.Android.hasNotificationPermission === 'function')
         {
-          try
-          {
-            if (window.Android.hasNotificationPermission()) return true
-          }
-          catch (e) {}
+          try { if (window.Android.hasNotificationPermission()) return true } catch (e) {}
         }
         if (typeof window.Android.requestNotificationPermission === 'function')
         {
-          try
-          {
-            const granted = await window.Android.requestNotificationPermission()
-            return !!granted
-          }
-          catch (e) { return false }
+          try { return !!(await window.Android.requestNotificationPermission()) } catch (e) { return false }
         }
-        // Android present but no permission API — assume native handles it.
         return true
       }
-
-      // 2. Standard web Notification API
       if (typeof Notification !== 'undefined' && Notification.permission !== undefined)
       {
         if (Notification.permission === 'granted') return true
         if (Notification.permission === 'denied') return false
-        try
-        {
-          const result = await Notification.requestPermission()
-          return result === 'granted'
-        }
-        catch (e) { return false }
+        try { return (await Notification.requestPermission()) === 'granted' } catch (e) { return false }
       }
-
-      // 3. Unknown environment — permit, caller/native will handle.
       return true
     },
 
-    // ---------- toggle ----------
-    // Does NOT touch `notificationEnabled` (statusbar quick-note toggle).
-    // Those two user preferences are independent.
     async toggleCalendarNotifications()
     {
       const wanted = this.calendarNotificationsEnabled
@@ -122,7 +94,6 @@ export function createCalendarModule()
         const granted = await this._ensureNotificationPermission()
         if (!granted)
         {
-          // v-model already flipped the checkbox; revert it and inform.
           this.calendarNotificationsEnabled = false
           localStorage.setItem('calendarNotificationsEnabled', 'false')
           this.showToast('Enable system notifications for this app first')
@@ -131,7 +102,6 @@ export function createCalendarModule()
       }
 
       localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
-
       this.syncCalendarEventsToAndroid()
 
       const hasApi = !!(window.Android && typeof window.Android.setCalendarNotificationsEnabled === 'function')
@@ -182,8 +152,6 @@ export function initCalendar(appStore)
     return appStore.notes.filter(n => n.category === cat)
   }
 
-  // Keeps the `@HHMM` token in the returned `text` — the calendar list,
-  // day modal and "recurring today" strip all display it intentionally.
   function parseNoteDateAndText(note)
   {
     if (note.scheduledDate)
@@ -313,10 +281,16 @@ export function initCalendar(appStore)
     const month = currentDate.getMonth()
     const firstDay = new Date(year, month, 1)
     const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const startWeekday = firstDay.getDay()
     const todayS = todayStr()
 
-    // Parse once, bucket by date in a single pass.
+    // Start-of-week offset. weekStartsMonday shifts Sun(0) to end.
+    const rawStart = firstDay.getDay()
+    const startWeekday = appStore.weekStartsMonday ? (rawStart + 6) % 7 : rawStart
+
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`
+
+    // Parse once, bucket by date, keep only this month's one-off events in
+    // the "Events this month" list.
     const calNotes = getCalendarNotes()
     const allParsed = calNotes.map(parseNoteDateAndText)
     const dayNoteMap = {}
@@ -326,7 +300,7 @@ export function initCalendar(appStore)
       if (!item.date) continue
       if (!dayNoteMap[item.date]) dayNoteMap[item.date] = []
       dayNoteMap[item.date].push(item)
-      if (!item.isRecurring) monthlyEvents.push(item)
+      if (!item.isRecurring && item.date.startsWith(monthPrefix)) monthlyEvents.push(item)
     }
     monthlyEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
@@ -347,7 +321,9 @@ export function initCalendar(appStore)
     hiddenInput.style.cssText = 'position:absolute; left:-9999px; opacity:0; width:1px; height:1px;'
     hiddenInput.value = `${year}-${String(month + 1).padStart(2, '0')}`
 
-    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const weekDays = appStore.weekStartsMonday
+      ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const weekdaysHtml = weekDays.map(w => `<div class="calendar-weekday">${w}</div>`).join('')
 
     let dayCells = ''
@@ -374,13 +350,10 @@ export function initCalendar(appStore)
         }
       }
 
-      // Recurring indicator: diamond. Pending → border color,
-      // done → gray (matches one-off done dots).
       let dotsHtml = ''
       if (recPending > 0) dotsHtml += `<span class="event-dot recurring"></span>`
       else if (recDone > 0) dotsHtml += `<span class="event-dot recurring done"></span>`
 
-      // One-off dots: pending first (accent), then done (gray), capped at 3.
       const pendingShow = Math.min(offPending, 3)
       const doneShow = Math.min(offDone, Math.max(0, 3 - pendingShow))
       for (let i = 0; i < pendingShow; i++) dotsHtml += `<span class="event-dot"></span>`

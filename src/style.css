@@ -1,42 +1,38 @@
-
+/* ===========================================================================
+   1. RESET & TOKENS
+   =========================================================================== */
 [v-cloak] { display: none !important; }
 a { color: gray; }
-
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); --padding-top: 14px; }
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
-
-
-
-header { position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-         background: linear-gradient(
-    to bottom,
-    var(--bg) 0%,
-    var(--bg) calc(100% - 28px),
-    transparent 100%
-  );
-/*       background: color-mix(in srgb, var(--bg) 45%, transparent); 
-         backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(16px); 
-       */  
-         padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); transition: transform 0.1s ease-out, opacity 0.25s ease-out; padding-top: 26px; margin-bottom: 44px; }
-
-
-
-
-
-
-#app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; transition: all 0.1s ease-out; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 28px; line-height: 1; overflow: hidden; transform: translateY(0); }
-
-
+/* ===========================================================================
+   2. HEADER & TITLE
+   =========================================================================== */
+header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) calc(100% - 28px), transparent 100%); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); padding-top: 26px; margin-bottom: 44px; transition: transform 0.1s ease-out, opacity 0.25s ease-out; contain: layout style paint; }
+#app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 28px; line-height: 1; overflow: hidden; transform: translateY(0); transition: opacity 0.1s ease-out, max-height 0.1s ease-out, margin-bottom 0.1s ease-out, margin-top 0.1s ease-out, transform 0.1s ease-out; will-change: transform, opacity; }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 10px; transform: translateY(-20px); pointer-events: none; }
+
+/* ===========================================================================
+   3. PIVOT NAV
+   =========================================================================== */
 .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; margin: 0 calc(-20px * var(--ui-scale)); padding-left: calc(20px * var(--ui-scale)); padding-right: calc(20px * var(--ui-scale)); }
 .pivot-container::-webkit-scrollbar { display: none; }
-.pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; --transition: all 0.1s ease; padding-bottom: 4px; text-transform: lowercase; flex-shrink: 0; white-space: nowrap; }
+.pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; padding-bottom: 4px; text-transform: lowercase; flex-shrink: 0; white-space: nowrap; }
 .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
-#viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1); }
 
+/* ===========================================================================
+   4. VIEWPORT & SCREENS
+   content-visibility: auto skips layout/paint for off-screen screens.
+   If the horizontal swipe ever stutters on low-end Android, remove the
+   content-visibility + contain-intrinsic-size pair and keep the rest.
+   =========================================================================== */
+#viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1); will-change: transform; }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; content-visibility: auto; contain-intrinsic-size: 100vw 100vh; }
 
-.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; }
+/* ===========================================================================
+   5. BOXES & FORM CONTROLS
+   =========================================================================== */
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 20px; }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.1s; font-family: inherit; position: relative; overflow: hidden; }
@@ -49,6 +45,10 @@ button:active { filter: brightness(0.8); }
 .box1-btns { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; }
 .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
+
+/* ===========================================================================
+   6. TOGGLES & SWITCHES
+   =========================================================================== */
 .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
 .toggle-container:last-of-type { border-bottom: none; }
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
@@ -58,82 +58,128 @@ button:active { filter: brightness(0.8); }
 .switch input:checked + .slider { background-color: var(--accent); }
 .switch input:checked + .slider:before { transform: translateX(18px); background-color: var(--accent-txt); }
 .switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+
+/* ===========================================================================
+   7. TABS & THEME GRID
+   =========================================================================== */
 .tabs-container { display: flex; flex-wrap: wrap; gap: 8px; overflow-x: auto; padding-bottom: 0; margin-bottom: 5px; scrollbar-width: none; }
 .tab { position: relative; overflow: hidden; padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .theme-btn { position: relative; overflow: hidden; padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: calc(11px * var(--ui-scale)); font-weight: bold; white-space: nowrap; text-overflow: ellipsis; width: 100%; text-align: center; display: flex; align-items: center; justify-content: center; }
 .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
+#theme-btns .theme-btn { position: relative; }
+.theme-delete-glyph { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 14px; padding: 0 4px; cursor: pointer; line-height: 1; }
+
+/* ===========================================================================
+   8. NOTES LIST
+   =========================================================================== */
 .note-item { display: flex; justify-content: space-between; align-items: flex-start; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 2px solid color-mix(in srgb, var(--text) 20%, transparent); font-size: calc(16px * var(--ui-scale)); }
 .note-text { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: inherit; }
 .note-text.completed { text-decoration: line-through; opacity: 0.55; }
 .pin-icon { margin-right: 6px; font-size: calc(14px * var(--ui-scale)); text-decoration: none !important; display: inline-block; }
+.note-content-wrap { max-height: calc(8 * 1.5em); line-height: 1.5; overflow: hidden; }
+.note-content-wrap.expanded { max-height: none; }
+.note-expand-bar { display: flex; align-items: center; justify-content: center; padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale)); margin-top: calc(4px * var(--ui-scale)); font-size: calc(14px * var(--ui-scale)); color: var(--accent); cursor: pointer; user-select: none; border: 0 solid var(--border); background: transparent; text-transform: uppercase; letter-spacing: 0.5px; }
+.note-menu-trigger { padding: 0 0 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0; line-height: 1; margin-top: 2px; }
 .ghost { opacity: 0.35; border: 2px dashed var(--accent); }
-.menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 10px; z-index: 2000; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); min-width: 140px; }
+.ghost-line { padding: calc(18px * var(--ui-scale)) calc(10px * var(--ui-scale)); color: var(--gray); text-align: center; font-style: italic; font-size: calc(14px * var(--ui-scale)); opacity: 0.7; border-bottom: 2px dashed color-mix(in srgb, var(--text) 15%, transparent); }
+
+/* ===========================================================================
+   9. MENUS
+   =========================================================================== */
+.menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 10px; z-index: 2000; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); min-width: 140px; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
 .menu button { width: 100%; margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); display: block; }
 .menu button:last-of-type { margin-bottom: 0; }
-
-
-
 .menu-title { font-size: calc(14px * var(--ui-scale)); font-weight: bold; color: var(--accent); text-align: center; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px dashed var(--border); text-transform: uppercase; word-break: break-all; }
-
-.note-menu-stats {
-  font-size: calc(14px * var(--ui-scale));
-  color: var(--gray);
-  text-align: center;
-  line-height: 1;
-  opacity: 0.75;
-  pointer-events: none;
-  user-select: none;
-  letter-spacing: 0.3px;
-  font-weight: bold;
-}
+.note-menu-stats { font-size: calc(14px * var(--ui-scale)); color: var(--gray); text-align: center; line-height: 1; opacity: 0.75; pointer-events: none; user-select: none; letter-spacing: 0.3px; font-weight: bold; }
 .note-menu-stats-top { padding-bottom: 4px; }
 .note-menu-stats-bottom { padding-top: 5px; }
+#note-dropdown { padding: 6px; min-width: 120px; box-shadow: 3px 3px 0 rgba(0,0,0,0.6); }
+#note-dropdown button { margin-bottom: 5px; padding: 7px 9px; font-size: calc(12px * var(--ui-scale)); }
+#note-dropdown button:last-of-type { margin-bottom: 0; }
+#note-dropdown .note-menu-stats { font-size: calc(12px * var(--ui-scale)); opacity: 0.6; }
+.menu-2col { min-width: 220px; padding: 8px; }
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.menu-grid button { margin-bottom: 0 !important; padding: 8px 4px; font-size: calc(12px * var(--ui-scale)); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/*  (it overrides only vertical padding) */
-#note-dropdown {
-  padding-top: 4px;
-  padding-bottom: 4px;
-}
-
-
-
-
+/* ===========================================================================
+   10. SETTINGS HELPERS
+   =========================================================================== */
 .ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0; }
 .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
 .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
 .about-text { font-size: calc(14px * var(--ui-scale)); line-height: 1.5; color: var(--text); opacity: 0.9; }
 .about-text code { color: var(--accent); }
-#modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
-.modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
-#toast { position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-.has-ripple { position: relative; overflow: hidden; }
-.ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
-@keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
-#fab-btn { position: fixed; bottom: 55px; right: 25px; width: calc(52px * var(--ui-scale)); height: calc(52px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: calc(20px * var(--ui-scale)); font-weight: bold; cursor: pointer; z-index: 999; transition: transform 0.15s ease-out; overflow: hidden; }
-#fab-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6); }
-.btn-subtle { background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(12px * var(--ui-scale)); }
 .section-divider { margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 10px; }
 .toggle-hr { border: 0; border-top: 1px dashed var(--border); margin: 10px 0; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 15px; }
 .text-muted { color: var(--gray); }
-.note-menu-trigger { padding: 0 0 0 10px; font-weight: bold; cursor: pointer; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+.btn-subtle { background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(12px * var(--ui-scale)); }
 
-.event-dot.recurring { border-radius: 0; transform: rotate(45deg); background: var(--border); }
-.recurring-today { margin-top: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1rem; }
-.recurring-today h4 { font-size: 0.875rem; color: var(--gray); margin-bottom: 0.5rem; text-transform: uppercase; }
-.recurring-today-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
-.recurring-today-item.completed { opacity: 0.55; text-decoration: line-through; }
-.recurring-today-text { flex: 1; font-size: 0.875rem; cursor: pointer; }
-.recurring-today-empty { color: var(--gray); font-size: 0.875rem; padding: 0.375rem 0; }
+/* ===========================================================================
+   11. MODALS & OVERLAYS (prompt / PIN)
+   =========================================================================== */
+#modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
+.modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+#modal-pin-input { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(20px * var(--ui-scale)); letter-spacing: 6px; text-align: center; font-family: monospace; outline: none; }
+#modal-pin-input:focus { border-color: var(--accent); }
 
+/* ===========================================================================
+   12. QR MODAL
+   =========================================================================== */
+#qr-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.qr-modal-box { background: var(--bg); border: 2px solid var(--border); padding: 18px; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.qr-modal-title { font-weight: bold; color: var(--accent); font-size: calc(18px * var(--ui-scale)); text-align: left; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3; max-height: calc(2 * 1.3em + 4px); width: 100%; padding: 0 4px; white-space: pre-wrap; }
+.qr-modal-busy { font-size: calc(14px * var(--ui-scale)); color: var(--gray); padding: 40px 0; }
+.qr-image { width: min(78vw, 78vh, 380px); height: auto; image-rendering: pixelated; background: #fff; padding: 8px; display: block; }
+.qr-modal-status { font-size: calc(14px * var(--ui-scale)); color: var(--text); font-weight: bold; }
+.qr-modal-hint { font-size: calc(12px * var(--ui-scale)); color: var(--gray); text-align: center; }
+.qr-modal-buttons { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
+.qr-modal-buttons button { flex: 1; }
+.qr-modal-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===========================================================================
+   13. PASTE JSON MODAL
+   =========================================================================== */
+#paste-json-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.paste-json-box { background: var(--bg); border: 2px solid var(--border); padding: 16px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 92vh; }
+.paste-json-title { font-weight: bold; color: var(--accent); font-size: calc(18px * var(--ui-scale)); text-align: center; }
+#paste-json-input { min-height: 200px; max-height: 50vh; font-family: monospace; font-size: calc(12px * var(--ui-scale)); resize: vertical; }
+.paste-json-buttons { display: flex; gap: 8px; }
+.paste-json-buttons button { flex: 1; }
+
+/* ===========================================================================
+   14. THEME IMPORT MODAL
+   =========================================================================== */
+#theme-import-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 5500; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
+.theme-format-hint { background: var(--surface); border: 1px dashed var(--border); padding: 8px; font-size: calc(11px * var(--ui-scale)); font-family: monospace; color: var(--gray); overflow-x: auto; white-space: pre; line-height: 1.4; max-height: 200px; margin: 0; }
+#theme-import-input { font-family: monospace; font-size: calc(12px * var(--ui-scale)); min-height: 120px; max-height: 40vh; }
+
+/* ===========================================================================
+   15. TOAST, FAB, RIPPLES
+   =========================================================================== */
+#toast { position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+#fab-btn { position: fixed; bottom: 55px; right: 25px; width: calc(52px * var(--ui-scale)); height: calc(52px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: calc(20px * var(--ui-scale)); font-weight: bold; cursor: pointer; z-index: 999; transition: transform 0.15s ease-out; overflow: hidden; }
+#fab-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.6); }
+.has-ripple { position: relative; overflow: hidden; }
+.ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
+@keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+/* ===========================================================================
+   16. RESPONSIVE HELPERS
+   =========================================================================== */
 .portrait-only { display: block; }
 .landscape-only { display: none; }
 
-/* Landscape phones: header slides away, side margins on content, big game canvas, split game controls */
-@media (orientation: landscape) and (max-height: 600px) {
+/* ===========================================================================
+   17. LANDSCAPE PHONES ONLY
+   pointer: coarse      → touch-primary device (excludes desktop / laptops)
+   min-aspect-ratio:3/2 → excludes square-ish viewports / portrait tablets
+   max-height: 600px    → excludes landscape tablets
+   =========================================================================== */
+@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) and (min-aspect-ratio: 3/2) {
   body { padding-top: 0; }
   header { padding: calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) calc(4px * var(--ui-scale)); padding-top: 10px; }
   header.scrolled { transform: translateY(-100%); }
@@ -152,283 +198,7 @@ button:active { filter: brightness(0.8); }
   #toast { bottom: 20px; }
   .note-item { padding: calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale)); }
   .portrait-only { display: none !important; }
-}
-
-
-
-/* --- QR share modal --- */
-#qr-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.85); z-index: 5000;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-}
-.qr-modal-box {
-  background: var(--bg); border: 2px solid var(--border);
-  padding: 18px; width: 100%; max-width: 440px; max-height: 92vh;
-  overflow-y: auto; display: flex; flex-direction: column;
-  gap: 10px; align-items: center;
-}
-.qr-modal-title {
-  font-weight: bold; color: var(--accent);
-  font-size: calc(18px * var(--ui-scale));
-  word-break: break-all; text-align: center;
-}
-.qr-modal-busy {
-  font-size: calc(14px * var(--ui-scale)); color: var(--gray);
-  padding: 40px 0;
-}
-.qr-image {
-  width: min(78vw, 78vh, 380px); height: auto;
-  image-rendering: pixelated;
-  background: #fff; padding: 8px; display: block;
-}
-.qr-modal-status {
-  font-size: calc(14px * var(--ui-scale)); color: var(--text);
-  font-weight: bold;
-}
-.qr-modal-hint {
-  font-size: calc(12px * var(--ui-scale)); color: var(--gray);
-  text-align: center;
-}
-.qr-modal-buttons {
-  display: flex; gap: 8px; width: 100%; margin-top: 4px;
-}
-.qr-modal-buttons button { flex: 1; }
-.qr-modal-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-
-/* --- Paste JSON modal --- */
-#paste-json-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.85); z-index: 6000;
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
-}
-.paste-json-box {
-  background: var(--bg); border: 2px solid var(--border);
-  padding: 16px; width: 100%; max-width: 480px;
-  display: flex; flex-direction: column; gap: 12px;
-  max-height: 92vh;
-}
-.paste-json-title {
-  font-weight: bold; color: var(--accent);
-  font-size: calc(18px * var(--ui-scale)); text-align: center;
-}
-#paste-json-input {
-  min-height: 200px; max-height: 50vh;
-  font-family: monospace; font-size: calc(12px * var(--ui-scale));
-  resize: vertical;
-}
-.paste-json-buttons { display: flex; gap: 8px; }
-.paste-json-buttons button { flex: 1; }
-
-
-
-
-
-/* Landscape: compact + scrollable menus */
-@media (orientation: landscape) and (max-height: 600px) {
-  .menu {
-    max-height: calc(100vh - 12px);
-    padding: 8px;
-  }
-  .menu button {
-    padding: 8px 10px;
-    margin-bottom: 4px;
-    font-size: calc(13px * var(--ui-scale));
-  }
-  .menu-title {
-    padding-bottom: 4px;
-    margin-bottom: 6px;
-    font-size: calc(12px * var(--ui-scale));
-  }
-}
-
-/* Menu safety: never taller than viewport, scrolls if content overflows */
-.menu {
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-
-/* --- Note expand/collapse --- */
-.note-content-wrap {
-  max-height: calc(8 * 1.5em);
-  line-height: 1.5;
-  overflow: hidden;
-}
-.note-content-wrap.expanded {
-  max-height: none;
-}
-
-
-
-
-
-
-.note-expand-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  margin-top: calc(4px * var(--ui-scale));
-  font-size: calc(14px * var(--ui-scale));
-  color: var(--accent);
-  cursor: pointer;
-  user-select: none;
-  border: 0px solid var(--border);
-  background: transparent;
-  --font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.note-expand-bar:active {
-  --background: var(--surface);
-}
-
-
-
-
-
-
-
-/* ============================================================
-   Compact note menu
-   ============================================================ */
-#note-dropdown {
-  padding: 6px;
-  min-width: 120px;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
-}
-#note-dropdown button {
-  margin-bottom: 5px;
-  padding: 7px 9px;
-  font-size: calc(12px * var(--ui-scale));
-}
-#note-dropdown button:last-of-type { margin-bottom: 0; }
-#note-dropdown .note-menu-stats {
-  font-size: calc(12px * var(--ui-scale));
-  opacity: 0.6;
-}
-
-/* ============================================================
-   Two-column tab context menu (long-press on tab)
-   ============================================================ */
-.menu-2col {
-  min-width: 220px;
-  padding: 8px;
-}
-.menu-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-.menu-grid button {
-  margin-bottom: 0 !important;
-  padding: 8px 4px;
-  font-size: calc(12px * var(--ui-scale));
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-/* ============================================================
-   Ghost line — search no-results / locked-tab placeholder
-   ============================================================ */
-.ghost-line {
-  padding: calc(18px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  color: var(--gray);
-  text-align: center;
-  font-style: italic;
-  font-size: calc(14px * var(--ui-scale));
-  opacity: 0.7;
-  border-bottom: 2px dashed color-mix(in srgb, var(--text) 15%, transparent);
-}
-
-/* ============================================================
-   Custom theme delete glyph (mirrors custom font pattern)
-   ============================================================ */
-#theme-btns .theme-btn { position: relative; }
-.theme-delete-glyph {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  padding: 0 4px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-/* ============================================================
-   Theme import modal
-   ============================================================ */
-#theme-import-overlay {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.8);
-  z-index: 5500;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 18vh 25px 25px;
-  overflow-y: auto;
-}
-.theme-format-hint {
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  padding: 8px;
-  font-size: calc(11px * var(--ui-scale));
-  font-family: monospace;
-  color: var(--gray);
-  overflow-x: auto;
-  white-space: pre;
-  line-height: 1.4;
-  max-height: 200px;
-  margin: 0;
-}
-#theme-import-input {
-  font-family: monospace;
-  font-size: calc(12px * var(--ui-scale));
-  min-height: 120px;
-  max-height: 40vh;
-}
-
-/* ============================================================
-   PIN entry (password variant of modal input)
-   ============================================================ */
-#modal-pin-input {
-  width: 100%;
-  padding: calc(12px * var(--ui-scale));
-  background: var(--surface);
-  color: var(--text);
-  border: 2px solid var(--border);
-  font-size: calc(20px * var(--ui-scale));
-  letter-spacing: 6px;
-  text-align: center;
-  font-family: monospace;
-  outline: none;
-}
-#modal-pin-input:focus { border-color: var(--accent); }
-
-/* ============================================================
-   QR note title — 2 lines max, left aligned
-   (overrides earlier .qr-modal-title rule; safe to leave both)
-   ============================================================ */
-.qr-modal-title {
-  text-align: left;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-  line-height: 1.3;
-  max-height: calc(2 * 1.3em + 4px);
-  width: 100%;
-  padding: 0 4px;
-  white-space: pre-wrap;
+  .menu { max-height: calc(100vh - 12px); padding: 8px; }
+  .menu button { padding: 8px 10px; margin-bottom: 4px; font-size: calc(13px * var(--ui-scale)); }
+  .menu-title { padding-bottom: 4px; margin-bottom: 6px; font-size: calc(12px * var(--ui-scale)); }
 }

@@ -48,7 +48,8 @@
       </div>
     </header>
 
-    <div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+    <div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" 
+      @touchmove.passive="handleTouchMove" @touchend="handleTouchEnd">
 
       <div class="screen" id="home-screen" @scroll="handleScroll">
         <div class="box">
@@ -164,6 +165,14 @@
             </div>
 
             <div class="toggle-container">
+              <span>Start week on Monday</span>
+              <label class="switch">
+                <input type="checkbox" v-model="weekStartsMonday" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="toggle-container">
               <span>Add Notes To Bottom</span>
               <label class="switch">
                 <input type="checkbox" v-model="addNoteBottom" :disabled="sortAlphabetical" @change="saveData">
@@ -270,7 +279,7 @@
             - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu. Long press from your launcher homescreen to add Karui widgets. <br/>
             - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete individual notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
-            - Add a % symbol on any tabname and it automatically counts percentage of tasks completed.<br/>
+            - Add a % symbol on any tabname and it automatically counts percentage of tasks completed. You can also search a term using the syntax %s term.<br/>
             - Recurring notes (BETA): Start a note with !Nx to repeat it.
             !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly. 
             !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 

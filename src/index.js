@@ -116,6 +116,7 @@ function hydrateStore(store)
   store.inboxTabName = str('inboxTabName', 'Inbox')
   store.syncFilePath = str('syncFilePath', '')
   store.enterNewLine = bool('enterNewLine')
+  store.weekStartsMonday = bool('weekStartsMonday')
 
   store.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
   store.calendarTabName = str('calendarTabName', 'Calkarui')
@@ -142,13 +143,14 @@ const appStore = reactive(mergeModules(
     quoteText: '',
     quoteAuthor: '',
 
+    // --- calendar display preference ---
+    weekStartsMonday: false,
+
     // --- modal ---
     modalVisible: false,
     modalTitle: '',
     modalInput: '',
     modalCb: null,
-    // modalIsPassword lives in notes.js; endState here for clarity:
-    // it is set by openPrompt() below.
 
     // --- toast ---
     toastVisible: false,
@@ -207,7 +209,6 @@ const appStore = reactive(mergeModules(
         this.activeCategory = this.noteCategories[0] || 'Inbox'
       }
 
-      // Custom theme vars must be applied AFTER customThemes hydrated.
       applyTheme(this.currentTheme, this.customThemes)
       applyFont(this.currentFont)
       applyUiScale(this.uiScale)
@@ -287,6 +288,7 @@ const appStore = reactive(mergeModules(
       localStorage.setItem('inboxTabName', this.inboxTabName)
       localStorage.setItem('syncFilePath', this.syncFilePath)
       localStorage.setItem('enterNewLine', this.enterNewLine)
+      localStorage.setItem('weekStartsMonday', this.weekStartsMonday)
 
       localStorage.setItem('calendarEnabled', this.calendarEnabled)
       localStorage.setItem('calendarTabName', this.calendarTabName)
@@ -378,12 +380,14 @@ const appStore = reactive(mergeModules(
     {
       if (!this.scrollTicking)
       {
-        let scrollTop = e.target.scrollTop
+        const scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
         {
-          let scrolled = scrollTop > 10
+          const scrolled = scrollTop > 10
           if (this.isScrolled !== scrolled) this.isScrolled = scrolled
-          this.closeAllMenus()
+          // Only touch the reactive store when a menu is actually open —
+          // otherwise we were burning a reactivity pass on every scroll frame.
+          if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
           this.scrollTicking = false
         })
         this.scrollTicking = true
@@ -443,7 +447,6 @@ const appStore = reactive(mergeModules(
         const el = document.getElementById('modal-input')
         if (el)
         {
-          // Reset height every open, so a previous expanded state is gone.
           el.style.height = 'auto'
           autoExpandTextarea(el)
           if (this.keepKeyboard) el.focus()
@@ -457,9 +460,6 @@ const appStore = reactive(mergeModules(
       const cb = this.modalCb
       this.modalCb = null
       this.modalIsPassword = false
-      // Fire cb even on cancel (with null) so promise-based callers
-      // (`_promptPin`) always resolve. Existing callers already guard
-      // `if (!val) return`, so this is safe.
       if (cb) cb(saveAction ? this.modalInput.trim() : null)
       nextTick(() =>
       {
@@ -491,10 +491,6 @@ const appStore = reactive(mergeModules(
     },
 
     // --- data export / import / sync ---
-    // All export paths exclude locked tabs. Locked tab data can still be
-    // backed up if the user unlocks the tab, saves, then re-locks — but
-    // never silently leaks through a share/sync/QR path.
-
     exportDataCall()
     {
       const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))

@@ -1082,6 +1082,18 @@ export function createNotesModule()
 
     // ==================== IMPORT MERGE ====================
 
+    // Merge imported notes with the local store.
+    //
+    // Rules:
+    //   * Match by `id` first, fall back to (text, category).
+    //   * Update when incoming.updatedAt is STRICTLY newer than existing.
+    //   * On tied timestamps, update ONLY if content (text/completed/pinned/
+    //     category) actually differs — a timestamp bump with identical
+    //     content is applied but does NOT count as an "update".
+    //   * Locked destination tabs are skipped and counted.
+    //
+    // Returned counters reflect *user-visible* changes only, so callers can
+    // say "Imported 2, updated 1" without lying about no-op re-imports.
     mergeNotes(imported)
     {
       if (!Array.isArray(imported)) return { added: 0, updated: 0, skipped: 0 }
@@ -1089,6 +1101,7 @@ export function createNotesModule()
       let added = 0
       let updated = 0
       let skipped = 0
+
       imported.forEach((n, idx) =>
       {
         if (!n || typeof n.text !== 'string') return
@@ -1109,7 +1122,22 @@ export function createNotesModule()
 
         if (existing)
         {
-          if (itemUpdatedAt >= (existing.updatedAt || 0))
+          const existingUpdatedAt = existing.updatedAt || 0
+          const incomingNewer = itemUpdatedAt > existingUpdatedAt
+          const timestampsTied = itemUpdatedAt === existingUpdatedAt
+
+          // Only true user-visible differences count as "updated".
+          const contentChanged =
+            existing.text !== n.text ||
+            existing.completed !== itemCompleted ||
+            existing.pinned !== itemPinned ||
+            existing.category !== cat
+
+          // Apply when incoming is strictly newer, OR when timestamps tie
+          // but content genuinely differs (protects against millisecond
+          // collisions). A timestamp bump with identical content is applied
+          // silently — it does NOT increment `updated`.
+          if (incomingNewer || (timestampsTied && contentChanged))
           {
             existing.text = n.text
             existing.completed = itemCompleted
@@ -1119,15 +1147,18 @@ export function createNotesModule()
             if (n.groupId) existing.groupId = n.groupId
             if (n.scheduledDate) existing.scheduledDate = n.scheduledDate
             if (n.recurrence) existing.recurrence = n.recurrence
-            updated++
+            if (contentChanged) updated++
           }
         }
         else
         {
           let newNote = {
             id: noteId || (now + Math.floor(Math.random() * 100000) + idx),
-            text: n.text, completed: itemCompleted, category: cat,
-            pinned: itemPinned, updatedAt: itemUpdatedAt
+            text: n.text,
+            completed: itemCompleted,
+            category: cat,
+            pinned: itemPinned,
+            updatedAt: itemUpdatedAt
           }
           if (n.groupId) newNote.groupId = n.groupId
           if (n.scheduledDate) newNote.scheduledDate = n.scheduledDate
@@ -1136,6 +1167,7 @@ export function createNotesModule()
           added++
         }
       })
+
       this.saveData()
       return { added, updated, skipped }
     }
