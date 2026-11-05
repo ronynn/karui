@@ -1,38 +1,26 @@
-/* ===========================================================================
-   1. RESET & TOKENS
-   =========================================================================== */
+/* Reset & base */
 [v-cloak] { display: none !important; }
 a { color: gray; }
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
-/* ===========================================================================
-   2. HEADER & TITLE
-   =========================================================================== */
+/* Header & title */
 header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) calc(100% - 28px), transparent 100%); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); padding-top: 26px; margin-bottom: 44px; transition: transform 0.1s ease-out, opacity 0.25s ease-out; contain: layout style paint; }
 #app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 28px; line-height: 1; overflow: hidden; transform: translateY(0); transition: opacity 0.1s ease-out, max-height 0.1s ease-out, margin-bottom 0.1s ease-out, margin-top 0.1s ease-out, transform 0.1s ease-out; will-change: transform, opacity; }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 10px; transform: translateY(-20px); pointer-events: none; }
 
-/* ===========================================================================
-   3. PIVOT NAV
-   =========================================================================== */
+/* Pivot nav */
 .pivot-container { display: flex; gap: calc(30px * var(--ui-scale)); overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; margin: 0 calc(-20px * var(--ui-scale)); padding-left: calc(20px * var(--ui-scale)); padding-right: calc(20px * var(--ui-scale)); }
 .pivot-container::-webkit-scrollbar { display: none; }
 .pivot-item { font-size: calc(26px * var(--ui-scale)); font-weight: 300; opacity: 0.35; cursor: pointer; padding-bottom: 4px; text-transform: lowercase; flex-shrink: 0; white-space: nowrap; }
 .pivot-item.active { opacity: 1; color: var(--accent); border-bottom: 2px solid var(--accent); }
 
-/* ===========================================================================
-   4. VIEWPORT & SCREENS
-   content-visibility: auto skips layout/paint for off-screen screens.
-   If the horizontal swipe ever stutters on low-end Android, remove the
-   content-visibility + contain-intrinsic-size pair and keep the rest.
-   =========================================================================== */
+/* Viewport & screens */
 #viewport { display: flex; flex: 1; width: 200vw; height: 100vh; transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1); will-change: transform; }
-.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; content-visibility: auto; contain-intrinsic-size: 100vw 100vh; }
+.screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; contain: layout style; overflow-anchor: none; }
+#notes-list { overflow-anchor: none; }
 
-/* ===========================================================================
-   5. BOXES & FORM CONTROLS
-   =========================================================================== */
+/* Boxes & form controls */
 .box { border: 2px solid var(--border); padding: calc(18px * var(--ui-scale)) calc(15px * var(--ui-scale)) calc(15px * var(--ui-scale)); position: relative; background: var(--bg); margin-bottom: calc(25px * var(--ui-scale)); margin-top: 20px; }
 .box-title { position: absolute; top: -1px; transform: translateY(-50%); left: 10px; background: var(--bg); padding: 0 6px; font-size: calc(12px * var(--ui-scale)); color: var(--accent); font-weight: bold; line-height: 1; }
 input, select, button, textarea { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(16px * var(--ui-scale)); outline: none; transition: border-color 0.1s; font-family: inherit; position: relative; overflow: hidden; }
@@ -46,9 +34,7 @@ button:active { filter: brightness(0.8); }
 .icon-btn-small { width: 32px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; background: var(--surface); color: var(--text); border: 2px solid var(--border); border-radius: 0; cursor: pointer; flex-shrink: 0; }
 .icon-btn-small.active { background: var(--accent); color: var(--accent-txt); }
 
-/* ===========================================================================
-   6. TOGGLES & SWITCHES
-   =========================================================================== */
+/* Toggles & switches */
 .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: calc(10px * var(--ui-scale)) 0; border-bottom: 1px dashed var(--border); font-size: calc(14px * var(--ui-scale)); }
 .toggle-container:last-of-type { border-bottom: none; }
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
@@ -59,9 +45,7 @@ button:active { filter: brightness(0.8); }
 .switch input:checked + .slider:before { transform: translateX(18px); background-color: var(--accent-txt); }
 .switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
 
-/* ===========================================================================
-   7. TABS & THEME GRID
-   =========================================================================== */
+/* Tabs & theme grid */
 .tabs-container { display: flex; flex-wrap: wrap; gap: 8px; overflow-x: auto; padding-bottom: 0; margin-bottom: 5px; scrollbar-width: none; }
 .tab { position: relative; overflow: hidden; padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
 .tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
@@ -71,9 +55,7 @@ button:active { filter: brightness(0.8); }
 #theme-btns .theme-btn { position: relative; }
 .theme-delete-glyph { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 14px; padding: 0 4px; cursor: pointer; line-height: 1; }
 
-/* ===========================================================================
-   8. NOTES LIST
-   =========================================================================== */
+/* Notes list */
 .note-item { display: flex; justify-content: space-between; align-items: flex-start; padding: calc(14px * var(--ui-scale)) calc(10px * var(--ui-scale)); background: var(--bg); transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease; position: relative; border-bottom: 2px solid color-mix(in srgb, var(--text) 20%, transparent); font-size: calc(16px * var(--ui-scale)); }
 .note-text { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; font-family: inherit; }
 .note-text.completed { text-decoration: line-through; opacity: 0.55; }
@@ -85,9 +67,7 @@ button:active { filter: brightness(0.8); }
 .ghost { opacity: 0.35; border: 2px dashed var(--accent); }
 .ghost-line { padding: calc(18px * var(--ui-scale)) calc(10px * var(--ui-scale)); color: var(--gray); text-align: center; font-style: italic; font-size: calc(14px * var(--ui-scale)); opacity: 0.7; border-bottom: 2px dashed color-mix(in srgb, var(--text) 15%, transparent); }
 
-/* ===========================================================================
-   9. MENUS
-   =========================================================================== */
+/* Menus */
 .menu { position: fixed; background: var(--surface); border: 2px solid var(--border); padding: 10px; z-index: 2000; display: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.6); min-width: 140px; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
 .menu button { width: 100%; margin-bottom: 6px; background: var(--bg); color: var(--text); border: 2px solid var(--border); display: block; }
 .menu button:last-of-type { margin-bottom: 0; }
@@ -103,9 +83,7 @@ button:active { filter: brightness(0.8); }
 .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .menu-grid button { margin-bottom: 0 !important; padding: 8px 4px; font-size: calc(12px * var(--ui-scale)); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/* ===========================================================================
-   10. SETTINGS HELPERS
-   =========================================================================== */
+/* Settings helpers */
 .ui-size-ctrl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 0; }
 .ui-size-ctrl button { padding: 8px 0; text-align: center; font-size: 14px; background: var(--surface); color: var(--text); border: 2px solid var(--border); cursor: pointer; }
 .ui-size-ctrl button.active { background: var(--accent); color: var(--accent-txt); font-weight: bold; }
@@ -117,17 +95,13 @@ button:active { filter: brightness(0.8); }
 .text-muted { color: var(--gray); }
 .btn-subtle { background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(12px * var(--ui-scale)); }
 
-/* ===========================================================================
-   11. MODALS & OVERLAYS (prompt / PIN)
-   =========================================================================== */
+/* Modal & PIN prompt */
 #modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
 .modal-box { background: var(--bg); border: 2px solid var(--border); padding: 20px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
 #modal-pin-input { width: 100%; padding: calc(12px * var(--ui-scale)); background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(20px * var(--ui-scale)); letter-spacing: 6px; text-align: center; font-family: monospace; outline: none; }
 #modal-pin-input:focus { border-color: var(--accent); }
 
-/* ===========================================================================
-   12. QR MODAL
-   =========================================================================== */
+/* QR modal */
 #qr-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .qr-modal-box { background: var(--bg); border: 2px solid var(--border); padding: 18px; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .qr-modal-title { font-weight: bold; color: var(--accent); font-size: calc(18px * var(--ui-scale)); text-align: left; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; line-height: 1.3; max-height: calc(2 * 1.3em + 4px); width: 100%; padding: 0 4px; white-space: pre-wrap; }
@@ -139,9 +113,7 @@ button:active { filter: brightness(0.8); }
 .qr-modal-buttons button { flex: 1; }
 .qr-modal-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ===========================================================================
-   13. PASTE JSON MODAL
-   =========================================================================== */
+/* Paste JSON modal */
 #paste-json-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .paste-json-box { background: var(--bg); border: 2px solid var(--border); padding: 16px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 92vh; }
 .paste-json-title { font-weight: bold; color: var(--accent); font-size: calc(18px * var(--ui-scale)); text-align: center; }
@@ -149,16 +121,12 @@ button:active { filter: brightness(0.8); }
 .paste-json-buttons { display: flex; gap: 8px; }
 .paste-json-buttons button { flex: 1; }
 
-/* ===========================================================================
-   14. THEME IMPORT MODAL
-   =========================================================================== */
+/* Theme import modal */
 #theme-import-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 5500; display: flex; align-items: flex-start; justify-content: center; padding: 18vh 25px 25px; overflow-y: auto; }
 .theme-format-hint { background: var(--surface); border: 1px dashed var(--border); padding: 8px; font-size: calc(11px * var(--ui-scale)); font-family: monospace; color: var(--gray); overflow-x: auto; white-space: pre; line-height: 1.4; max-height: 200px; margin: 0; }
 #theme-import-input { font-family: monospace; font-size: calc(12px * var(--ui-scale)); min-height: 120px; max-height: 40vh; }
 
-/* ===========================================================================
-   15. TOAST, FAB, RIPPLES
-   =========================================================================== */
+/* Toast, FAB, ripples */
 #toast { position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); color: var(--text); border: 2px solid var(--border); padding: 10px 20px; font-size: calc(14px * var(--ui-scale)); z-index: 1000; opacity: 0; transition: transform 0.3s, opacity 0.3s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
 #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 #fab-btn { position: fixed; bottom: 55px; right: 25px; width: calc(52px * var(--ui-scale)); height: calc(52px * var(--ui-scale)); background: var(--accent); color: var(--accent-txt); border: 2px solid var(--border); box-shadow: 4px 4px 0 rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: calc(20px * var(--ui-scale)); font-weight: bold; cursor: pointer; z-index: 999; transition: transform 0.15s ease-out; overflow: hidden; }
@@ -167,18 +135,11 @@ button:active { filter: brightness(0.8); }
 .ripple-span { position: absolute; border-radius: 50%; background: color-mix(in srgb, var(--text) 35%, transparent); transform: scale(0); animation: ripple-anim 2.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
 @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
 
-/* ===========================================================================
-   16. RESPONSIVE HELPERS
-   =========================================================================== */
+/* Responsive helpers */
 .portrait-only { display: block; }
 .landscape-only { display: none; }
 
-/* ===========================================================================
-   17. LANDSCAPE PHONES ONLY
-   pointer: coarse      → touch-primary device (excludes desktop / laptops)
-   min-aspect-ratio:3/2 → excludes square-ish viewports / portrait tablets
-   max-height: 600px    → excludes landscape tablets
-   =========================================================================== */
+/* Landscape phones only */
 @media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) and (min-aspect-ratio: 3/2) {
   body { padding-top: 0; }
   header { padding: calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) calc(4px * var(--ui-scale)); padding-top: 10px; }
@@ -201,4 +162,66 @@ button:active { filter: brightness(0.8); }
   .menu { max-height: calc(100vh - 12px); padding: 8px; }
   .menu button { padding: 8px 10px; margin-bottom: 4px; font-size: calc(13px * var(--ui-scale)); }
   .menu-title { padding-bottom: 4px; margin-bottom: 6px; font-size: calc(12px * var(--ui-scale)); }
+  /* Landscape edit mode: tighter horizontal margins */
+  #edit-textarea { padding-top: calc(24px * var(--ui-scale)); padding-left: calc(40px * var(--ui-scale)); padding-right: calc(40px * var(--ui-scale)); }
+}
+
+/* Focus suppression for non-interactive click targets */
+.note-item:focus,
+.note-content-wrap:focus,
+.note-expand-bar:focus,
+.note-menu-trigger:focus,
+.pin-icon:focus { outline: none !important; }
+
+/* Full-screen note editor (autosave) — fills viewport, no box */
+#edit-textarea {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: calc(64px * var(--ui-scale) + env(safe-area-inset-top, 0px)) calc(24px * var(--ui-scale)) calc(140px + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px)) calc(24px * var(--ui-scale));
+  background: var(--bg);
+  color: var(--text);
+  border: none;
+  font-family: inherit;
+  font-size: calc(16px * var(--ui-scale));
+  line-height: 1.6;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  user-select: text;
+  -webkit-user-select: text;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+  z-index: 500;
+  max-height: none;
+  min-height: 0;
+}
+
+
+/* Short screens (any orientation): collapse the header entirely so the
+   content has more vertical room. Overrides both the base layout and the
+   scrolled transform. */
+@media (max-height: 500px) {
+  header,
+  header.scrolled {
+    transform: translateY(-100%);
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: none;
+  }
+  #app-title { max-height: 0; opacity: 0; margin: 0; }
+  /* Pull the screens up since the fixed header no longer pads the top. */
+  .screen { padding-top: calc(20px * var(--ui-scale)); }
+  /* FAB + toast ride a bit lower without the header. */
+  #fab-btn { bottom: 20px; }
+  #toast { bottom: 20px; }
 }

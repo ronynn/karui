@@ -1,13 +1,11 @@
 import { playSound, tryRunGame } from './extras.js'
 
-// Recurrence token only; the trailing body captures everything else — including
-// any `@HHMM` the user typed, which we deliberately keep in the note text.
+// Recurrence token only; trailing body captures the rest (incl. @HHMM).
 const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+([\s\S]+)$/i
 const FUTURE_BUFFER = 3
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})([ap])?(?=\s|$)/
-// Reserved prefixes — a note whose *trimmed* text starts with `%s` (either
-// followed by whitespace or nothing at all) is search syntax, never a note.
+// Reserved search prefix — notes never start with this.
 const SEARCH_PREFIX_RE = /^%s(?:\s|$)/
 const SEARCH_ACTIVE_RE = /^%s\s/
 
@@ -17,21 +15,18 @@ export function parseReminderTime(text)
   if (!m) return null
   let h = parseInt(m[1], 10)
   const mi = parseInt(m[2], 10)
-  const suffix = m[3]   // 'a' | 'p' | undefined
+  const suffix = m[3]
   if (mi > 59) return null
-
   if (suffix)
   {
-    // 12h mode: hour must be 1–12. Convert to 24h.
     if (h < 1 || h > 12) return null
     if (suffix === 'p' && h !== 12) h += 12
-    if (suffix === 'a' && h === 12) h = 0     // 12am → 00:00
+    if (suffix === 'a' && h === 12) h = 0
   }
   else
   {
     if (h > 23) return null
   }
-
   return String(h).padStart(2, '0') + ':' + m[2]
 }
 
@@ -46,7 +41,6 @@ export function stripReminderTime(text)
 export function createNotesModule()
 {
   return {
-    // --- state ---
     noteCategories: ['Inbox'],
     activeCategory: 'Main',
     notes: [],
@@ -68,30 +62,20 @@ export function createNotesModule()
     _cacheKey: '',
     _dirtyNotes: true,
 
-    // --- expand/collapse state (in-memory only) ---
     _expandedNotes: {},
     _noteNeedsExpand: {},
     _noteOverflowObserver: null,
     _noteOverflowMeasurePending: false,
     _resizeDebounce: null,
 
-    // --- tab locking (session-only unlock state; PIN hashes live in categoryMeta) ---
     _unlockedTabs: {},
     modalIsPassword: false,
 
-    // ==================== GETTERS ====================
-
-    // True when the input begins with `%s` + whitespace. Empty term still
-    // counts as active (user is composing) — displayedNotes falls back to
-    // the normal activeCategory view while the term is empty.
     get searchActive()
     {
       return SEARCH_ACTIVE_RE.test(this.noteInput || '')
     },
 
-    // The term after `%s `. Recomputes on every noteInput change, so the
-    // filtered view updates live. Setter exists so any stray write
-    // (e.g. hydrateStore) round-trips through noteInput rather than throwing.
     get searchTerm()
     {
       return this.searchActive ? (this.noteInput || '').slice(2).trim() : ''
@@ -104,7 +88,6 @@ export function createNotesModule()
 
     get displayedNotes()
     {
-      // Live search: filter across all unlocked tabs, ignore activeCategory.
       if (this.searchTerm)
       {
         const q = this.searchTerm.toLowerCase()
@@ -245,8 +228,6 @@ export function createNotesModule()
       return { display: this.noteMenuVisible ? 'block' : 'none', left: `${this.noteMenuPos.x}px`, top: `${this.noteMenuPos.y}px` }
     },
 
-    // ==================== TAB LOCKING ====================
-
     hasLock(tab)
     {
       return !!(this.categoryMeta[tab] && this.categoryMeta[tab].lock)
@@ -359,10 +340,6 @@ export function createNotesModule()
       this.showToast('Locked')
     },
 
-    // ==================== SEARCH ====================
-
-    // Clearing search = clearing noteInput. Called by the search pill's ×
-    // (if you keep one) or manually by the user.
     clearSearch()
     {
       this.noteInput = ''
@@ -374,8 +351,6 @@ export function createNotesModule()
       const el = document.getElementById('note-in')
       if (el) el.style.height = ''
     },
-
-    // ==================== EXPAND / COLLAPSE ====================
 
     toggleNoteExpand(id)
     {
@@ -447,8 +422,6 @@ export function createNotesModule()
         this._measureNoteOverflow()
       )))
     },
-
-    // ==================== RECURRENCE ====================
 
     parseRecurrence(text)
     {
@@ -619,8 +592,6 @@ export function createNotesModule()
       else this.notes.unshift(newNote)
     },
 
-    // ==================== ADD NOTE ====================
-
     addNote(rawText, category, anchorDateStr)
     {
       const v = (rawText || '').trim()
@@ -670,8 +641,6 @@ export function createNotesModule()
       return true
     },
 
-    // ==================== TAB / LIST ACTIONS ====================
-
     toggleSortAlphabetical()
     {
       this.sortAlphabetical = !this.sortAlphabetical
@@ -706,30 +675,21 @@ export function createNotesModule()
       if (!this.keepKeyboard && document.activeElement) document.activeElement.blur()
     },
 
-    // ==================== NOTE SUBMIT ====================
-
     submitNote()
     {
       const v = this.noteInput.trim()
       if (!v) return
-
-      // %s is reserved for live search (see searchTerm getter). Never
-      // saveable — Enter is a no-op so the user can keep browsing results.
       if (SEARCH_PREFIX_RE.test(v)) return
-
       if (this.isTabLocked(this.activeCategory))
       {
         this.showToast('Unlock tab first')
         return
       }
-
       this.addNote(v, this.activeCategory, null)
       this.noteInput = ''
       this._resetNoteInputHeight()
       this.saveData()
     },
-
-    // ==================== NOTE CRUD ====================
 
     toggleNote(n, e)
     {
@@ -805,8 +765,6 @@ export function createNotesModule()
       this.recycleBin = []
       this.saveData()
     },
-
-    // ==================== NOTE MENU ====================
 
     openNoteMenu(e, id)
     {
@@ -885,18 +843,16 @@ export function createNotesModule()
     actionEditNote()
     {
       if (!this.activeNoteMenuId) return
-      let n = this.notes.find(x => x.id === this.activeNoteMenuId)
-      if (n)
-      {
-        this.openPrompt('Edit Note', n.text, val =>
-        {
-          if (val) { n.text = val; n.updatedAt = Date.now(); this.saveData() }
-        })
-      }
+      const n = this.notes.find(x => x.id === this.activeNoteMenuId)
       this.closeAllMenus()
+      if (!n) return
+      if (this.isTabLocked(n.category))
+      {
+        this.showToast('Unlock tab first')
+        return
+      }
+      this.startEdit(n)
     },
-
-    // ==================== TAB CONTEXT MENU ====================
 
     openContextMenu(e, tab)
     {
@@ -919,8 +875,6 @@ export function createNotesModule()
       }
       this.closeAllMenus()
     },
-
-    // ==================== TAB LIFECYCLE ====================
 
     addTab(n)
     {
@@ -1080,20 +1034,9 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // ==================== IMPORT MERGE ====================
-
-    // Merge imported notes with the local store.
-    //
-    // Rules:
-    //   * Match by `id` first, fall back to (text, category).
-    //   * Update when incoming.updatedAt is STRICTLY newer than existing.
-    //   * On tied timestamps, update ONLY if content (text/completed/pinned/
-    //     category) actually differs — a timestamp bump with identical
-    //     content is applied but does NOT count as an "update".
-    //   * Locked destination tabs are skipped and counted.
-    //
-    // Returned counters reflect *user-visible* changes only, so callers can
-    // say "Imported 2, updated 1" without lying about no-op re-imports.
+    // Merge imported notes with local store. Matches by id, falls back to (text, category).
+    // Updates only when incoming is strictly newer, or tied timestamps with real content change.
+    // Tied timestamp + identical content = no-op (not counted as an update).
     mergeNotes(imported)
     {
       if (!Array.isArray(imported)) return { added: 0, updated: 0, skipped: 0 }
@@ -1126,17 +1069,12 @@ export function createNotesModule()
           const incomingNewer = itemUpdatedAt > existingUpdatedAt
           const timestampsTied = itemUpdatedAt === existingUpdatedAt
 
-          // Only true user-visible differences count as "updated".
           const contentChanged =
             existing.text !== n.text ||
             existing.completed !== itemCompleted ||
             existing.pinned !== itemPinned ||
             existing.category !== cat
 
-          // Apply when incoming is strictly newer, OR when timestamps tie
-          // but content genuinely differs (protects against millisecond
-          // collisions). A timestamp bump with identical content is applied
-          // silently — it does NOT increment `updated`.
           if (incomingNewer || (timestampsTied && contentChanged))
           {
             existing.text = n.text

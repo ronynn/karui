@@ -8,7 +8,7 @@ import { createNotesModule } from './notes.js'
 import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './settings.js'
 import { createQrModule } from './qr.js'
 
-// --- LAZY CONFETTI ---
+// Lazy-load confetti so first paint doesn't wait on it.
 let _confettiPromise = null
 function _loadConfetti()
 {
@@ -48,7 +48,7 @@ if (typeof window.confetti !== 'function')
   window.confetti = stub
 }
 
-// --- VANILLA DOM HELPER ---
+// Auto-grow a textarea up to 45vh.
 export function autoExpandTextarea(el)
 {
   if (!el) return
@@ -70,7 +70,7 @@ function mergeModules(...mods)
   return result
 }
 
-// --- HYDRATE PERSISTED STATE BEFORE MOUNT ---
+// Hydrate persisted state from localStorage before mount.
 function hydrateStore(store)
 {
   const ls = (k) =>
@@ -124,7 +124,7 @@ function hydrateStore(store)
 
   store.activeCategory = store.noteCategories[0] || 'Inbox'
 
-  // Session-only state — reset on every cold start.
+  // Session-only state.
   store._unlockedTabs = {}
   store.searchTerm = ''
   store.modalIsPassword = false
@@ -136,28 +136,32 @@ const appStore = reactive(mergeModules(
   createQrModule(),
   createCalendarModule(),
   {
-    // --- shell state ---
     currentScreen: 'home',
     isScrolled: false,
     noteInput: '',
     quoteText: '',
     quoteAuthor: '',
 
-    // --- calendar display preference ---
+    // Calendar display.
     weekStartsMonday: false,
 
-    // --- modal ---
+    // Full-screen note editor (autosave) state.
+    editVisible: false,
+    editNoteId: null,
+    editDraftText: '',
+    _autosaveTimer: null,
+    _vvListener: null,
+
+    // Modal state (still used for rename/new tab/PIN/theme import).
     modalVisible: false,
     modalTitle: '',
     modalInput: '',
     modalCb: null,
 
-    // --- toast ---
     toastVisible: false,
     toastMessage: '',
     toastTimer: null,
 
-    // --- gestures ---
     tabTouchTimer: null,
     touchStartX: 0,
     touchStartY: 0,
@@ -165,7 +169,6 @@ const appStore = reactive(mergeModules(
     touchEndY: 0,
     scrollTicking: false,
 
-    // --- computed shell ---
     get screenOrder()
     {
       return this.calendarEnabled ? ['home', 'calendar', 'settings'] : ['home', 'settings']
@@ -179,7 +182,6 @@ const appStore = reactive(mergeModules(
       return 0
     },
 
-    // --- lifecycle ---
     async init()
     {
       this.noteCategories = [...new Set(this.noteCategories)]
@@ -260,6 +262,17 @@ const appStore = reactive(mergeModules(
           this.calendarRef = initCalendar(this)
         }, 50)
       }
+
+      // Defensive blur for old WebViews that auto-focus a clickable on load.
+      requestAnimationFrame(() => requestAnimationFrame(() =>
+      {
+        const ae = document.activeElement
+        const ni = document.getElementById('note-in')
+        if (ae && ae !== ni && ae !== document.body && typeof ae.blur === 'function')
+        {
+          ae.blur()
+        }
+      }))
     },
 
     saveData()
@@ -317,7 +330,6 @@ const appStore = reactive(mergeModules(
       autoExpandTextarea(el)
     },
 
-    // --- key handling ---
     onInputKeydown(e)
     {
       if (e.key === 'Enter' && !e.shiftKey)
@@ -331,7 +343,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // --- gestures / navigation ---
     handleTouchStart(e)
     {
       if (this.disableSwipe) return
@@ -385,8 +396,7 @@ const appStore = reactive(mergeModules(
         {
           const scrolled = scrollTop > 10
           if (this.isScrolled !== scrolled) this.isScrolled = scrolled
-          // Only touch the reactive store when a menu is actually open —
-          // otherwise we were burning a reactivity pass on every scroll frame.
+          // Only touch the reactive store when a menu is actually open.
           if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
           this.scrollTicking = false
         })
@@ -394,7 +404,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // --- tab long press ---
     handleTabTouchStart(e, tab)
     {
       clearTimeout(this.tabTouchTimer)
@@ -407,11 +416,17 @@ const appStore = reactive(mergeModules(
     handleTabTouchEnd() { clearTimeout(this.tabTouchTimer) },
     handleTabTouchCancel() { clearTimeout(this.tabTouchTimer) },
 
-    // --- FAB ---
     handleFabClick(e)
     {
       if (e && typeof e.preventDefault === 'function') e.preventDefault()
       this.focusNoteInput()
+    },
+
+    // FAB doubles as Done button while the editor is open.
+    onFabClick(e)
+    {
+      if (this.editVisible) this.finishEdit()
+      else this.handleFabClick(e)
     },
 
     focusNoteInput()
@@ -421,7 +436,93 @@ const appStore = reactive(mergeModules(
       if (inp) inp.focus()
     },
 
-    // --- menus / modal / toast ---
+    // Open the full-screen editor. Cursor lands at end.
+    startEdit(note)
+    {
+      if (!note) return
+      this.editNoteId = note.id
+      this.editDraftText = note.text
+      this.editVisible = true
+      this._updateKeyboardPadding()
+      this._bindViewportListener()
+      nextTick(() =>
+      {
+        const el = document.getElementById('edit-textarea')
+        if (!el) return
+        el.focus()
+        const len = el.value.length
+        try { el.selectionStart = el.selectionEnd = len } catch (_) {}
+      })
+    },
+
+    // Debounced autosave. Store updates immediately; localStorage follows in 400ms.
+    autosaveEdit()
+    {
+      if (this.editNoteId == null) return
+      const n = this.notes.find(x => x.id === this.editNoteId)
+      if (!n) return
+      n.text = this.editDraftText
+      n.updatedAt = Date.now()
+      clearTimeout(this._autosaveTimer)
+      this._autosaveTimer = setTimeout(() => this.saveData(), 400)
+    },
+
+    // Compute keyboard height from visualViewport and publish it as --kb-pad.
+    // With interactive-widget=resizes-content: innerHeight and vv.height both
+    // shrink (diff ≈ 0 → small pad). Without it: only vv.height shrinks
+    // (diff = real keyboard → bigger pad). Either way cursor stays visible.
+    _updateKeyboardPadding()
+    {
+      if (!this.editVisible) return
+      const vv = window.visualViewport
+      const kbHeight = vv ? Math.max(0, window.innerHeight - vv.height) : 0
+      const pad = kbHeight > 60 ? (kbHeight + 60) : 0
+      document.documentElement.style.setProperty('--kb-pad', pad + 'px')
+    },
+
+    _bindViewportListener()
+    {
+      if (this._vvListener) return
+      if (!window.visualViewport) return
+      this._vvListener = () => this._updateKeyboardPadding()
+      window.visualViewport.addEventListener('resize', this._vvListener)
+      window.visualViewport.addEventListener('scroll', this._vvListener)
+    },
+
+    _unbindViewportListener()
+    {
+      if (this._vvListener && window.visualViewport)
+      {
+        window.visualViewport.removeEventListener('resize', this._vvListener)
+        window.visualViewport.removeEventListener('scroll', this._vvListener)
+      }
+      this._vvListener = null
+      document.documentElement.style.removeProperty('--kb-pad')
+    },
+
+    // Flush pending save and close the editor.
+    finishEdit()
+    {
+      const id = this.editNoteId
+      this.editVisible = false
+      this.editNoteId = null
+      clearTimeout(this._autosaveTimer)
+      this._unbindViewportListener()
+      if (id != null)
+      {
+        const n = this.notes.find(x => x.id === id)
+        if (n)
+        {
+          n.text = this.editDraftText
+          n.updatedAt = Date.now()
+        }
+        this.saveData()
+      }
+      this.editDraftText = ''
+      const ae = document.activeElement
+      if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur()
+    },
+
     closeAllMenus()
     {
       this.contextMenuVisible = false
@@ -490,7 +591,6 @@ const appStore = reactive(mergeModules(
       if (!e.target.closest('.menu')) this.closeAllMenus()
     },
 
-    // --- data export / import / sync ---
     exportDataCall()
     {
       const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))

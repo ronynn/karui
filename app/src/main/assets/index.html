@@ -8,9 +8,6 @@
     <link rel="modulepreload" href="index.js">
     <script src="quotes.js" defer></script>
 
-
-
-
     <script>
       (function(){try{
         var t=localStorage.getItem('theme')||'gruvbox';
@@ -25,11 +22,6 @@
         if(s){document.documentElement.style.setProperty('--ui-scale',s);}
       }catch(e){}})();
     </script>
-
-
-
-
-
 
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="theme.css">
@@ -48,8 +40,7 @@
       </div>
     </header>
 
-    <div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" 
-      @touchmove.passive="handleTouchMove" @touchend="handleTouchEnd">
+    <div id="viewport" :style="{ transform: `translateX(-${currentScreenIdx * 100}vw)`, width: calendarEnabled ? '300vw' : '200vw' }" @touchstart="handleTouchStart" @touchmove.passive="handleTouchMove" @touchend="handleTouchEnd">
 
       <div class="screen" id="home-screen" @scroll="handleScroll">
         <div class="box">
@@ -84,16 +75,15 @@
                   <span v-if="n.pinned" class="pin-icon">⊢</span>
                   <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
                 </div>
-                <div v-if="_noteNeedsExpand[n.id]" class="note-expand-bar" :class="{ expanded: _expandedNotes[n.id] }" @click.stop="toggleNoteExpand(n.id)">
+                <div v-if="_noteNeedsExpand[n.id]" class="note-expand-bar" tabindex="-1" :class="{ expanded: _expandedNotes[n.id] }" @click.stop="toggleNoteExpand(n.id)">
                   {{ _expandedNotes[n.id] ? 'collapse ↑' : 'expand ↓' }}
                 </div>
               </div>
-              <span class="note-menu-trigger text-muted" @click.stop="openNoteMenu($event, n.id)">:</span>
+              <span class="note-menu-trigger text-muted" tabindex="-1" @click.stop="openNoteMenu($event, n.id)">:</span>
             </div>
           </div>
         </div>
       </div>
-
 
       <div v-if="calendarEnabled" class="screen" id="calendar-screen" @scroll="handleScroll">
         <div class="box">
@@ -101,10 +91,6 @@
           <div id="calendar-container"></div>
         </div>
       </div>
-
-
-
-
 
       <div class="screen" id="settings-screen" @scroll="handleScroll">
         <div class="box">
@@ -156,21 +142,7 @@
                 <span class="slider"></span>
               </label>
             </div>
-            <div class="toggle-container">
-              <span>Disable Screen Swipe</span>
-              <label class="switch">
-                <input type="checkbox" v-model="disableSwipe" @change="saveData">
-                <span class="slider"></span>
-              </label>
-            </div>
 
-            <div class="toggle-container">
-              <span>Start week on Monday</span>
-              <label class="switch">
-                <input type="checkbox" v-model="weekStartsMonday" @change="saveData">
-                <span class="slider"></span>
-              </label>
-            </div>
 
             <div class="toggle-container">
               <span>Add Notes To Bottom</span>
@@ -193,13 +165,6 @@
                 <span class="slider"></span>
               </label>
             </div>
-            <!--          <div class="toggle-container">
-            <span>Double Tap Delete To Delete</span>
-            <label class="switch">
-            <input type="checkbox" v-model="doubleTapDelete" @change="saveData">
-            <span class="slider"></span>
-          </label>
-          </div> -->
             <div class="toggle-container">
               <span>Enter key inserts newline</span>
               <label class="switch">
@@ -207,6 +172,14 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="toggle-container">
+              <span>Disable Screen Swipe</span>
+              <label class="switch">
+                <input type="checkbox" v-model="disableSwipe" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            
             <div class="toggle-container">
               <span>Disable Screenshots</span>
               <label class="switch">
@@ -266,6 +239,13 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="toggle-container">
+              <span>Start week on Monday</span>
+              <label class="switch">
+                <input type="checkbox" v-model="weekStartsMonday" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
             <div style="margin-top: 8px;" v-if="calendarEnabled">
               <label style="font-size: calc(14px * var(--ui-scale)); display: block; margin-bottom: 6px;">Calendar Tab Name:</label>
               <input type="text" style="margin-top: 2px;" :value="calendarTabName" @change="renameCalendarTab($event.target.value)">
@@ -279,10 +259,10 @@
             - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu. Long press from your launcher homescreen to add Karui widgets. <br/>
             - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete individual notes.<br/>
             - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
-            - Add a % symbol on any tabname and it automatically counts percentage of tasks completed. You can also search a term using the syntax %s term.<br/>
+            - Add a % symbol on any tabname and it automatically counts percentage of tasks completed. Use %s term to search a term in your notes.<br/>
             - Recurring notes (BETA): Start a note with !Nx to repeat it.
-            !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly. 
-            !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st. 
+            !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly.
+            !m15 on the 15th of every month · !wsa every Saturday · !y05-01 every May 1st.
             Deleting one occurrence deletes the whole series (and restoring brings it back whole).
             Completing an occurrence automatically queues the next fourth one. Adding time goes like !1d @1500 event.<br/>
             - To pin a note to status bar, add it as a journal/calendar entry for today.<br/>
@@ -331,7 +311,13 @@
       </div>
     </div>
 
-    <div id="fab-btn" v-if="showFab && currentScreen === 'home' && !modalVisible" @click="handleFabClick">&gt;_</div>
+    <div id="fab-btn"
+      v-if="editVisible || (showFab && currentScreen === 'home' && !modalVisible)"
+      @click="onFabClick"
+      :title="editVisible ? 'Done' : 'Quick Input'"
+      :style="editVisible ? { fontSize: 'calc(17px * var(--ui-scale))' } : null">
+      {{ editVisible ? '√s' : '>_' }}
+    </div>
 
     <div id="context-menu" class="menu menu-2col" :style="contextMenuStyle">
       <div class="menu-title">{{ contextTab }}</div>
@@ -351,8 +337,6 @@
       </div>
     </div>
 
-
-
     <div id="note-dropdown" class="menu" :style="noteMenuStyle">
       <div class="note-menu-stats note-menu-stats-top">WC:{{ activeNoteWordCount }}</div>
       <button @click="actionCopyNote">Copy</button>
@@ -362,6 +346,10 @@
       <button @click="actionTogglePinNote">{{ activeNotePinned ? 'Unpin' : 'Pin' }}</button>
       <button @click="actionDeleteNote">Delete</button>
       <div class="note-menu-stats note-menu-stats-bottom">CH: {{ activeNoteCharCount }}</div>
+    </div>
+
+    <div id="edit-overlay" class="edit-overlay" v-if="editVisible">
+      <textarea id="edit-textarea" v-if="editVisible" v-model="editDraftText" @input="autosaveEdit" spellcheck="false"></textarea>   
     </div>
 
     <div id="modal-overlay" v-if="modalVisible">
@@ -412,7 +400,6 @@
 
     <div id="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
 
-
     <div id="theme-import-overlay" v-if="themeImportVisible">
       <div class="modal-box" style="max-width: 480px;">
         <div style="font-weight: bold;">Import Custom Theme</div>
@@ -435,11 +422,6 @@
         </div>
       </div>
     </div>
-
-
-
-
-
 
     <script type="module" src="index.js"></script>
     <script>
