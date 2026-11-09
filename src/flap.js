@@ -31,7 +31,6 @@ const ROT_DOWN = 1.2
 const ROT_VEL_SCALE = 12
 const ROT_LERP = 0.15
 
-const PULSE_DECAY_MS = 120
 const SHAKE_FRAMES = 12
 const FLASH_FRAMES = 5
 
@@ -39,9 +38,32 @@ const FIXED_MS = 1000 / 60
 const MAX_STEPS_PER_FRAME = 5
 const MAX_FRAME_MS = 100
 
+const PARTICLE_LIFE = 10
+
 let session = null
 
 function lerp(a, b, t) { return a + (b - a) * t }
+
+// Font state is cached per-session; assigning ctx.font re-parses the string,
+// so avoid it on every draw when the value hasn't changed.
+function setFont(s, ctx, font)
+{
+  if (s._font !== font) { ctx.font = font; s._font = font }
+}
+
+// localStorage.setItem is a synchronous IPC to the browser process on
+// Android WebView (often 1-10 ms). Do NOT call it inside the game loop.
+// We keep the high score in memory and flush once, when the round ends.
+function persistHighScore()
+{
+  if (!session) return
+  try { localStorage.setItem('flap_highscore', String(session.highScore)) } catch (e) {}
+}
+
+function handlePageHide()
+{
+  persistHighScore()
+}
 
 export function startFlapGame()
 {
@@ -67,19 +89,28 @@ export function startFlapGame()
   canvas.className = 'game-canvas'
   Object.assign(canvas.style, {
     border: `2px solid ${theme.border}`,
-    backgroundColor: theme.bg,   // pre-draw state blends with overlay bg
+    backgroundColor: theme.bg,
     aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
     width: '94%',
     height: 'auto',
     maxHeight: '72vh',
-    touchAction: 'manipulation'
+    touchAction: 'manipulation',
+    // Give the canvas its own composited layer so the overlay/page
+    // doesn't have to repaint when the canvas contents change.
+    display: 'block',
+    willChange: 'transform',
+    transform: 'translateZ(0)',
+    imageRendering: 'pixelated',
+    contain: 'paint'
   })
   overlay.contentHost.appendChild(canvas)
 
-  const ctx = canvas.getContext('2d', { alpha: false })
+  // `desynchronized: true` lets the compositor show the frame immediately
+  // instead of queueing it, cutting ~1 frame of latency on Chromium WebView.
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true })
   ctx.imageSmoothingEnabled = false
-  // Paint the canvas with --bg immediately. Until draw() runs, the canvas
-  // looks identical to the overlay behind it -- no flash of black/surface.
+  // Paint the canvas with --bg immediately so the first paint matches the
+  // overlay background (no flash of black/surface).
   ctx.fillStyle = theme.bg
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
 
@@ -94,7 +125,7 @@ export function startFlapGame()
   const particles = []
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
-    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0 })
+    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, size: 0, life: 0 })
   }
 
   const heights = new Float32Array(TRACK_SIZE)
@@ -112,11 +143,14 @@ export function startFlapGame()
     theme,
     highScore,
     highScoreBeaten: false,
+    // Score text is cached: template literals allocate every frame otherwise.
+    scoreText: 'PTS 0',
+    hiText: `HI ${highScore}`,
     pipes,
     particles,
     heights,
     trackIndex: 0,
-    bird: { y: CANVAS_H / 2, prevY: CANVAS_H / 2, vy: 0, pulse: 0, rot: 0, prevRot: 0 },
+    bird: { y: CANVAS_H / 2, prevY: CANVAS_H / 2, vy: 0, rot: 0, prevRot: 0 },
     spawnAccumulator: 0,
     score: 0,
     started: false,
@@ -126,13 +160,28 @@ export function startFlapGame()
     lastFrame: 0,
     accumulator: 0,
     alpha: 0,
+    needsDraw: true,
+    _font: '',
     rafId: null,
-    applyCanvasSize: null
+    applyCanvasSize: null,
+    onViewportChange: null
   }
 
   resetFlapGame()
 
-  setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 300)
+  // Preload confetti on idle, NOT mid-run. `ensureConfettiLoaded` appends
+  // a <script> tag; its fetch + compile + execute would otherwise land
+  // right in the middle of the game and cause a visible hitch.
+  // requestIdleCallback fires between frames when the main thread is free;
+  // the timeout guarantees it eventually runs even if the thread stays busy.
+  if (typeof requestIdleCallback === 'function')
+  {
+    requestIdleCallback(() => { ensureConfettiLoaded().catch(() => {}) }, { timeout: 1500 })
+  }
+  else
+  {
+    setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 1200)
+  }
 
   function applyCanvasSize()
   {
@@ -150,15 +199,31 @@ export function startFlapGame()
       canvas.style.maxHeight = '72vh'
       canvas.style.maxWidth = ''
     }
-    // Reading clientWidth forces layout; if the box isn't ready yet, retry
-    // on the next frame instead of leaving the canvas blank.
+    // Reading clientWidth forces layout. Only draw when the box is actually
+    // big enough; otherwise the first rAF fallback below will retry.
     if (canvas.clientWidth > 100 && canvas.clientHeight > 100)
     {
       try { draw() } catch (e) {}
+      if (session) session.needsDraw = false
     }
   }
 
   session.applyCanvasSize = applyCanvasSize
+
+  // Coalesce resize/orientationchange bursts into a single rAF callback.
+  // The URL bar never shows in this app, so continuous resize storms aren't
+  // a concern, but orientationchange can fire several times in a row.
+  let resizeRaf = 0
+  const onViewportChange = () =>
+  {
+    if (resizeRaf) return
+    resizeRaf = requestAnimationFrame(() =>
+    {
+      resizeRaf = 0
+      if (session) applyCanvasSize()
+    })
+  }
+  session.onViewportChange = onViewportChange
 
   // Draw synchronously; no paint can happen between here and the return
   // of startFlapGame(), so the first frame already shows content.
@@ -168,8 +233,9 @@ export function startFlapGame()
     requestAnimationFrame(applyCanvasSize)
   }
 
-  window.addEventListener('resize', applyCanvasSize)
-  window.addEventListener('orientationchange', applyCanvasSize)
+  window.addEventListener('resize', onViewportChange)
+  window.addEventListener('orientationchange', onViewportChange)
+  window.addEventListener('pagehide', handlePageHide)
 
   const handleTap = (e) =>
   {
@@ -189,10 +255,11 @@ export function stopFlapGame()
   if (!session) return
   if (session.rafId) cancelAnimationFrame(session.rafId)
   window.removeEventListener('keydown', handleKey)
-  if (session.applyCanvasSize)
+  window.removeEventListener('pagehide', handlePageHide)
+  if (session.onViewportChange)
   {
-    window.removeEventListener('resize', session.applyCanvasSize)
-    window.removeEventListener('orientationchange', session.applyCanvasSize)
+    window.removeEventListener('resize', session.onViewportChange)
+    window.removeEventListener('orientationchange', session.onViewportChange)
   }
   session.overlay.remove()
   session = null
@@ -219,10 +286,12 @@ function flapAction()
   if (!s.started) s.started = true
   try { getGameAudioContext() } catch (e) {}
   s.bird.vy = BIRD_LIFT
-  s.bird.pulse = 1
   spawnJumpParticles(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H)
 }
 
+// Particles leave from under the bird and trail down-and-left in a puff,
+// angled 20°–55° below horizontal (mirroring the bird's downward flap).
+// They grow slightly and fade out as they die.
 function spawnJumpParticles(x, y)
 {
   const s = session
@@ -233,12 +302,15 @@ function spawnJumpParticles(x, y)
     const p = s.particles[i]
     if (!p.active)
     {
+      const angle = (20 + Math.random() * 35) * Math.PI / 180
+      const speed = 1.0 + Math.random() * 1.5
       p.active = true
-      p.x = x
-      p.y = y
-      p.vx = (Math.random() - 0.5) * 2.5
-      p.vy = Math.random() * 1.5 + 0.5
-      p.life = 10
+      p.x = x + (Math.random() - 0.5) * BIRD_W * 0.7
+      p.y = y + Math.random() * 2
+      p.vx = -Math.cos(angle) * speed   // always leftward
+      p.vy = Math.sin(angle) * speed    // always downward
+      p.size = 3 + Math.random() * 2    // 3–5 px base
+      p.life = PARTICLE_LIFE
       spawned++
     }
   }
@@ -250,7 +322,8 @@ function resetFlapHighScore()
   if (!s) return
   s.highScore = 0
   s.highScoreBeaten = false
-  localStorage.setItem('flap_highscore', '0')
+  s.hiText = 'HI 0'
+  try { localStorage.setItem('flap_highscore', '0') } catch (e) {}
   resetFlapGame()
 }
 
@@ -261,7 +334,6 @@ function resetFlapGame()
   s.bird.y = CANVAS_H / 2
   s.bird.prevY = s.bird.y
   s.bird.vy = 0
-  s.bird.pulse = 0
   s.bird.rot = 0
   s.bird.prevRot = 0
   for (let i = 0; i < MAX_PIPES; i++)
@@ -276,12 +348,14 @@ function resetFlapGame()
   s.trackIndex = 0
   s.spawnAccumulator = 0
   s.score = 0
+  s.scoreText = 'PTS 0'
   s.started = false
   s.gameOver = false
   s.shakeFrames = 0
   s.flashFrames = 0
   s.accumulator = 0
   s.alpha = 0
+  s.needsDraw = true
 }
 
 function spawnPipe()
@@ -313,12 +387,14 @@ function triggerGameOver()
   s.gameOver = true
   s.shakeFrames = SHAKE_FRAMES
   s.flashFrames = FLASH_FRAMES
+  s.needsDraw = true
   playGameSound('gameover')
   if (navigator.vibrate) navigator.vibrate(200)
   if (s.score > s.highScore)
   {
     s.highScore = s.score
-    localStorage.setItem('flap_highscore', s.highScore.toString())
+    s.hiText = `HI ${s.highScore}`
+    persistHighScore()   // one synchronous write, at round end
   }
 }
 
@@ -332,8 +408,6 @@ function update()
 
   const targetRot = Math.max(ROT_UP, Math.min(ROT_DOWN, s.bird.vy / ROT_VEL_SCALE))
   s.bird.rot += (targetRot - s.bird.rot) * ROT_LERP
-
-  s.bird.pulse *= Math.exp(-FIXED_MS / PULSE_DECAY_MS)
 
   s.spawnAccumulator += FIXED_MS
   if (s.spawnAccumulator >= PIPE_SPAWN_MS)
@@ -352,6 +426,7 @@ function update()
     {
       p.passed = true
       s.score++
+      s.scoreText = `PTS ${s.score}`
       playGameSound('score')
       if (s.score > s.highScore)
       {
@@ -362,7 +437,8 @@ function update()
           s.highScoreBeaten = true
         }
         s.highScore = s.score
-        localStorage.setItem('flap_highscore', s.highScore.toString())
+        s.hiText = `HI ${s.highScore}`
+        // NO localStorage write here — persisted on game over.
       }
     }
 
@@ -435,7 +511,19 @@ function loop(now)
   if (s.shakeFrames > 0) s.shakeFrames--
   if (s.flashFrames > 0) s.flashFrames--
 
-  draw()
+  // Skip drawing on frames where nothing can have visually changed:
+  // pre-start idle (waiting for first tap) and fully-settled game over.
+  const active =
+    (s.started && !s.gameOver) ||
+    s.shakeFrames > 0 ||
+    s.flashFrames > 0 ||
+    s.needsDraw
+  if (active)
+  {
+    s.needsDraw = false
+    draw()
+  }
+
   s.rafId = requestAnimationFrame(loop)
 }
 
@@ -481,41 +569,46 @@ function draw()
   ctx.fillStyle = theme.accent
   ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, 4)
 
-  ctx.fillStyle = theme.accent
+  // Particles: grow slightly as they fade out (puff effect), in text color
+  // so they read as distinct from the accent-colored bird and pipes.
+  ctx.fillStyle = theme.text
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
     const p = s.particles[i]
-    if (p.active) ctx.fillRect(p.x, p.y, 3, 3)
+    if (!p.active) continue
+    const t = p.life / PARTICLE_LIFE               // 1 (new) → 0 (dead)
+    ctx.globalAlpha = t
+    const sz = p.size * (1.5 - t * 0.5)            // 1× → 1.5× as it fades
+    ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz)
   }
+  ctx.globalAlpha = 1
 
+  // Bird: pure rotation, no squash/stretch.
   const birdY = lerp(s.bird.prevY, s.bird.y, alpha)
   const birdRot = lerp(s.bird.prevRot, s.bird.rot, alpha)
-  const pulse = s.bird.pulse
-  const w = BIRD_W * (1 + pulse * 0.15)
-  const h = BIRD_H * (1 - pulse * 0.15)
 
   ctx.save()
   ctx.translate(BIRD_X + BIRD_W / 2, birdY + BIRD_H / 2)
   ctx.rotate(birdRot)
   ctx.fillStyle = theme.accent
-  ctx.fillRect(-w / 2, -h / 2, w, h)
+  ctx.fillRect(-BIRD_W / 2, -BIRD_H / 2, BIRD_W, BIRD_H)
   ctx.fillStyle = theme.accentTxt
-  ctx.fillRect(w / 2 - 6, -h / 2 + 4, 4, 4)
+  ctx.fillRect(BIRD_W / 2 - 6, -BIRD_H / 2 + 4, 4, 4)
   ctx.restore()
 
   ctx.restore()
 
+  setFont(s, ctx, 'bold 16px monospace')
   ctx.fillStyle = theme.text
-  ctx.font = 'bold 16px monospace'
   ctx.textAlign = 'left'
-  ctx.fillText(`PTS ${s.score}`, 12, 28)
+  ctx.fillText(s.scoreText, 12, 28)
   ctx.textAlign = 'right'
-  ctx.fillText(`HI ${s.highScore}`, CANVAS_W - 12, 28)
+  ctx.fillText(s.hiText, CANVAS_W - 12, 28)
 
   if (!s.started && !s.gameOver)
   {
+    setFont(s, ctx, '15px monospace')
     ctx.fillStyle = theme.text
-    ctx.font = '15px monospace'
     ctx.textAlign = 'center'
     ctx.fillText('Tap or Space to Jump', CANVAS_W / 2, CANVAS_H / 2)
   }
@@ -524,11 +617,11 @@ function draw()
   {
     ctx.fillStyle = 'rgba(0,0,0,0.5)'
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    setFont(s, ctx, 'bold 26px monospace')
     ctx.fillStyle = '#fff'
-    ctx.font = 'bold 26px monospace'
     ctx.textAlign = 'center'
     ctx.fillText('GAME OVER', CANVAS_W / 2, CANVAS_H / 2 - 10)
-    ctx.font = 'bold 14px monospace'
+    setFont(s, ctx, 'bold 14px monospace')
     ctx.fillText('Tap Canvas to Restart', CANVAS_W / 2, CANVAS_H / 2 + 20)
   }
 
