@@ -19,6 +19,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -41,11 +42,10 @@ public class MainActivity extends Activity
 {
   // ═══════════════════════════════════════════════════════════════
   //  SECTION 1 — CONSTANTS
-  //  Request codes and prefs keys are package-private because
-  //  WebAppInterface uses them when delegating intents/results.
   // ═══════════════════════════════════════════════════════════════
 
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
+  public static final String ACTION_OPEN_FLOATING = "io.github.ronynn.karui.ACTION_OPEN_FLOATING";
 
   static final int CREATE_FILE_REQUEST_CODE = 1;
   static final int IMPORT_FILE_REQUEST_CODE = 2;
@@ -61,12 +61,12 @@ public class MainActivity extends Activity
   private static final String KEY_SYNC_URI = "sync_file_uri";
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
+  private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
 
   private static final int WEBVIEW_BG_COLOR = 0xFF000000;
 
   // ═══════════════════════════════════════════════════════════════
   //  SECTION 2 — FIELDS
-  //  Package-private fields below are accessed by WebAppInterface.
   // ═══════════════════════════════════════════════════════════════
 
   private WebView mWebView;
@@ -102,20 +102,30 @@ public class MainActivity extends Activity
     super.onCreate(savedInstanceState);
 
     Intent launchIntent = getIntent();
-    boolean assistLaunch = launchIntent != null
-        && Intent.ACTION_ASSIST.equals(launchIntent.getAction());
+    String action = launchIntent != null ? launchIntent.getAction() : null;
 
-    // ── ASSIST fast path ──────────────────────────────────────────
-    if (assistLaunch)
+    boolean assistLaunch = Intent.ACTION_ASSIST.equals(action);
+    boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
+    boolean floatingTrigger = assistLaunch || tileLaunch;
+
+    // ── Floating-window fast path ─────────────────────────────────
+    if (floatingTrigger && canDrawOverlays())
     {
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-      if (BubbleManager.showBubble(this))
+      try
       {
+        startService(new Intent(this, FloatingWindowService.class));
         finishAndRemoveTask();
         overridePendingTransition(0, 0);
         return;
       }
-      // Bubble unavailable (API <29) — fall through to full UI.
+      catch (Exception e)
+      {
+        Toast.makeText(this,
+            "Could not open floating window: " + e.getMessage(),
+            Toast.LENGTH_LONG).show();
+        // fall through to full UI
+      }
     }
 
     // ── Normal / fallback launch ──────────────────────────────────
@@ -200,9 +210,7 @@ public class MainActivity extends Activity
     });
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-    {
       mWebView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
-    }
 
     mWebView.loadUrl("file:///android_asset/index.html");
 
@@ -228,6 +236,13 @@ public class MainActivity extends Activity
         CalendarNotificationReceiver.scheduleEventReminders(this);
       }
     });
+
+    // If the floating path was requested but permission is missing,
+    // explain once and stay in the full app.
+    if (floatingTrigger && !canDrawOverlays())
+    {
+      onboardOverlayPermission();
+    }
   }
 
   @Override
@@ -259,13 +274,21 @@ public class MainActivity extends Activity
   {
     super.onNewIntent(intent);
     setIntent(intent);
-    if (intent != null && Intent.ACTION_ASSIST.equals(intent.getAction()))
+
+    if (intent == null) return;
+    String action = intent.getAction();
+    boolean floatingTrigger = Intent.ACTION_ASSIST.equals(action)
+        || ACTION_OPEN_FLOATING.equals(action);
+
+    if (floatingTrigger && canDrawOverlays())
     {
-      if (BubbleManager.showBubble(this))
+      try
       {
+        startService(new Intent(this, FloatingWindowService.class));
         finishAndRemoveTask();
         overridePendingTransition(0, 0);
       }
+      catch (Exception e) { e.printStackTrace(); }
     }
   }
 
@@ -468,7 +491,55 @@ public class MainActivity extends Activity
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  SECTION 4 — DATA INJECTION (called by receiver + lifecycle)
+  //  SECTION 4 — OVERLAY PERMISSION
+  // ═══════════════════════════════════════════════════════════════
+
+  boolean canDrawOverlays()
+  {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      return Settings.canDrawOverlays(this);
+    return true;
+  }
+
+  void openOverlaySettings()
+  {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+    try
+    {
+      Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+          Uri.parse("package:" + getPackageName()));
+      startActivity(i);
+    }
+    catch (Exception e)
+    {
+      try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)); }
+      catch (Exception ignored) {}
+    }
+  }
+
+  private void onboardOverlayPermission()
+  {
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    boolean prompted = prefs.getBoolean(KEY_OVERLAY_PROMPTED, false);
+    if (!prompted)
+    {
+      prefs.edit().putBoolean(KEY_OVERLAY_PROMPTED, true).apply();
+      Toast.makeText(this,
+          "Enable 'Display over other apps' for Karui to float over other apps.",
+          Toast.LENGTH_LONG).show();
+      openOverlaySettings();
+    }
+    else
+    {
+      Toast.makeText(this,
+          "Floating window needs 'Display over other apps' permission. "
+              + "Grant it from Settings → Privacy protection → Special permissions.",
+          Toast.LENGTH_LONG).show();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SECTION 5 — DATA INJECTION
   // ═══════════════════════════════════════════════════════════════
 
   private void injectPendingNotes() { injectPendingNotes(0); }
@@ -555,7 +626,7 @@ public class MainActivity extends Activity
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  SECTION 5 — PERMISSION RESULT ROUTING
+  //  SECTION 6 — PERMISSION RESULT ROUTING
   // ═══════════════════════════════════════════════════════════════
 
   @Override

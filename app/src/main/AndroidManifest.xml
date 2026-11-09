@@ -7,6 +7,7 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
   <application
     android:allowBackup="true"
@@ -94,6 +95,10 @@
 
     <!-- NEW: Quick Settings Tile -->
     <service
+      android:name=".FloatingWindowService"
+      android:exported="false" />
+
+    <service
       android:name=".KaruiTileService"
       android:label="Karui Notes"
       android:icon="@drawable/ic_note"
@@ -103,9 +108,6 @@
         <action android:name="android.service.quicksettings.action.QS_TILE" />
       </intent-filter>
     </service>
-
-    <!-- OverlayService removed entirely -->
-    <!-- SYSTEM_ALERT_WINDOW permission removed entirely -->
 
   </application>
 </manifest>

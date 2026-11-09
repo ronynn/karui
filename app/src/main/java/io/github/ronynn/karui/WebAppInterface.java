@@ -42,7 +42,7 @@ public class WebAppInterface
     if (a == null) return;
 
     a.pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty())
-        ? defaultFileName : "file.md";
+      ? defaultFileName : "file.md";
     a.pendingFileData = currentContent != null ? currentContent : "";
 
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -51,14 +51,14 @@ public class WebAppInterface
     intent.putExtra(Intent.EXTRA_TITLE, a.pendingFileName);
 
     try
-    {
-      a.startActivityForResult(intent, MainActivity.SYNC_FILE_REQUEST_CODE);
-    }
+      {
+        a.startActivityForResult(intent, MainActivity.SYNC_FILE_REQUEST_CODE);
+      }
     catch (ActivityNotFoundException e)
-    {
-      a.runOnUiThread(() -> Toast.makeText(a,
-          "No document picker found on device.", Toast.LENGTH_SHORT).show());
-    }
+      {
+        a.runOnUiThread(() -> Toast.makeText(a,
+                                             "No document picker found on device.", Toast.LENGTH_SHORT).show());
+      }
   }
 
   @JavascriptInterface
@@ -68,24 +68,24 @@ public class WebAppInterface
     if (a == null || filePath == null || filePath.trim().isEmpty()) return;
 
     try
-    {
-      Uri uri = Uri.parse(filePath);
-      OutputStream out = a.getContentResolver().openOutputStream(uri, "rwt");
-      if (out == null) out = a.getContentResolver().openOutputStream(uri);
-      if (out != null)
       {
-        out.write(content.getBytes());
-        out.close();
+        Uri uri = Uri.parse(filePath);
+        OutputStream out = a.getContentResolver().openOutputStream(uri, "rwt");
+        if (out == null) out = a.getContentResolver().openOutputStream(uri);
+        if (out != null)
+        {
+          out.write(content.getBytes());
+          out.close();
 
-        Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-        updateIntent.setPackage(a.getPackageName());
-        a.sendBroadcast(updateIntent);
+          Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+          updateIntent.setPackage(a.getPackageName());
+          a.sendBroadcast(updateIntent);
+        }
       }
-    }
     catch (Exception e)
-    {
-      e.printStackTrace();
-    }
+      {
+        e.printStackTrace();
+      }
   }
 
   @JavascriptInterface
@@ -109,14 +109,14 @@ public class WebAppInterface
     intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
 
     try
-    {
-      a.startActivityForResult(intent, MainActivity.IMPORT_MD_FILE_REQUEST_CODE);
-    }
+      {
+        a.startActivityForResult(intent, MainActivity.IMPORT_MD_FILE_REQUEST_CODE);
+      }
     catch (ActivityNotFoundException e)
-    {
-      a.runOnUiThread(() -> Toast.makeText(a,
-          "No document picker found", Toast.LENGTH_SHORT).show());
-    }
+      {
+        a.runOnUiThread(() -> Toast.makeText(a,
+                                             "No document picker found", Toast.LENGTH_SHORT).show());
+      }
   }
 
   @JavascriptInterface
@@ -157,28 +157,28 @@ public class WebAppInterface
     if (a == null) return;
 
     a.runOnUiThread(() ->
-    {
-      if (enable)
-      {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-               != PackageManager.PERMISSION_GRANTED)
-        {
-          a.pendingQuickNoteEnable = true;
-          a.requestPermissions(
-              new String[]{Manifest.permission.POST_NOTIFICATIONS},
-              MainActivity.NOTIFICATION_PERMISSION_REQUEST);
-          return;
-        }
-        NotificationHelper.setEnabled(a, true);
-        NotificationHelper.show(a, false);
-      }
-      else
-      {
-        NotificationHelper.setEnabled(a, false);
-        NotificationHelper.cancel(a);
-      }
-    });
+                    {
+                      if (enable)
+                      {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED)
+                        {
+                          a.pendingQuickNoteEnable = true;
+                          a.requestPermissions(
+                            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
+                          return;
+                        }
+                        NotificationHelper.setEnabled(a, true);
+                        NotificationHelper.show(a, false);
+                      }
+                      else
+                      {
+                        NotificationHelper.setEnabled(a, false);
+                        NotificationHelper.cancel(a);
+                      }
+                    });
   }
 
   @JavascriptInterface
@@ -206,10 +206,10 @@ public class WebAppInterface
     MainActivity a = act();
     if (a == null) return;
     a.runOnUiThread(() ->
-    {
-      if (disable) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-      else         a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-    });
+                    {
+                      if (disable) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                      else         a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                    });
   }
 
   // ── Bubble / overlay compatibility stubs ────────────────────────
@@ -217,7 +217,10 @@ public class WebAppInterface
   @JavascriptInterface
   public boolean isOverlayPermissionGranted()
   {
-    // Bubble API requires no overlay permission.
+    MainActivity a = act();
+    if (a == null) return false;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      return Settings.canDrawOverlays(a);
     return true;
   }
 
@@ -254,40 +257,40 @@ public class WebAppInterface
     if (a == null) return;
     if (json == null) json = "[]";
     SharedPreferences prefs = a.getSharedPreferences(
-        CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
+      CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
     String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
 
     prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
 
     try
-    {
-      JSONArray oldArr = new JSONArray(oldJson);
-      JSONArray newArr = new JSONArray(json);
-      NotificationManager nm = (NotificationManager) a.getSystemService(Context.NOTIFICATION_SERVICE);
-      if (nm != null)
       {
-        for (int i = 0; i < oldArr.length(); i++)
+        JSONArray oldArr = new JSONArray(oldJson);
+        JSONArray newArr = new JSONArray(json);
+        NotificationManager nm = (NotificationManager) a.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null)
         {
-          JSONObject oldO = oldArr.getJSONObject(i);
-          int oldId = oldO.optInt("id", 0);
-          boolean stillActive = false;
-          for (int j = 0; j < newArr.length(); j++)
-          {
-            JSONObject newO = newArr.getJSONObject(j);
-            if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
+          for (int i = 0; i < oldArr.length(); i++)
             {
-              stillActive = true;
-              break;
+              JSONObject oldO = oldArr.getJSONObject(i);
+              int oldId = oldO.optInt("id", 0);
+              boolean stillActive = false;
+              for (int j = 0; j < newArr.length(); j++)
+                {
+                  JSONObject newO = newArr.getJSONObject(j);
+                  if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
+                  {
+                    stillActive = true;
+                    break;
+                  }
+                }
+              if (!stillActive)
+              {
+                nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE
+                          + Math.abs(oldId % 100000));
+              }
             }
-          }
-          if (!stillActive)
-          {
-            nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE
-                + Math.abs(oldId % 100000));
-          }
         }
       }
-    }
     catch (Exception ignored) {}
 
     if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
@@ -305,52 +308,52 @@ public class WebAppInterface
     if (a == null) return;
 
     SharedPreferences prefs = a.getSharedPreferences(
-        CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
+      CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
     boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
     prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
 
     final boolean justEnabled = enabled && !wasEnabled;
 
     a.runOnUiThread(() ->
-    {
-      if (enabled)
-      {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-               != PackageManager.PERMISSION_GRANTED)
-        {
-          a.requestPermissions(
-              new String[]{Manifest.permission.POST_NOTIFICATIONS},
-              MainActivity.NOTIFICATION_PERMISSION_REQUEST);
-        }
+                    {
+                      if (enabled)
+                      {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED)
+                        {
+                          a.requestPermissions(
+                            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
+                        }
 
-        if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-        {
-          AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
-          if (am != null && !am.canScheduleExactAlarms())
-          {
-            Toast.makeText(a,
-                "Allow 'Alarms & reminders' so calendar reminders fire on time.",
-                Toast.LENGTH_LONG).show();
-            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-            i.setData(Uri.parse("package:" + a.getPackageName()));
-            try { a.startActivity(i); } catch (Exception ignored) {}
-          }
-        }
+                        if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                        {
+                          AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
+                          if (am != null && !am.canScheduleExactAlarms())
+                          {
+                            Toast.makeText(a,
+                                           "Allow 'Alarms & reminders' so calendar reminders fire on time.",
+                                           Toast.LENGTH_LONG).show();
+                            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                            i.setData(Uri.parse("package:" + a.getPackageName()));
+                            try { a.startActivity(i); } catch (Exception ignored) {}
+                          }
+                        }
 
-        CalendarNotificationReceiver.scheduleNext(a);
-        CalendarNotificationReceiver.scheduleEventReminders(a);
+                        CalendarNotificationReceiver.scheduleNext(a);
+                        CalendarNotificationReceiver.scheduleEventReminders(a);
 
-        if (justEnabled)
-        {
-          Intent show = new Intent(a, CalendarNotificationReceiver.class);
-          a.sendBroadcast(show);
-        }
-      }
-      else
-      {
-        CalendarNotificationReceiver.cancel(a);
-      }
-    });
+                        if (justEnabled)
+                        {
+                          Intent show = new Intent(a, CalendarNotificationReceiver.class);
+                          a.sendBroadcast(show);
+                        }
+                      }
+                      else
+                      {
+                        CalendarNotificationReceiver.cancel(a);
+                      }
+                    });
   }
 }

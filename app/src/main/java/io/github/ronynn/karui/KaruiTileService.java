@@ -12,21 +12,20 @@ public class KaruiTileService extends TileService
   {
     super.onClick();
 
-    // Create a PendingIntent to show the bubble.
     Intent intent = new Intent(this, MainActivity.class);
-    intent.setAction(Intent.ACTION_ASSIST); // Reuse the ASSIST path
-    PendingIntent pendingIntent = PendingIntent.getActivity(
-        this, 0, intent,
-        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-    );
+    intent.setAction(MainActivity.ACTION_OPEN_FLOATING);
+    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-    // Use the PendingIntent overload for API 34+.
-    // For older versions, startActivityAndCollapse(Intent) is used internally.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        startActivityAndCollapse(pendingIntent);
-    } else {
-        //noinspection deprecation
-        startActivityAndCollapse(intent);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    {
+      PendingIntent pi = PendingIntent.getActivity(
+          this, 0, intent,
+          PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+      startActivityAndCollapse(pi);
+    }
+    else
+    {
+      startActivityAndCollapse(intent);
     }
   }
 }
