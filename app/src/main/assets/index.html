@@ -32,8 +32,7 @@
     <link rel="stylesheet" href="games.css">
   </head>
 
-  <body v-scope v-cloak :class="{ 'no-transitions': removeTransitions }" @vue:mounted="init">
-
+<body v-scope v-cloak :class="{ 'no-transitions': removeTransitions, 'no-fab': !showFab }" @vue:mounted="init">
     <header id="top-bar" :class="{ scrolled: isScrolled }">
       <div id="app-title">Karui</div>
       <div class="pivot-container">
@@ -326,13 +325,13 @@
       </div>
     </div>
 
-    <div id="fab-btn"
-      v-if="editVisible || (showFab && currentScreen === 'home' && !modalVisible)"
-      @click="onFabClick"
-      :title="editVisible ? 'Done' : 'Quick Input'"
-      :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
-      {{ editVisible ? '~_' : '>_' }}
-    </div>
+<div id="fab-btn"
+  v-if="showFab && (editVisible || (currentScreen === 'home' && !modalVisible))"
+  @click="onFabClick"
+  :title="editVisible ? 'Done' : 'Quick Input'"
+  :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
+  {{ editVisible ? '>>' : '>_' }}
+</div>
 
     <div id="context-menu" class="menu menu-2col" :style="contextMenuStyle">
       <div class="menu-title">{{ contextTab }}</div>

@@ -103,3 +103,9 @@
 @media (min-width: 1000px) {
   #edit-textarea { padding-left: calc(120px * var(--ui-scale)); padding-right: calc(120px * var(--ui-scale)); }
 }
+
+
+/* No FAB → editor doesn't need the big bottom gap reserved for it. */
+body.no-fab #edit-textarea {
+  padding-bottom: calc(40px + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px));
+}

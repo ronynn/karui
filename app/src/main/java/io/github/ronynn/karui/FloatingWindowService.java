@@ -8,7 +8,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -22,8 +21,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.WindowMetrics;
-import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
@@ -50,38 +47,39 @@ public class FloatingWindowService extends Service
   static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
   private static final String PANEL_BG_COLOR  = "#282828";
-  private static final String HANDLE_BG_COLOR = "#3C3836";
+  private static final String TITLE_BG_COLOR  = "#3C3836";
   private static final String PILL_COLOR      = "#928374";
   private static final String CLOSE_COLOR     = "#EBDBB2";
+  private static final String RESIZE_HINT     = "#504945";
 
   private static final int  INJECT_RETRY_COUNT    = 10;
   private static final long INJECT_RETRY_DELAY_MS = 300L;
 
+  // Initial floating window size and minimums (all in dp).
+  private static final int INITIAL_WIDTH_DP   = 340;
+  private static final int INITIAL_HEIGHT_DP  = 500;
+  private static final int MIN_WIDTH_DP       = 220;
+  private static final int MIN_HEIGHT_DP      = 200;
+
   private final Handler mHandler = new Handler(Looper.getMainLooper());
 
   private WindowManager mWindowManager;
-  private View mOverlayView;
+  private View mRootView;
   private WindowManager.LayoutParams mParams;
   private WebView mWebView;
 
-  private int mInitialHeight;
-  private int mMinHeight;
-  private int mMaxHeight;
-  private int mNavBarHeight;
+  private int mScreenWidth;
+  private int mScreenHeight;
 
   private boolean mPageLoaded = false;
   private boolean mInjecting = false;
-  private boolean mOverlayAttached = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
     @Override
     public void onReceive(Context context, Intent intent)
     {
-      if (mOverlayAttached && mPageLoaded && mWebView != null)
-      {
-        injectPendingNotes();
-      }
+      if (mPageLoaded && mWebView != null) injectPendingNotes();
     }
   };
 
@@ -104,76 +102,240 @@ public class FloatingWindowService extends Service
         TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
   }
 
-  private int navBarHeightPx()
-  {
-    int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-    return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
-  }
-
-  private int physicalScreenHeight()
-  {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-    {
-      WindowMetrics wm = mWindowManager.getMaximumWindowMetrics();
-      Rect b = wm.getBounds();
-      return b.height();
-    }
-    DisplayMetrics dm = new DisplayMetrics();
-    mWindowManager.getDefaultDisplay().getRealMetrics(dm);
-    return dm.heightPixels;
-  }
-
   @Override
   public int onStartCommand(Intent intent, int flags, int startId)
   {
-    if (mOverlayView == null) createOverlayView();
-    if (!mOverlayAttached) attachOverlay();
+    if (mRootView == null)
+    {
+      try
+      {
+        buildFloatingWindow();
+      }
+      catch (Exception e)
+      {
+        e.printStackTrace();
+        Toast.makeText(this, "Could not open floating window", Toast.LENGTH_LONG).show();
+        stopSelf();
+        return START_NOT_STICKY;
+      }
+    }
     return START_NOT_STICKY;
   }
 
-  private void attachOverlay()
+  private void buildFloatingWindow()
   {
-    try
+    // ── Read screen metrics (safe area, not real metrics) ─────────
+    // We deliberately use getMetrics() NOT getRealMetrics(), so the
+    // window lives inside the safe inset area and never overlaps the
+    // navbar. That's what eliminates resize stutter.
+    DisplayMetrics dm = new DisplayMetrics();
+    mWindowManager.getDefaultDisplay().getMetrics(dm);
+    mScreenWidth = dm.widthPixels;
+    mScreenHeight = dm.heightPixels;
+
+    int initialW = dp(INITIAL_WIDTH_DP);
+    int initialH = dp(INITIAL_HEIGHT_DP);
+    int minW = dp(MIN_WIDTH_DP);
+    int minH = dp(MIN_HEIGHT_DP);
+
+    // Clamp initial size to fit on screen.
+    initialW = Math.min(initialW, mScreenWidth - dp(16));
+    initialH = Math.min(initialH, mScreenHeight - dp(80));
+
+    // ── Root view ─────────────────────────────────────────────────
+    FrameLayout rootLayout = new FrameLayout(this);
+    rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
+
+    // ── Inner content (title bar + WebView) ───────────────────────
+    LinearLayout contentLayout = new LinearLayout(this);
+    contentLayout.setOrientation(LinearLayout.VERTICAL);
+    contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT));
+
+    // Title bar (draggable)
+    FrameLayout titleBar = new FrameLayout(this);
+    titleBar.setBackgroundColor(Color.parseColor(TITLE_BG_COLOR));
+    titleBar.setLayoutParams(new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(32)));
+
+    View pill = new View(this);
+    GradientDrawable pillShape = new GradientDrawable();
+    pillShape.setColor(Color.parseColor(PILL_COLOR));
+    pillShape.setCornerRadius(dp(2));
+    pill.setBackground(pillShape);
+    FrameLayout.LayoutParams pillParams = new FrameLayout.LayoutParams(
+        dp(32), dp(3), Gravity.CENTER);
+    titleBar.addView(pill, pillParams);
+
+    TextView closeBtn = new TextView(this);
+    closeBtn.setText("×");
+    closeBtn.setTextSize(22);
+    closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
+    closeBtn.setGravity(Gravity.CENTER);
+    closeBtn.setLayoutParams(new FrameLayout.LayoutParams(
+        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
+    closeBtn.setOnClickListener(v -> dismiss());
+    titleBar.addView(closeBtn);
+
+    // WebView
+    mWebView = new WebView(this);
+    mWebView.setLayoutParams(new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+    mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
+    mWebView.setVerticalScrollBarEnabled(false);
+    mWebView.setHorizontalScrollBarEnabled(false);
+
+    WebSettings ws = mWebView.getSettings();
+    ws.setJavaScriptEnabled(true);
+    ws.setDomStorageEnabled(true);
+    ws.setAllowFileAccess(true);
+    ws.setAllowContentAccess(true);
+    ws.setAllowFileAccessFromFileURLs(true);
+    ws.setAllowUniversalAccessFromFileURLs(true);
+
+    mWebView.setWebViewClient(new WebViewClient()
     {
-      mWindowManager.addView(mOverlayView, mParams);
-      mOverlayAttached = true;
-    }
-    catch (Exception e)
-    {
-      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
-      try
+      @Override
+      public void onPageFinished(WebView view, String url)
       {
-        mWindowManager.addView(mOverlayView, mParams);
-        mOverlayAttached = true;
+        mPageLoaded = true;
+        injectPendingNotes();
+        readSyncFileAndInject();
       }
-      catch (Exception e2)
-      {
-        e2.printStackTrace();
-        stopSelf();
-        return;
-      }
-    }
+    });
+
+    mWebView.addJavascriptInterface(new FloatingWebAppInterface(), "Android");
+    mWebView.loadUrl("file:///android_asset/index.html");
+
+    contentLayout.addView(titleBar);
+    contentLayout.addView(mWebView);
+    rootLayout.addView(contentLayout);
+
+    // ── Resize handle (bottom-right corner) ───────────────────────
+    // A small triangle-ish square. Purely visual + touch target.
+    View resizeHandle = new View(this);
+    GradientDrawable resizeShape = new GradientDrawable();
+    resizeShape.setColor(Color.parseColor(RESIZE_HINT));
+    resizeShape.setCornerRadius(dp(4));
+    resizeHandle.setBackground(resizeShape);
+    FrameLayout.LayoutParams rhParams = new FrameLayout.LayoutParams(
+        dp(22), dp(22), Gravity.BOTTOM | Gravity.END);
+    rhParams.setMargins(0, 0, dp(4), dp(4));
+    resizeHandle.setLayoutParams(rhParams);
+    rootLayout.addView(resizeHandle);
+
+    // ── WindowManager.LayoutParams ────────────────────────────────
+    // No FLAG_LAYOUT_IN_SCREEN, no LAYOUT_NO_LIMITS, no
+    // setFitInsetsTypes(0). The window respects the safe area, so it
+    // never touches the navbar. Resizing can't cause navbar stutter.
+    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+    mParams = new WindowManager.LayoutParams(
+        initialW,
+        initialH,
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            : WindowManager.LayoutParams.TYPE_PHONE,
+        flags,
+        PixelFormat.TRANSLUCENT);
+
+    mParams.gravity = Gravity.TOP | Gravity.START;
+    // Center horizontally, sit near the top.
+    mParams.x = (mScreenWidth - initialW) / 2;
+    mParams.y = dp(80);
+    mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+
+    mRootView = rootLayout;
+    mWindowManager.addView(mRootView, mParams);
 
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
       .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
-    mOverlayView.setTranslationY(mInitialHeight);
-    mOverlayView.setAlpha(0f);
-    mOverlayView.animate()
-        .translationY(0f)
-        .alpha(1f)
-        .setDuration(260)
-        .setInterpolator(new DecelerateInterpolator())
-        .start();
-
-    if (mPageLoaded && mWebView != null)
+    // ── Drag-to-move on title bar ─────────────────────────────────
+    titleBar.setOnTouchListener(new View.OnTouchListener()
     {
-      injectPendingNotes();
-      readSyncFileAndInject();
-    }
+      private int startX, startY;
+      private float startTouchX, startTouchY;
+      private boolean moved;
+
+      @Override
+      public boolean onTouch(View v, MotionEvent e)
+      {
+        switch (e.getActionMasked())
+        {
+          case MotionEvent.ACTION_DOWN:
+            startX = mParams.x;
+            startY = mParams.y;
+            startTouchX = e.getRawX();
+            startTouchY = e.getRawY();
+            moved = false;
+            return true;
+          case MotionEvent.ACTION_MOVE:
+            float dx = e.getRawX() - startTouchX;
+            float dy = e.getRawY() - startTouchY;
+            if (Math.abs(dx) > dp(3) || Math.abs(dy) > dp(3)) moved = true;
+            if (moved)
+            {
+              int newX = startX + (int) dx;
+              int newY = startY + (int) dy;
+              // Keep a margin so the window can't be dragged fully off-screen.
+              newX = Math.max(-mParams.width + dp(60),
+                       Math.min(mScreenWidth - dp(60), newX));
+              newY = Math.max(0,
+                       Math.min(mScreenHeight - dp(60), newY));
+              mParams.x = newX;
+              mParams.y = newY;
+              mWindowManager.updateViewLayout(mRootView, mParams);
+            }
+            return true;
+          case MotionEvent.ACTION_UP:
+          case MotionEvent.ACTION_CANCEL:
+            return true;
+        }
+        return false;
+      }
+    });
+
+    // ── Drag-to-resize on corner handle ───────────────────────────
+    resizeHandle.setOnTouchListener(new View.OnTouchListener()
+    {
+      private int startW, startH;
+      private float startTouchX, startTouchY;
+
+      @Override
+      public boolean onTouch(View v, MotionEvent e)
+      {
+        switch (e.getActionMasked())
+        {
+          case MotionEvent.ACTION_DOWN:
+            startW = mParams.width;
+            startH = mParams.height;
+            startTouchX = e.getRawX();
+            startTouchY = e.getRawY();
+            return true;
+          case MotionEvent.ACTION_MOVE:
+            int newW = startW + (int) (e.getRawX() - startTouchX);
+            int newH = startH + (int) (e.getRawY() - startTouchY);
+            // Clamp to remaining space on screen from current x/y.
+            newW = Math.max(minW, Math.min(mScreenWidth - mParams.x, newW));
+            newH = Math.max(minH, Math.min(mScreenHeight - mParams.y, newH));
+            if (newW != mParams.width || newH != mParams.height)
+            {
+              mParams.width = newW;
+              mParams.height = newH;
+              mWindowManager.updateViewLayout(mRootView, mParams);
+            }
+            return true;
+          case MotionEvent.ACTION_UP:
+          case MotionEvent.ACTION_CANCEL:
+            return true;
+        }
+        return false;
+      }
+    });
   }
 
-  private void dismissOverlay()
+  private void dismiss()
   {
     try
     {
@@ -186,10 +348,10 @@ public class FloatingWindowService extends Service
 
     triggerCloseSync();
 
-    if (mOverlayView != null && mOverlayAttached)
+    if (mRootView != null && mWindowManager != null)
     {
-      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
-      mOverlayAttached = false;
+      try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
+      mRootView = null;
     }
 
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
@@ -203,28 +365,22 @@ public class FloatingWindowService extends Service
   {
     triggerCloseSync();
 
-    if (mOverlayView != null && mOverlayAttached && mWindowManager != null)
+    if (mRootView != null && mWindowManager != null)
     {
-      try { mWindowManager.removeView(mOverlayView); } catch (Exception ignored) {}
-      mOverlayAttached = false;
+      try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
+      mRootView = null;
     }
-    mOverlayView = null;
 
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
       .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
 
-    final WebView webToDestroy = mWebView;
+    final WebView wv = mWebView;
     mWebView = null;
     mPageLoaded = false;
-    if (webToDestroy != null)
+    if (wv != null)
     {
-      mHandler.postDelayed(new Runnable()
-      {
-        @Override
-        public void run()
-        {
-          try { webToDestroy.destroy(); } catch (Exception ignored) {}
-        }
+      mHandler.postDelayed(() -> {
+        try { wv.destroy(); } catch (Exception ignored) {}
       }, 1000);
     }
 
@@ -236,153 +392,11 @@ public class FloatingWindowService extends Service
   @Override
   public IBinder onBind(Intent intent) { return null; }
 
-  private void createOverlayView()
-  {
-    int screenHeight = physicalScreenHeight();
-    mNavBarHeight = navBarHeightPx();
-
-    mInitialHeight = (int) (screenHeight * 0.50);
-    mMinHeight = (int) (screenHeight * 0.25);
-    mMaxHeight = screenHeight;
-
-    BackInterceptLayout rootLayout = new BackInterceptLayout(this);
-    rootLayout.setOnBackPressed(() -> dismissOverlay());
-    rootLayout.setOrientation(LinearLayout.VERTICAL);
-    rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
-    rootLayout.setFocusableInTouchMode(true);
-    rootLayout.requestFocus();
-
-    FrameLayout handle = new FrameLayout(this);
-    handle.setBackgroundColor(Color.parseColor(HANDLE_BG_COLOR));
-    handle.setLayoutParams(new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, dp(28)));
-
-    View pill = new View(this);
-    GradientDrawable pillShape = new GradientDrawable();
-    pillShape.setColor(Color.parseColor(PILL_COLOR));
-    pillShape.setCornerRadius(dp(2));
-    pill.setBackground(pillShape);
-    handle.addView(pill, new FrameLayout.LayoutParams(
-        dp(32), dp(3), Gravity.CENTER));
-
-    TextView closeBtn = new TextView(this);
-    closeBtn.setText("×");
-    closeBtn.setTextSize(22);
-    closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
-    closeBtn.setGravity(Gravity.CENTER);
-    closeBtn.setLayoutParams(new FrameLayout.LayoutParams(
-        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
-    closeBtn.setOnClickListener(v -> dismissOverlay());
-    handle.addView(closeBtn);
-
-    FrameLayout webContainer = new FrameLayout(this);
-    webContainer.setLayoutParams(new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
-    webContainer.setPadding(0, 0, 0, mNavBarHeight);
-
-    mWebView = new WebView(this);
-    mWebView.setLayoutParams(new FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-    mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
-    mWebView.setVisibility(View.INVISIBLE);
-    mWebView.setVerticalScrollBarEnabled(false);
-    mWebView.setHorizontalScrollBarEnabled(false);
-
-    WebSettings settings = mWebView.getSettings();
-    settings.setJavaScriptEnabled(true);
-    settings.setDomStorageEnabled(true);
-    settings.setAllowFileAccess(true);
-    settings.setAllowContentAccess(true);
-    settings.setAllowFileAccessFromFileURLs(true);
-    settings.setAllowUniversalAccessFromFileURLs(true);
-
-    mWebView.setWebViewClient(new WebViewClient()
-    {
-      @Override
-      public void onPageFinished(WebView view, String url)
-      {
-        mPageLoaded = true;
-        injectPendingNotes();
-        readSyncFileAndInject();
-        view.setAlpha(0f);
-        view.setVisibility(View.VISIBLE);
-        view.animate().alpha(1f).setDuration(150).start();
-      }
-    });
-
-    mWebView.addJavascriptInterface(new OverlayWebAppInterface(), "Android");
-    mWebView.loadUrl("file:///android_asset/index.html");
-
-    webContainer.addView(mWebView);
-    rootLayout.addView(handle);
-    rootLayout.addView(webContainer);
-
-    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-              | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-              | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
-
-    mParams = new WindowManager.LayoutParams(
-        WindowManager.LayoutParams.MATCH_PARENT,
-        mInitialHeight,
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            : WindowManager.LayoutParams.TYPE_PHONE,
-        flags,
-        PixelFormat.TRANSLUCENT);
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-      mParams.setFitInsetsTypes(0);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
-      mParams.layoutInDisplayCutoutMode =
-          WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
-
-    mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
-    mParams.gravity = Gravity.BOTTOM | Gravity.START;
-    mParams.x = 0;
-    mParams.y = 0;
-
-    mOverlayView = rootLayout;
-
-    handle.setOnTouchListener(new View.OnTouchListener()
-    {
-      private int initialHeight;
-      private float initialTouchY;
-      private boolean dragging;
-
-      @Override
-      public boolean onTouch(View v, MotionEvent event)
-      {
-        switch (event.getActionMasked())
-        {
-          case MotionEvent.ACTION_DOWN:
-            initialHeight = mParams.height;
-            initialTouchY = event.getRawY();
-            dragging = false;
-            return true;
-          case MotionEvent.ACTION_MOVE:
-            float deltaY = event.getRawY() - initialTouchY;
-            if (Math.abs(deltaY) > dp(2)) dragging = true;
-            if (dragging)
-            {
-              int newHeight = (int) (initialHeight - deltaY);
-              newHeight = Math.max(mMinHeight, Math.min(mMaxHeight, newHeight));
-              mParams.height = newHeight;
-              mWindowManager.updateViewLayout(mOverlayView, mParams);
-            }
-            return true;
-        }
-        return false;
-      }
-    });
-  }
-
   private void injectPendingNotes() { injectPendingNotes(0); }
 
   private void injectPendingNotes(final int attempt)
   {
-    if (!mOverlayAttached) return;
-    if (mInjecting) return;
-    if (!mPageLoaded || mWebView == null) return;
+    if (mInjecting || !mPageLoaded || mWebView == null) return;
 
     final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     final String jsonStr = prefs.getString("pending_notes_json", "[]");
@@ -461,24 +475,9 @@ public class FloatingWindowService extends Service
     }
   }
 
-  private static class BackInterceptLayout extends LinearLayout
-  {
-    private Runnable mOnBack;
-    BackInterceptLayout(Context c) { super(c); }
-    void setOnBackPressed(Runnable r) { mOnBack = r; }
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event)
-    {
-      if (event.getKeyCode() == KeyEvent.KEYCODE_BACK)
-      {
-        if (event.getAction() == KeyEvent.ACTION_UP && mOnBack != null) mOnBack.run();
-        return true;
-      }
-      return super.dispatchKeyEvent(event);
-    }
-  }
+  // ── JS bridge ──────────────────────────────────────────────────
 
-  public class OverlayWebAppInterface
+  public class FloatingWebAppInterface
   {
     @JavascriptInterface
     public void saveFileSync(String filePath, String content)
@@ -509,16 +508,20 @@ public class FloatingWindowService extends Service
     {
       if (noteText == null || noteText.trim().isEmpty()) return;
       ProcessTextActivity.saveNoteToQueue(FloatingWindowService.this, noteText.trim());
-      Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-      updateIntent.setPackage(getPackageName());
-      sendBroadcast(updateIntent);
+      Intent u = new Intent(MainActivity.ACTION_NOTE_ADDED);
+      u.setPackage(getPackageName());
+      sendBroadcast(u);
     }
 
     @JavascriptInterface
-    public void closeOverlay() { dismissOverlay(); }
+    public void closeOverlay() { dismiss(); }
 
     @JavascriptInterface
-    public int getNavBarHeight() { return mNavBarHeight; }
+    public int getNavBarHeight()
+    {
+      int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+      return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
+    }
 
     @JavascriptInterface
     public void setInboxTabName(String tabName)

@@ -156,6 +156,10 @@ const appStore = reactive(mergeModules(
     _autosaveTimer: null,
     _vvListener: null,
     _editPushedState: false,
+    _lastKbPad: null,
+
+    // Debounced side-effect timer (calendar render, sync file, Android bridge).
+    _sideEffectTimer: null,
 
     // Modal state (still used for rename/new tab/PIN/theme import).
     modalVisible: false,
@@ -241,21 +245,62 @@ const appStore = reactive(mergeModules(
 
       window.addEventListener('click', e => this.handleGlobalClick(e), true)
 
-      // Whenever a text field gains focus, immediately un-hide the header.
-      // This covers the case where the keyboard opens without a scroll event
-      // firing (common on Android with interactive-widget=resizes-content).
+      // Whenever a text field gains focus, immediately un-hide the header
+      // and mark body as keyboard-open. The latter prevents the small-portrait
+      // header-padding rule from firing while typing.
       window.addEventListener('focusin', (e) =>
       {
         const t = e.target
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
         {
           if (this.isScrolled) this.isScrolled = false
+          document.body.classList.add('kb-open')
         }
       })
 
+      window.addEventListener('focusout', (e) =>
+      {
+        const t = e.target
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
+        {
+          // Delay so a quick focus→focus transfer doesn't flicker kb-open off.
+          setTimeout(() =>
+          {
+            const ae = document.activeElement
+            if (!ae || (ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA'))
+            {
+              document.body.classList.remove('kb-open')
+            }
+          }, 80)
+        }
+      })
+
+      // ESC closes the editor (desktop / external keyboards).
+      window.addEventListener('keydown', (e) =>
+      {
+        if (e.key === 'Escape' && this.editVisible)
+        {
+          e.preventDefault()
+          this.finishEdit()
+        }
+      })
+
+      // Hardware / gesture back closes the editor.
       window.addEventListener('popstate', () =>
       {
         if (this.editVisible) this.finishEdit()
+      })
+
+      // Flush deferred side effects before the tab goes to the background,
+      // so the sync file and Android bridge always receive the latest state.
+      document.addEventListener('visibilitychange', () =>
+      {
+        if (document.hidden && this._sideEffectTimer)
+        {
+          clearTimeout(this._sideEffectTimer)
+          this._sideEffectTimer = null
+          this._runSideEffects()
+        }
       })
 
       setupNativeHooks(this)
@@ -331,19 +376,39 @@ const appStore = reactive(mergeModules(
       localStorage.setItem('calendarTabName', this.calendarTabName)
       localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
 
-      if (this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
+      // Calendar is directly visible to the user — re-render immediately,
+      // not deferred. Everything else (file I/O, Android bridge, measure)
+      // gets batched below.
+      if (this.currentScreen === 'calendar' && this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
       {
         this.calendarRef.renderCalendar()
       }
 
+      this._scheduleSideEffects()
+    },
+
+    // Trailing-debounced expensive work. Typing in the editor previously
+    // fired a calendar render + sync-file write + Android bridge call on
+    // every 400 ms saveData — that's file and IPC I/O on every keystroke
+    // batch. Now it runs once, 1 s after the last change.
+    _scheduleSideEffects()
+    {
+      clearTimeout(this._sideEffectTimer)
+      this._sideEffectTimer = setTimeout(() =>
+      {
+        this._sideEffectTimer = null
+        this._runSideEffects()
+      }, 1000)
+    },
+
+    _runSideEffects()
+    {
       if (this.syncFilePath)
       {
         this.exportMarkdownSilent()
       }
-
       this.syncCalendarEventsToAndroid()
-
-      if (typeof this._measureNoteOverflow === 'function')
+      if (typeof this._measureNoteOverflow === 'function' && !this.editVisible)
       {
         requestAnimationFrame(() => this._measureNoteOverflow())
       }
@@ -405,10 +470,16 @@ const appStore = reactive(mergeModules(
     switchScreen(name)
     {
       this.currentScreen = name
-      this.closeAllMenus()
+      if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
       const screens = document.querySelectorAll('.screen')
       const idx = this.currentScreenIdx
       if (screens[idx]) this.isScrolled = screens[idx].scrollTop > 10
+      // Only re-render the calendar on entry — otherwise it's skipped
+      // in saveData while hidden.
+      if (name === 'calendar' && this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
+      {
+        this.calendarRef.renderCalendar()
+      }
     },
 
     handleScroll(e)
@@ -470,7 +541,7 @@ const appStore = reactive(mergeModules(
       if (inp) inp.focus()
     },
 
-    // Open the full-screen editor. Cursor lands at end.
+    // Open the full-screen editor. Keyboard only pops when keepKeyboard is on.
     startEdit(note)
     {
       if (!note) return
@@ -480,22 +551,22 @@ const appStore = reactive(mergeModules(
       this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
-      // Push a history entry so the hardware back button closes the editor
-      // (with autosave already flushed by finishEdit) instead of leaving
-      // the app.
       if (!history.state || !history.state.karuiEdit)
       {
         history.pushState({ karuiEdit: true }, '')
         this._editPushedState = true
       }
-      nextTick(() =>
+      if (this.keepKeyboard)
       {
-        const el = document.getElementById('edit-textarea')
-        if (!el) return
-        el.focus()
-        const len = el.value.length
-        try { el.selectionStart = el.selectionEnd = len } catch (_) {}
-      })
+        nextTick(() =>
+        {
+          const el = document.getElementById('edit-textarea')
+          if (!el) return
+          el.focus()
+          const len = el.value.length
+          try { el.selectionStart = el.selectionEnd = len } catch (_) {}
+        })
+      }
     },
 
     // Debounced autosave. Store updates immediately; localStorage follows in 400ms.
@@ -511,13 +582,19 @@ const appStore = reactive(mergeModules(
     },
 
     // Compute keyboard height from visualViewport and publish it as --kb-pad.
+    // Skips the write if the value hasn't changed to avoid extra style recalcs.
     _updateKeyboardPadding()
     {
       if (!this.editVisible) return
       const vv = window.visualViewport
       const kbHeight = vv ? Math.max(0, window.innerHeight - vv.height) : 0
       const pad = kbHeight > 60 ? (kbHeight + 60) : 0
-      document.documentElement.style.setProperty('--kb-pad', pad + 'px')
+      const padStr = pad + 'px'
+      if (this._lastKbPad !== padStr)
+      {
+        this._lastKbPad = padStr
+        document.documentElement.style.setProperty('--kb-pad', padStr)
+      }
     },
 
     _bindViewportListener()
@@ -537,6 +614,7 @@ const appStore = reactive(mergeModules(
         window.visualViewport.removeEventListener('scroll', this._vvListener)
       }
       this._vvListener = null
+      this._lastKbPad = null
       document.documentElement.style.removeProperty('--kb-pad')
     },
 
@@ -566,9 +644,7 @@ const appStore = reactive(mergeModules(
       this.editDraftText = ''
       const ae = document.activeElement
       if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur()
-      // If the user tapped Done (not the hardware back), pop the history
-      // entry we pushed so the app's history stays clean. If they used the
-      // hardware back button, the pop already happened and this is a no-op.
+      requestAnimationFrame(() => this._measureNoteOverflow())
       if (shouldPopHistory) history.back()
     },
 

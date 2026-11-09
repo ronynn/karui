@@ -362,6 +362,9 @@ export function createNotesModule()
 
     _measureNoteOverflow()
     {
+      // Skip while the full-screen editor is open — nothing to measure and
+      // it saves a full DOM scan per saveData cycle.
+      if (this.editVisible) return
       const list = document.getElementById('notes-list')
       if (!list) return
       const wraps = list.querySelectorAll('.note-content-wrap')

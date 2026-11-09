@@ -40,3 +40,18 @@ body.no-transitions .screen { padding-top: calc(78px * var(--ui-scale)); }
 
   body.no-transitions .screen { padding-top: calc(46px * var(--ui-scale)); }
 }
+
+/* Very short portrait screens: trim header headroom.
+   Guarded against keyboard-open so typing doesn't trigger a layout shift,
+   and against no-transitions so that mode keeps its own tight spacing. */
+@media (max-height: 520px) and (orientation: portrait) {
+  body:not(.kb-open):not(.no-transitions) header { padding-top: 6px; }
+  body:not(.kb-open):not(.no-transitions) #app-title { margin-top: 8px; margin-bottom: -4px; font-size: calc(32px * var(--ui-scale)); max-height: calc(40px * var(--ui-scale)); }
+  body:not(.kb-open):not(.no-transitions) .screen { padding-top: calc(100px * var(--ui-scale)); }
+}
+
+/* Respect OS-level reduced-motion preference (accessibility + battery). */
+@media (prefers-reduced-motion: reduce) {
+  #viewport, header, #app-title, #toast, #fab-btn, .menu, .note-item { transition: none !important; }
+  .ripple-span { animation: none !important; }
+}
