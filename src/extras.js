@@ -1,3 +1,44 @@
+
+
+// -------- Back-navigation handling --------
+// When a game overlay is open, one entry is pushed on the history stack.
+// Hardware back (or the in-game back button) pops it, which fires popstate,
+// which in turn runs the game's stop function. Result: any back press exits
+// the game and returns the user to the karui page.
+
+let activeGame = null
+
+if (typeof window !== 'undefined')
+{
+  window.addEventListener('popstate', () =>
+  {
+    if (activeGame)
+    {
+      const cb = activeGame.onBack
+      activeGame = null
+      try { if (cb) cb() } catch (e) {}
+    }
+  })
+}
+
+function exitActiveGame()
+{
+  if (!activeGame) return
+  const cb = activeGame.onBack
+  activeGame = null
+  // Neutralize the pushed entry first so overlay.remove() won't pop again.
+  if (history.state && history.state.__karuiGame)
+  {
+    try { history.replaceState(null, '') } catch (e) {}
+    try { history.back() } catch (e) {}
+  }
+  if (cb) try { cb() } catch (e) {}
+}
+
+
+
+
+
 let audioCtx = null
 
 export function playSound(type = 'click', uiSoundsEnabled = true)
@@ -243,7 +284,9 @@ export function createGameOverlay(opts)
   const overlay = document.createElement('div')
   overlay.className = 'game-overlay'
 
-  const backBtn  = makeTopButton('back', options.onBack)
+  const backBtn  = makeTopButton('back', null)
+  backBtn.onclick = (e) => { e.preventDefault(); exitActiveGame() }
+  
   const resetBtn = makeTopButton(options.resetLabel || 'reset', options.onReset)
 
   const topBar = document.createElement('div')
@@ -271,6 +314,10 @@ export function createGameOverlay(opts)
 
   document.body.appendChild(overlay)
 
+  activeGame = { onBack: options.onBack }
+  try { history.pushState({ __karuiGame: true }, '') } catch (e) {}
+
+  
   return {
     overlay,
     contentHost: centerHost,
@@ -283,6 +330,14 @@ export function createGameOverlay(opts)
     isLandscape: () => lsMedia.matches,
     remove()
     {
+      if (activeGame && activeGame.onBack === options.onBack) activeGame = null
+      // If the pushed entry is still on top (removal not triggered by back),
+      // pop it silently so history stays in sync with the UI.
+      if (history.state && history.state.__karuiGame)
+      {
+        try { history.replaceState(null, '') } catch (e) {}
+        try { history.back() } catch (e) {}
+      }
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
     }
   }
@@ -391,6 +446,12 @@ export const gameRegistry = {
   {
     const mod = await import('./snake.js')
     mod.startSnakeGame()
+    return true
+  },
+  ASEPRITE: async () =>
+  {
+    const mod = await import('./pixel.js')
+    mod.startPixelGame()
     return true
   }
 }

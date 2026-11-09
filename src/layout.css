@@ -55,3 +55,19 @@ body.no-transitions .screen { padding-top: calc(78px * var(--ui-scale)); }
   #viewport, header, #app-title, #toast, #fab-btn, .menu, .note-item { transition: none !important; }
   .ripple-span { animation: none !important; }
 }
+
+/* Compact mode: small floating windows / split-screen / resizable windows.
+   Catches viewports that are small in BOTH dimensions (~560px square),
+   so real phones (≥640px tall in portrait, ≥640px wide in landscape) are
+   unaffected. Regardless of transition toggle or keyboard state:
+   - Karui title hidden
+   - Header has minimal top padding
+   - Screen padding shrinks to match the smaller header
+   Header still slides away on scroll (paused while typing so the keyboard
+   never hides it). */
+@media (max-width: 560px) and (max-height: 560px) {
+  #app-title { display: none !important; }
+  header { padding-top: 4px !important; padding-bottom: 4px !important; }
+  .screen { padding-top: calc(56px * var(--ui-scale)) !important; }
+  body:not(.kb-open) header.scrolled { transform: translateY(-100%); }
+}

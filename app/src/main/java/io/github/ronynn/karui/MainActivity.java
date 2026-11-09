@@ -80,6 +80,7 @@ public class MainActivity extends Activity
 
   private boolean isPageLoaded = false;
   private boolean mInjecting = false;
+  private boolean mJustClosedFloating = false;
   boolean pendingQuickNoteEnable = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
@@ -124,7 +125,20 @@ public class MainActivity extends Activity
         Toast.makeText(this,
             "Could not open floating window: " + e.getMessage(),
             Toast.LENGTH_LONG).show();
-        // fall through to full UI
+      }
+    }
+
+    // ── Close any running floating window before opening full UI ──
+    // Prevents two Karuis coexisting, and lets the floating window's
+    // final export land before we read the sync file.
+    if (!floatingTrigger)
+    {
+      SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+      if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
+      {
+        mJustClosedFloating = true;
+        stopService(new Intent(this, FloatingWindowService.class));
+        qp.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
       }
     }
 
@@ -169,8 +183,27 @@ public class MainActivity extends Activity
       public void onPageFinished(WebView view, String url)
       {
         isPageLoaded = true;
-        injectPendingNotes();
-        readSyncFileAndInject();
+
+        // If we just closed the floating window, delay the initial
+        // sync read so its async file export has time to finish.
+        if (mJustClosedFloating)
+        {
+          mJustClosedFloating = false;
+          new Handler(Looper.getMainLooper()).postDelayed(() ->
+          {
+            if (isPageLoaded && mWebView != null)
+            {
+              injectPendingNotes();
+              readSyncFileAndInject();
+            }
+          }, 500);
+        }
+        else
+        {
+          injectPendingNotes();
+          readSyncFileAndInject();
+        }
+
         SystemBarHelper.apply(MainActivity.this);
 
         splashScreen.animate()
@@ -237,8 +270,6 @@ public class MainActivity extends Activity
       }
     });
 
-    // If the floating path was requested but permission is missing,
-    // explain once and stay in the full app.
     if (floatingTrigger && !canDrawOverlays())
     {
       onboardOverlayPermission();

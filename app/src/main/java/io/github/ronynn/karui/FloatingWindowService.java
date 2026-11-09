@@ -1,5 +1,6 @@
 package io.github.ronynn.karui;
 
+import android.animation.ValueAnimator;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -55,24 +56,36 @@ public class FloatingWindowService extends Service
   private static final int  INJECT_RETRY_COUNT    = 10;
   private static final long INJECT_RETRY_DELAY_MS = 300L;
 
-  // Initial floating window size and minimums (all in dp).
-  private static final int INITIAL_WIDTH_DP   = 340;
-  private static final int INITIAL_HEIGHT_DP  = 500;
-  private static final int MIN_WIDTH_DP       = 220;
-  private static final int MIN_HEIGHT_DP      = 200;
+  private static final int INITIAL_WIDTH_DP  = 340;
+  private static final int INITIAL_HEIGHT_DP = 500;
+  private static final int MIN_WIDTH_DP      = 220;
+  private static final int MIN_HEIGHT_DP     = 200;
+
+  /** How many dp of the window remains visible when snapped to an edge. */
+  private static final int SNAP_VISIBLE_DP = 24;
+
+  /** Within this fraction of screen width of an edge = snap. */
+  private static final float SNAP_THRESHOLD_FRACTION = 0.25f;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
 
   private WindowManager mWindowManager;
   private View mRootView;
   private WindowManager.LayoutParams mParams;
-  private WebView mWebView;
+  private BackAwareWebView mWebView;
+  private TextView mCloseBtn;
 
   private int mScreenWidth;
   private int mScreenHeight;
 
   private boolean mPageLoaded = false;
   private boolean mInjecting = false;
+
+  // Edge-snap state
+  private boolean mSnapped = false;
+  private boolean mSnappedLeft = false;
+  private int mSnapPreX, mSnapPreY;
+  private ValueAnimator mSnapAnim;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
@@ -107,10 +120,7 @@ public class FloatingWindowService extends Service
   {
     if (mRootView == null)
     {
-      try
-      {
-        buildFloatingWindow();
-      }
+      try { buildFloatingWindow(); }
       catch (Exception e)
       {
         e.printStackTrace();
@@ -124,62 +134,49 @@ public class FloatingWindowService extends Service
 
   private void buildFloatingWindow()
   {
-    // ── Read screen metrics (safe area, not real metrics) ─────────
-    // We deliberately use getMetrics() NOT getRealMetrics(), so the
-    // window lives inside the safe inset area and never overlaps the
-    // navbar. That's what eliminates resize stutter.
     DisplayMetrics dm = new DisplayMetrics();
     mWindowManager.getDefaultDisplay().getMetrics(dm);
     mScreenWidth = dm.widthPixels;
     mScreenHeight = dm.heightPixels;
 
-    int initialW = dp(INITIAL_WIDTH_DP);
-    int initialH = dp(INITIAL_HEIGHT_DP);
-    int minW = dp(MIN_WIDTH_DP);
-    int minH = dp(MIN_HEIGHT_DP);
+    int initialW = Math.min(dp(INITIAL_WIDTH_DP), mScreenWidth - dp(16));
+    int initialH = Math.min(dp(INITIAL_HEIGHT_DP), mScreenHeight - dp(80));
+    final int minW = dp(MIN_WIDTH_DP);
+    final int minH = dp(MIN_HEIGHT_DP);
 
-    // Clamp initial size to fit on screen.
-    initialW = Math.min(initialW, mScreenWidth - dp(16));
-    initialH = Math.min(initialH, mScreenHeight - dp(80));
-
-    // ── Root view ─────────────────────────────────────────────────
     FrameLayout rootLayout = new FrameLayout(this);
     rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
 
-    // ── Inner content (title bar + WebView) ───────────────────────
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT));
 
-    // Title bar (draggable)
     FrameLayout titleBar = new FrameLayout(this);
     titleBar.setBackgroundColor(Color.parseColor(TITLE_BG_COLOR));
     titleBar.setLayoutParams(new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, dp(32)));
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(24)));
 
     View pill = new View(this);
     GradientDrawable pillShape = new GradientDrawable();
     pillShape.setColor(Color.parseColor(PILL_COLOR));
-    pillShape.setCornerRadius(dp(2));
+    pillShape.setCornerRadius(dp(1));
     pill.setBackground(pillShape);
-    FrameLayout.LayoutParams pillParams = new FrameLayout.LayoutParams(
-        dp(32), dp(3), Gravity.CENTER);
-    titleBar.addView(pill, pillParams);
+    titleBar.addView(pill, new FrameLayout.LayoutParams(
+        dp(24), dp(2), Gravity.CENTER));
 
-    TextView closeBtn = new TextView(this);
-    closeBtn.setText("×");
-    closeBtn.setTextSize(22);
-    closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
-    closeBtn.setGravity(Gravity.CENTER);
-    closeBtn.setLayoutParams(new FrameLayout.LayoutParams(
-        dp(36), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
-    closeBtn.setOnClickListener(v -> dismiss());
-    titleBar.addView(closeBtn);
+    mCloseBtn = new TextView(this);
+    mCloseBtn.setText("×");
+    mCloseBtn.setTextSize(20);
+    mCloseBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
+    mCloseBtn.setGravity(Gravity.CENTER);
+    mCloseBtn.setLayoutParams(new FrameLayout.LayoutParams(
+        dp(32), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
+    mCloseBtn.setOnClickListener(v -> dismiss());
+    titleBar.addView(mCloseBtn);
 
-    // WebView
-    mWebView = new WebView(this);
+    mWebView = new BackAwareWebView(this);
     mWebView.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
     mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
@@ -212,8 +209,6 @@ public class FloatingWindowService extends Service
     contentLayout.addView(mWebView);
     rootLayout.addView(contentLayout);
 
-    // ── Resize handle (bottom-right corner) ───────────────────────
-    // A small triangle-ish square. Purely visual + touch target.
     View resizeHandle = new View(this);
     GradientDrawable resizeShape = new GradientDrawable();
     resizeShape.setColor(Color.parseColor(RESIZE_HINT));
@@ -225,22 +220,15 @@ public class FloatingWindowService extends Service
     resizeHandle.setLayoutParams(rhParams);
     rootLayout.addView(resizeHandle);
 
-    // ── WindowManager.LayoutParams ────────────────────────────────
-    // No FLAG_LAYOUT_IN_SCREEN, no LAYOUT_NO_LIMITS, no
-    // setFitInsetsTypes(0). The window respects the safe area, so it
-    // never touches the navbar. Resizing can't cause navbar stutter.
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
     mParams = new WindowManager.LayoutParams(
-        initialW,
-        initialH,
+        initialW, initialH,
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE,
-        flags,
-        PixelFormat.TRANSLUCENT);
+        flags, PixelFormat.TRANSLUCENT);
 
     mParams.gravity = Gravity.TOP | Gravity.START;
-    // Center horizontally, sit near the top.
     mParams.x = (mScreenWidth - initialW) / 2;
     mParams.y = dp(80);
     mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
@@ -251,7 +239,7 @@ public class FloatingWindowService extends Service
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
       .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
-    // ── Drag-to-move on title bar ─────────────────────────────────
+    // ── Drag-to-move + edge-snap on title bar ─────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
@@ -264,39 +252,57 @@ public class FloatingWindowService extends Service
         switch (e.getActionMasked())
         {
           case MotionEvent.ACTION_DOWN:
+            // If we're snapped, instantly restore to pre-snap position
+            // so any tap or drag brings the window back on screen.
+            if (mSnapped)
+            {
+              if (mSnapAnim != null) mSnapAnim.cancel();
+              mSnapped = false;
+              mParams.x = mSnapPreX;
+              mParams.y = mSnapPreY;
+              try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
+              if (mCloseBtn != null) mCloseBtn.setOnClickListener(v2 -> dismiss());
+            }
             startX = mParams.x;
             startY = mParams.y;
             startTouchX = e.getRawX();
             startTouchY = e.getRawY();
             moved = false;
             return true;
+
           case MotionEvent.ACTION_MOVE:
             float dx = e.getRawX() - startTouchX;
             float dy = e.getRawY() - startTouchY;
             if (Math.abs(dx) > dp(3) || Math.abs(dy) > dp(3)) moved = true;
             if (moved)
             {
-              int newX = startX + (int) dx;
-              int newY = startY + (int) dy;
-              // Keep a margin so the window can't be dragged fully off-screen.
-              newX = Math.max(-mParams.width + dp(60),
-                       Math.min(mScreenWidth - dp(60), newX));
-              newY = Math.max(0,
-                       Math.min(mScreenHeight - dp(60), newY));
+              int newX = Math.max(-mParams.width + dp(60),
+                       Math.min(mScreenWidth - dp(60), startX + (int) dx));
+              int newY = Math.max(0,
+                       Math.min(mScreenHeight - dp(60), startY + (int) dy));
               mParams.x = newX;
               mParams.y = newY;
               mWindowManager.updateViewLayout(mRootView, mParams);
             }
             return true;
+
           case MotionEvent.ACTION_UP:
           case MotionEvent.ACTION_CANCEL:
+            if (moved)
+            {
+              int snapThreshold = (int) (mScreenWidth * SNAP_THRESHOLD_FRACTION);
+              if (mParams.x < snapThreshold)
+                snapToEdge(true);
+              else if (mParams.x + mParams.width > mScreenWidth - snapThreshold)
+                snapToEdge(false);
+            }
             return true;
         }
         return false;
       }
     });
 
-    // ── Drag-to-resize on corner handle ───────────────────────────
+    // ── Drag-to-resize ────────────────────────────────────────────
     resizeHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int startW, startH;
@@ -316,7 +322,6 @@ public class FloatingWindowService extends Service
           case MotionEvent.ACTION_MOVE:
             int newW = startW + (int) (e.getRawX() - startTouchX);
             int newH = startH + (int) (e.getRawY() - startTouchY);
-            // Clamp to remaining space on screen from current x/y.
             newW = Math.max(minW, Math.min(mScreenWidth - mParams.x, newW));
             newH = Math.max(minH, Math.min(mScreenHeight - mParams.y, newH));
             if (newW != mParams.width || newH != mParams.height)
@@ -335,8 +340,84 @@ public class FloatingWindowService extends Service
     });
   }
 
+  // ── Edge-snap helpers ────────────────────────────────────────────
+
+  private void snapToEdge(boolean left)
+  {
+    if (mSnapAnim != null) mSnapAnim.cancel();
+
+    mSnapPreX = mParams.x;
+    mSnapPreY = mParams.y;
+    mSnapped = true;
+    mSnappedLeft = left;
+
+    // While snapped, tapping the close button area should restore
+    // rather than close — otherwise the strip behaves like a trapdoor.
+    if (mCloseBtn != null) mCloseBtn.setOnClickListener(v -> unsnap());
+
+    final int visible = dp(SNAP_VISIBLE_DP);
+    final int targetX = left ? -mParams.width + visible : mScreenWidth - visible;
+
+    mSnapAnim = ValueAnimator.ofInt(mParams.x, targetX);
+    mSnapAnim.setDuration(200);
+    mSnapAnim.addUpdateListener(a ->
+    {
+      if (mRootView == null) return;
+      mParams.x = (int) a.getAnimatedValue();
+      try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
+    });
+    mSnapAnim.start();
+  }
+
+  private void unsnap()
+  {
+    if (!mSnapped) return;
+    if (mSnapAnim != null) mSnapAnim.cancel();
+    mSnapped = false;
+    mParams.x = mSnapPreX;
+    mParams.y = mSnapPreY;
+    if (mRootView != null)
+    {
+      try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
+    }
+    if (mCloseBtn != null) mCloseBtn.setOnClickListener(v -> dismiss());
+  }
+
+  // ── Back-aware WebView ────────────────────────────────────────────
+
+  private class BackAwareWebView extends WebView
+  {
+    BackAwareWebView(Context c) { super(c); }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event)
+    {
+      if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
+          && event.getAction() == KeyEvent.ACTION_UP)
+      {
+        if (mSnapped)
+        {
+          unsnap();
+        }
+        else if (canGoBack())
+        {
+          goBack();
+        }
+        else
+        {
+          post(() -> dismiss());
+        }
+        return true;
+      }
+      return super.dispatchKeyEvent(event);
+    }
+  }
+
+  // ── Lifecycle ────────────────────────────────────────────────────
+
   private void dismiss()
   {
+    if (mSnapAnim != null) mSnapAnim.cancel();
     try
     {
       InputMethodManager imm =
@@ -363,6 +444,7 @@ public class FloatingWindowService extends Service
   @Override
   public void onDestroy()
   {
+    if (mSnapAnim != null) { mSnapAnim.cancel(); mSnapAnim = null; }
     triggerCloseSync();
 
     if (mRootView != null && mWindowManager != null)
@@ -391,6 +473,8 @@ public class FloatingWindowService extends Service
 
   @Override
   public IBinder onBind(Intent intent) { return null; }
+
+  // ── Data injection ────────────────────────────────────────────────
 
   private void injectPendingNotes() { injectPendingNotes(0); }
 
@@ -475,7 +559,7 @@ public class FloatingWindowService extends Service
     }
   }
 
-  // ── JS bridge ──────────────────────────────────────────────────
+  // ── JS bridge ─────────────────────────────────────────────────────
 
   public class FloatingWebAppInterface
   {
@@ -517,6 +601,18 @@ public class FloatingWindowService extends Service
     public void closeOverlay() { dismiss(); }
 
     @JavascriptInterface
+    public void snapLeft() { snapToEdge(true); }
+
+    @JavascriptInterface
+    public void snapRight() { snapToEdge(false); }
+
+    @JavascriptInterface
+    public void unsnapWindow() { unsnap(); }
+
+    @JavascriptInterface
+    public boolean isSnapped() { return mSnapped; }
+
+    @JavascriptInterface
     public int getNavBarHeight()
     {
       int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
@@ -540,6 +636,12 @@ public class FloatingWindowService extends Service
 
     @JavascriptInterface
     public boolean isOverlayMode() { return true; }
+
+    @JavascriptInterface
+    public String getDynamicWallpaperTheme()
+    {
+      return DynamicTheme.getWallpaperTheme(FloatingWindowService.this);
+    }
 
     @JavascriptInterface
     public void setupSyncFile(String d, String c) { showToast("Open the full Karui app for this."); }

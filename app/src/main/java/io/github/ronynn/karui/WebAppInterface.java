@@ -248,6 +248,14 @@ public class WebAppInterface
     return id > 0 ? a.getResources().getDimensionPixelSize(id) : 0;
   }
 
+  @JavascriptInterface
+public String getDynamicWallpaperTheme()
+{
+  MainActivity a = act();
+  if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
+  return DynamicTheme.getWallpaperTheme(a);
+}
+
   // ── Calendar bridge ─────────────────────────────────────────────
 
   @JavascriptInterface

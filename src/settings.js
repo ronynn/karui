@@ -1,5 +1,7 @@
 import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
 
+import { startFontLongPress, clearFontLongPress } from './fonts.js'
+
 // Whitelist — only these vars are honoured. Anything else in a custom
 // theme JSON is silently dropped, so a malformed paste can't nuke layout.
 const THEME_VARS = ['--bg', '--surface', '--border', '--text', '--accent', '--accent-txt', '--gray']
@@ -120,6 +122,47 @@ export function createSettingsModule()
       { label: 'L', scale: 1.15 },
       { label: 'XL', scale: 1.3 }
     ],
+
+
+    applyDynamicTheme()
+{
+  if (!window.Android || !window.Android.getDynamicWallpaperTheme)
+  {
+    this.showToast('Not available on this build')
+    return
+  }
+
+  try
+  {
+    const json = window.Android.getDynamicWallpaperTheme()
+    const data = JSON.parse(json)
+    if (!data.ok) throw new Error(data.error || 'no_color')
+
+    const key = 'dynamic_wallpaper'
+    const theme = {
+      key,
+      name: 'WALLPAPER',
+      vars: {
+        '--bg': data.bg,
+        '--surface': data.surface,
+        '--border': data.border,
+        '--text': data.text,
+        '--accent': data.accent,
+        '--accent-txt': data.accentTxt,
+        '--gray': data.gray
+      }
+    }
+
+    this.customThemes = this.customThemes.filter(t => t.key !== key).concat(theme)
+    localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
+    this.setTheme(key)
+    this.showToast('Wallpaper theme applied')
+  }
+  catch (e)
+  {
+    this.showToast('Could not read wallpaper')
+  }
+},
 
     // --- setters ---
     setTheme(t)
@@ -326,6 +369,3 @@ export function createSettingsModule()
   }
 }
 
-// These were referenced in the original but not imported — add the guard
-// here so `startFontHold` doesn't throw if you trim imports later.
-import { startFontLongPress, clearFontLongPress } from './fonts.js'

@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="games.css">
   </head>
 
-<body v-scope v-cloak :class="{ 'no-transitions': removeTransitions, 'no-fab': !showFab }" @vue:mounted="init">
+  <body v-scope v-cloak :class="{ 'no-transitions': removeTransitions, 'no-fab': !showFab }" @vue:mounted="init">
     <header id="top-bar" :class="{ scrolled: isScrolled }">
       <div id="app-title">Karui</div>
       <div class="pivot-container">
@@ -102,6 +102,11 @@
             <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
               {{ t.label }}
             </button>
+            <button class="theme-btn"
+              @click="applyDynamicTheme()"
+              title="Pick a theme from your wallpaper">
+              WALLPAPER
+            </button>
             <button v-for="ct in customThemes" :key="ct.key" class="theme-btn" :class="{ active: currentTheme === ct.key }" @click="setTheme(ct.key)">
               <span style="overflow:hidden; text-overflow:ellipsis;">{{ ct.name.toUpperCase() }}</span>
               <span v-if="currentTheme !== ct.key" class="theme-delete-glyph" @click.stop="deleteCustomTheme(ct.key)">&times;</span>
@@ -137,7 +142,7 @@
                 <span class="slider"></span>
               </label>
             </div>
-            
+
             <div class="toggle-container">
               <span>Keep keyboard when switching tabs</span>
               <label class="switch">
@@ -184,7 +189,7 @@
             </div>
 
 
-            
+
             <div style="text-align:center;padding-top:15px;">Effects</div>
 
             <div class="toggle-container">
@@ -223,7 +228,7 @@
               </label>
             </div>
 
-            
+
             <div style="text-align:center;padding-top:15px;">Functionality</div>
 
             <div class="toggle-container">
@@ -325,13 +330,13 @@
       </div>
     </div>
 
-<div id="fab-btn"
-  v-if="showFab && (editVisible || (currentScreen === 'home' && !modalVisible))"
-  @click="onFabClick"
-  :title="editVisible ? 'Done' : 'Quick Input'"
-  :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
-  {{ editVisible ? '>>' : '>_' }}
-</div>
+    <div id="fab-btn"
+      v-if="showFab && (editVisible || (currentScreen === 'home' && !modalVisible))"
+      @click="onFabClick"
+      :title="editVisible ? 'Done' : 'Quick Input'"
+      :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
+      {{ editVisible ? '>>' : '>_' }}
+    </div>
 
     <div id="context-menu" class="menu menu-2col" :style="contextMenuStyle">
       <div class="menu-title">{{ contextTab }}</div>
@@ -361,6 +366,7 @@
       <button @click="actionDeleteNote">Delete</button>
       <div class="note-menu-stats note-menu-stats-bottom">CH: {{ activeNoteCharCount }}</div>
     </div>
+    <div id="menu-backdrop" class="menu-backdrop" v-if="contextMenuVisible || noteMenuVisible" @click="closeAllMenus"></div>
 
     <textarea id="edit-textarea" v-if="editVisible" v-model="editDraftText" @input="autosaveEdit" spellcheck="false"></textarea>
 
@@ -383,7 +389,7 @@
           placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
         <div class="paste-json-buttons">
           <button class="btn-subtle" @click="closePasteJson">Cancel</button>
-         
+
           <button @click="importPastedJson">Save</button>
         </div>
       </div>
@@ -417,9 +423,9 @@
       <div class="modal-box" style="max-width: 480px;">
         <div style="font-weight: bold;">Import Custom Theme</div>
         <pre class="theme-format-hint">
-    {
-      "name": "My Theme",
-      "vars": {
+          {
+          "name": "My Theme",
+          "vars": {
           "--bg": "#1d2021",
           "--surface": "#282828",
           "--border": "#3c3836",
@@ -427,8 +433,8 @@
           "--accent": "#fabd2f",
           "--accent-txt": "#1d2021",
           "--gray": "#928374"
-        }
-    }</pre>
+          }
+          }</pre>
         <textarea id="theme-import-input" v-model="themeImportText" rows="10" spellcheck="false"></textarea>
         <div style="display: flex; gap: 10px;">
           <button class="btn-subtle" @click="closeThemeImport">Cancel</button>

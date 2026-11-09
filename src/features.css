@@ -109,3 +109,13 @@
 body.no-fab #edit-textarea {
   padding-bottom: calc(40px + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px));
 }
+
+/* Click-catcher under the menu. Clicks on it close the menu without
+   reaching the app underneath. Above all app UI, below `.menu` (2000). */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1999;
+  background: transparent;
+  touch-action: manipulation;
+}
