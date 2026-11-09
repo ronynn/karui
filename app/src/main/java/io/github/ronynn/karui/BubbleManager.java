@@ -14,119 +14,96 @@ import android.os.Build;
 
 public final class BubbleManager
 {
-  private static final String BUBBLE_CHANNEL_ID = "karui_bubble_channel";
-  private static final int    BUBBLE_NOTIFICATION_ID = 2;
-  private static final String SHORTCUT_ID = "karui_notes_bubble";
-  private static final int    DESIRED_HEIGHT_DP = 600;
+    private static final String BUBBLE_CHANNEL_ID = "karui_bubble_channel";
+    private static final int    BUBBLE_NOTIFICATION_ID = 2;
+    private static final String SHORTCUT_ID = "karui_notes_bubble";
+    private static final int    DESIRED_HEIGHT_DP = 600;
 
-  private BubbleManager() {}
+    private BubbleManager() {}
 
-  /**
-   * Posts the bubble notification. Returns true if the bubble was
-   * posted, false on devices where bubbles are unavailable (API < 29).
-   * Callers should fall back to the full-screen UI on false.
-   */
-  public static boolean showBubble(Context context)
-  {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
-
-    createChannel(context);
-    createShortcut(context);
-
-    Intent target = new Intent(context, MainActivity.class);
-    target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
-    int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      piFlags |= PendingIntent.FLAG_IMMUTABLE;
-    PendingIntent bubbleIntent =
-        PendingIntent.getActivity(context, 0, target, piFlags);
-
-    Icon icon = Icon.createWithResource(context, R.drawable.ic_note);
-
-    // Builder(PendingIntent, Icon) is the only valid constructor on API 29.
-    // It was deprecated (not removed) in API 33 in favour of
-    // Builder(String shortcutId, int height); both produce the same
-    // result when setShortcutId() is used on the notification, which
-    // we do below. So this single form works on every API 29+ device.
-    Notification.BubbleMetadata bubbleData =
-        new Notification.BubbleMetadata.Builder(bubbleIntent, icon)
-            .setDesiredHeight(DESIRED_HEIGHT_DP)
-            .setAutoExpandBubble(true)
-            .setSuppressNotification(true)
-            .build();
-
-    Person chatPartner = new Person.Builder()
-        .setName("Karui Notes")
-        .setImportant(true)
-        .build();
-
-    Notification.Builder nb = new Notification.Builder(context, BUBBLE_CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_note)
-        .setContentTitle("Karui Quick Note")
-        .setContentText("Tap to expand the floating notes window.")
-        .setBubbleMetadata(bubbleData)
-        .setShortcutId(SHORTCUT_ID)
-        .addPerson(chatPartner)
-        .setCategory(Notification.CATEGORY_MESSAGE);
-
-    NotificationManager nm =
-        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-    if (nm == null) return false;
-
-    try
+    /**
+     * Must be called while an Activity is visible (onResume).
+     * Returns true if the bubble was posted.
+     */
+    public static boolean showBubble(Context context)
     {
-      nm.notify(BUBBLE_NOTIFICATION_ID, nb.build());
-      return true;
-    }
-    catch (Exception e)
-    {
-      return false;
-    }
-  }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
 
-  private static void createChannel(Context context)
-  {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        createChannel(context);
+        createShortcut(context); // Always long-lived now
 
-    NotificationChannel channel = new NotificationChannel(
-        BUBBLE_CHANNEL_ID,
-        "Floating Notes",
-        NotificationManager.IMPORTANCE_HIGH);
-    channel.setDescription("Allows the Karui notes window to float over other apps.");
-    channel.setAllowBubbles(true);
+        Intent target = new Intent(context, MainActivity.class);
+        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-    NotificationManager nm =
-        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-    if (nm != null) nm.createNotificationChannel(channel);
-  }
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent bubbleIntent = PendingIntent.getActivity(context, 0, target, piFlags);
 
-  private static void createShortcut(Context context)
-  {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return;
+        Icon icon = Icon.createWithResource(context, R.drawable.ic_note);
 
-    ShortcutManager sm =
-        (ShortcutManager) context.getSystemService(Context.SHORTCUT_SERVICE);
-    if (sm == null) return;
+        Notification.BubbleMetadata bubbleData =
+                new Notification.BubbleMetadata.Builder(bubbleIntent, icon)
+                        .setDesiredHeight(DESIRED_HEIGHT_DP)
+                        .setAutoExpandBubble(true)
+                        .setSuppressNotification(true)
+                        .build();
 
-    Intent shortcutIntent = new Intent(context, MainActivity.class);
-    shortcutIntent.setAction(Intent.ACTION_VIEW);
+        Person chatPartner = new Person.Builder()
+                .setName("Karui Notes")
+                .setImportant(true)
+                .build();
 
-    ShortcutInfo.Builder builder = new ShortcutInfo.Builder(context, SHORTCUT_ID)
-        .setShortLabel("Karui Notes")
-        .setLongLabel("Open Karui Notes")
-        .setIcon(Icon.createWithResource(context, R.drawable.ic_note))
-        .setIntent(shortcutIntent);
+        Notification.Builder nb = new Notification.Builder(context, BUBBLE_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_note)
+                .setContentTitle("Karui Quick Note")
+                .setContentText("Tap to expand the floating notes window.")
+                .setBubbleMetadata(bubbleData)
+                .setShortcutId(SHORTCUT_ID) // Must match the shortcut
+                .addPerson(chatPartner)
+                .setCategory(Notification.CATEGORY_MESSAGE);
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-    {
-      builder.setLongLived(true);
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return false;
+
+        try {
+            nm.notify(BUBBLE_NOTIFICATION_ID, nb.build());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    try
-    {
-      sm.pushDynamicShortcut(builder.build());
+    private static void createChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationChannel channel = new NotificationChannel(
+                BUBBLE_CHANNEL_ID, "Floating Notes", NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription("Allows the Karui notes window to float over other apps.");
+        channel.setAllowBubbles(true);
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) nm.createNotificationChannel(channel);
     }
-    catch (Exception ignored) {}
-  }
+
+    private static void createShortcut(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return;
+        ShortcutManager sm = (ShortcutManager) context.getSystemService(Context.SHORTCUT_SERVICE);
+        if (sm == null) return;
+
+        Intent shortcutIntent = new Intent(context, MainActivity.class);
+        shortcutIntent.setAction(Intent.ACTION_VIEW);
+
+        ShortcutInfo.Builder builder = new ShortcutInfo.Builder(context, SHORTCUT_ID)
+                .setShortLabel("Karui Notes")
+                .setLongLabel("Open Karui Notes")
+                .setIcon(Icon.createWithResource(context, R.drawable.ic_note))
+                .setIntent(shortcutIntent);
+
+        // CRITICAL FIX: This must be true on ALL API levels >= 25
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            builder.setLongLived(true);
+        }
+
+        try {
+            sm.pushDynamicShortcut(builder.build());
+        } catch (Exception ignored) {}
+    }
 }

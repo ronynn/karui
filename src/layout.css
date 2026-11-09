@@ -23,8 +23,8 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin
 /* No-transitions mode: header shrinks (title hidden), screen padding follows */
 body.no-transitions #viewport { transition: none !important; }
 body.no-transitions #app-title { display: none !important; }
-body.no-transitions header { transition: none !important; padding-top: calc(52px * var(--ui-scale)); }
-body.no-transitions .screen { padding-top: calc(96px * var(--ui-scale)); }
+body.no-transitions header { transition: none !important; padding-top: calc(38px * var(--ui-scale)); }
+body.no-transitions .screen { padding-top: calc(82px * var(--ui-scale)); }
 
 /* Landscape phone: header slides up on scroll, tighter spacing */
 @media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) and (min-aspect-ratio: 16/9) and (min-width: 480px) {
