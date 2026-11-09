@@ -1,5 +1,6 @@
 package io.github.ronynn.karui;
 
+import android.app.WallpaperColors;
 import android.app.WallpaperManager;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -57,8 +58,9 @@ public final class DynamicTheme
     try
     {
       WallpaperManager wm = WallpaperManager.getInstance(context);
-      WallpaperManager.WallpaperColors wc =
-          wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
+      // WallpaperColors is android.app.WallpaperColors — top-level class,
+      // NOT a nested WallpaperManager.WallpaperColors.
+      WallpaperColors wc = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
       if (wc == null) return null;
 
       Color p = wc.getPrimaryColor();
@@ -99,7 +101,7 @@ public final class DynamicTheme
           int b = px & 0xFF;
           int max = Math.max(r, Math.max(g, b));
           int min = Math.min(r, Math.min(g, b));
-          if (max - min < 30) continue;     // skip grays
+          if (max - min < 30) continue;        // skip grays
           if (max < 40 || min > 220) continue; // skip near-black / near-white
           int idx = ((r >> 6) << 4) | ((g >> 6) << 2) | (b >> 6);
           buckets[idx]++;
@@ -136,11 +138,11 @@ public final class DynamicTheme
 
     float h = hsv[0];
 
-    int bg       = Color.HSVToColor(new float[]{ h, 0.14f, 0.11f });
-    int surface  = Color.HSVToColor(new float[]{ h, 0.12f, 0.17f });
-    int border   = Color.HSVToColor(new float[]{ h, 0.22f, 0.32f });
-    int text     = Color.HSVToColor(new float[]{ h, 0.06f, 0.92f });
-    int gray     = Color.HSVToColor(new float[]{ h, 0.05f, 0.55f });
+    int bg        = Color.HSVToColor(new float[]{ h, 0.14f, 0.11f });
+    int surface   = Color.HSVToColor(new float[]{ h, 0.12f, 0.17f });
+    int border    = Color.HSVToColor(new float[]{ h, 0.22f, 0.32f });
+    int text      = Color.HSVToColor(new float[]{ h, 0.06f, 0.92f });
+    int gray      = Color.HSVToColor(new float[]{ h, 0.05f, 0.55f });
     int accentTxt = (hsv[2] > 0.55f) ? 0xFF000000 : 0xFFFFFFFF;
 
     return "{\"ok\":true," +

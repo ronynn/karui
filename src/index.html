@@ -105,7 +105,7 @@
             <button class="theme-btn"
               @click="applyDynamicTheme()"
               title="Pick a theme from your wallpaper">
-              WALLPAPER
+              DYNAMIC
             </button>
             <button v-for="ct in customThemes" :key="ct.key" class="theme-btn" :class="{ active: currentTheme === ct.key }" @click="setTheme(ct.key)">
               <span style="overflow:hidden; text-overflow:ellipsis;">{{ ct.name.toUpperCase() }}</span>
