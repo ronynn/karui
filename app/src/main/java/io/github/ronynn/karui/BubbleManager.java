@@ -44,24 +44,17 @@ public final class BubbleManager
 
     Icon icon = Icon.createWithResource(context, R.drawable.ic_note);
 
-    Notification.BubbleMetadata bubbleData;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-    {
-      bubbleData = new Notification.BubbleMetadata.Builder(bubbleIntent, icon)
-          .setDesiredHeight(DESIRED_HEIGHT_DP)
-          .setAutoExpandBubble(true)
-          .setSuppressNotification(true)
-          .build();
-    }
-    else
-    {
-      // API 29 only — deprecated Intent constructor
-      bubbleData = new Notification.BubbleMetadata.Builder(target, icon)
-          .setDesiredHeight(DESIRED_HEIGHT_DP)
-          .setAutoExpandBubble(true)
-          .setSuppressNotification(true)
-          .build();
-    }
+    // Builder(PendingIntent, Icon) is the only valid constructor on API 29.
+    // It was deprecated (not removed) in API 33 in favour of
+    // Builder(String shortcutId, int height); both produce the same
+    // result when setShortcutId() is used on the notification, which
+    // we do below. So this single form works on every API 29+ device.
+    Notification.BubbleMetadata bubbleData =
+        new Notification.BubbleMetadata.Builder(bubbleIntent, icon)
+            .setDesiredHeight(DESIRED_HEIGHT_DP)
+            .setAutoExpandBubble(true)
+            .setSuppressNotification(true)
+            .build();
 
     Person chatPartner = new Person.Builder()
         .setName("Karui Notes")
