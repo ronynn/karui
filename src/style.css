@@ -140,7 +140,7 @@ button:active { filter: brightness(0.8); }
 .landscape-only { display: none; }
 
 /* Landscape phones only */
-@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) and (min-aspect-ratio: 3/2) {
+@media (max-height: 500px) and (pointer: coarse) {
   body { padding-top: 0; }
   header { padding: calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) calc(4px * var(--ui-scale)); padding-top: 10px; }
   header.scrolled { transform: translateY(-100%); }
@@ -203,25 +203,3 @@ button:active { filter: brightness(0.8); }
 }
 
 
-/* Short screens (any orientation): collapse the header entirely so the
-   content has more vertical room. Overrides both the base layout and the
-   scrolled transform. */
-@media (max-height: 500px) {
-  header,
-  header.scrolled {
-    transform: translateY(-100%);
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    height: 0;
-    overflow: hidden;
-    pointer-events: none;
-    transition: none;
-  }
-  #app-title { max-height: 0; opacity: 0; margin: 0; }
-  /* Pull the screens up since the fixed header no longer pads the top. */
-  .screen { padding-top: calc(20px * var(--ui-scale)); }
-  /* FAB + toast ride a bit lower without the header. */
-  #fab-btn { bottom: 20px; }
-  #toast { bottom: 20px; }
-}

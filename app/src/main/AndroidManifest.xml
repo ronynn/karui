@@ -7,7 +7,6 @@
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
   <application
     android:allowBackup="true"
@@ -20,7 +19,9 @@
       android:configChanges="orientation|screenSize"
       android:name="io.github.ronynn.karui.MainActivity"
       android:exported="true"
-      android:launchMode="singleTask">
+      android:launchMode="singleTask"
+      android:resizeableActivity="true"
+      android:allowEmbedded="true">
 
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
@@ -52,6 +53,7 @@
     </activity>
 
     <receiver android:name=".NoteReplyReceiver" android:exported="false" />
+
     <activity
       android:name=".WidgetConfigActivity"
       android:exported="true"
@@ -63,7 +65,9 @@
         <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
       </intent-filter>
     </activity>
+
     <receiver android:name=".WidgetToggleReceiver" android:exported="false" />
+
     <receiver android:name=".NotesWidgetProvider" android:exported="true">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -73,21 +77,35 @@
         android:name="android.appwidget.provider"
         android:resource="@xml/notes_widget_info" />
     </receiver>
+
     <receiver android:name=".CalendarNotificationReceiver" android:exported="false" />
+
     <receiver android:name=".BootReceiver" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
       </intent-filter>
     </receiver>
+
     <service
       android:name=".NotesWidgetService"
       android:permission="android.permission.BIND_REMOTEVIEWS"
       android:exported="false" />
 
+    <!-- NEW: Quick Settings Tile -->
     <service
-      android:name=".OverlayService"
-      android:exported="false" />
+      android:name=".KaruiTileService"
+      android:label="Karui Notes"
+      android:icon="@drawable/ic_note"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+
+    <!-- OverlayService removed entirely -->
+    <!-- SYSTEM_ALERT_WINDOW permission removed entirely -->
 
   </application>
 </manifest>
