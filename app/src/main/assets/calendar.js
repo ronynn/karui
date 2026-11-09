@@ -18,8 +18,8 @@ import{parseReminderTime as Q,stripReminderTime as U}from"./notes.js";export fun
       <div class="calendar-add-form">
         <textarea id="event-text" rows="4" placeholder="Event details\u2026 append @1810 for an 18:10 reminder. Prefix !1d for daily."></textarea>
         <div class="calendar-add-form-actions">
-          <button id="save-event">Save</button>
           <button id="cancel-event">Cancel</button>
+          <button id="save-event">Save</button>     
         </div>
       </div>
     `,document.getElementById("save-event").addEventListener("click",()=>{const o=document.getElementById("event-text").value.trim();o&&(a.addNote(o,a.calendarTabName,e),a.saveData(),L())}),document.getElementById("cancel-event").addEventListener("click",()=>{S(e,n)})}function u(){const e=document.getElementById("calendar-container");if(!e)return;const n=s.getFullYear(),o=s.getMonth(),k=new Date(n,o,1),C=new Date(n,o+1,0).getDate(),r=g(),h=k.getDay(),y=a.weekStartsMonday?(h+6)%7:h,D=`${n}-${String(o+1).padStart(2,"0")}-`,q=c().map(E),T={},M=[];for(const t of q)t.date&&(T[t.date]||(T[t.date]=[]),T[t.date].push(t),!t.isRecurring&&t.date.startsWith(D)&&M.push(t));M.sort((t,d)=>(t.date||"").localeCompare(d.date||""));const O=`

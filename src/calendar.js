@@ -254,8 +254,8 @@ export function initCalendar(appStore)
       <div class="calendar-add-form">
         <textarea id="event-text" rows="4" placeholder="Event details… append @1810 for an 18:10 reminder. Prefix !1d for daily."></textarea>
         <div class="calendar-add-form-actions">
-          <button id="save-event">Save</button>
           <button id="cancel-event">Cancel</button>
+          <button id="save-event">Save</button>     
         </div>
       </div>
     `

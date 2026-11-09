@@ -117,6 +117,7 @@ function hydrateStore(store)
   store.syncFilePath = str('syncFilePath', '')
   store.enterNewLine = bool('enterNewLine')
   store.weekStartsMonday = bool('weekStartsMonday')
+  store.removeTransitions = bool('removeTransitions')
 
   store.calendarEnabled = localStorage.getItem('calendarEnabled') !== 'false'
   store.calendarTabName = str('calendarTabName', 'Calkarui')
@@ -145,12 +146,16 @@ const appStore = reactive(mergeModules(
     // Calendar display.
     weekStartsMonday: false,
 
+    // UI behaviour toggle.
+    removeTransitions: false,
+
     // Full-screen note editor (autosave) state.
     editVisible: false,
     editNoteId: null,
     editDraftText: '',
     _autosaveTimer: null,
     _vvListener: null,
+    _editPushedState: false,
 
     // Modal state (still used for rename/new tab/PIN/theme import).
     modalVisible: false,
@@ -235,6 +240,24 @@ const appStore = reactive(mergeModules(
       }
 
       window.addEventListener('click', e => this.handleGlobalClick(e), true)
+
+      // Whenever a text field gains focus, immediately un-hide the header.
+      // This covers the case where the keyboard opens without a scroll event
+      // firing (common on Android with interactive-widget=resizes-content).
+      window.addEventListener('focusin', (e) =>
+      {
+        const t = e.target
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
+        {
+          if (this.isScrolled) this.isScrolled = false
+        }
+      })
+
+      window.addEventListener('popstate', () =>
+      {
+        if (this.editVisible) this.finishEdit()
+      })
+
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
@@ -302,6 +325,7 @@ const appStore = reactive(mergeModules(
       localStorage.setItem('syncFilePath', this.syncFilePath)
       localStorage.setItem('enterNewLine', this.enterNewLine)
       localStorage.setItem('weekStartsMonday', this.weekStartsMonday)
+      localStorage.setItem('removeTransitions', this.removeTransitions)
 
       localStorage.setItem('calendarEnabled', this.calendarEnabled)
       localStorage.setItem('calendarTabName', this.calendarTabName)
@@ -394,9 +418,19 @@ const appStore = reactive(mergeModules(
         const scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
         {
-          const scrolled = scrollTop > 10
-          if (this.isScrolled !== scrolled) this.isScrolled = scrolled
-          // Only touch the reactive store when a menu is actually open.
+          const ae = document.activeElement
+          const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')
+          if (typing)
+          {
+            // While any text field is focused, the entire header must stay
+            // visible — no title fade, no landscape slide-up. Force-show.
+            if (this.isScrolled) this.isScrolled = false
+          }
+          else
+          {
+            const scrolled = scrollTop > 10
+            if (this.isScrolled !== scrolled) this.isScrolled = scrolled
+          }
           if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
           this.scrollTicking = false
         })
@@ -443,8 +477,17 @@ const appStore = reactive(mergeModules(
       this.editNoteId = note.id
       this.editDraftText = note.text
       this.editVisible = true
+      this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
+      // Push a history entry so the hardware back button closes the editor
+      // (with autosave already flushed by finishEdit) instead of leaving
+      // the app.
+      if (!history.state || !history.state.karuiEdit)
+      {
+        history.pushState({ karuiEdit: true }, '')
+        this._editPushedState = true
+      }
       nextTick(() =>
       {
         const el = document.getElementById('edit-textarea')
@@ -468,9 +511,6 @@ const appStore = reactive(mergeModules(
     },
 
     // Compute keyboard height from visualViewport and publish it as --kb-pad.
-    // With interactive-widget=resizes-content: innerHeight and vv.height both
-    // shrink (diff ≈ 0 → small pad). Without it: only vv.height shrinks
-    // (diff = real keyboard → bigger pad). Either way cursor stays visible.
     _updateKeyboardPadding()
     {
       if (!this.editVisible) return
@@ -503,7 +543,12 @@ const appStore = reactive(mergeModules(
     // Flush pending save and close the editor.
     finishEdit()
     {
+      if (!this.editVisible) return
       const id = this.editNoteId
+      const shouldPopHistory = this._editPushedState
+        && history.state
+        && history.state.karuiEdit
+      this._editPushedState = false
       this.editVisible = false
       this.editNoteId = null
       clearTimeout(this._autosaveTimer)
@@ -521,6 +566,10 @@ const appStore = reactive(mergeModules(
       this.editDraftText = ''
       const ae = document.activeElement
       if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur()
+      // If the user tapped Done (not the hardware back), pop the history
+      // entry we pushed so the app's history stays clean. If they used the
+      // hardware back button, the pop already happened and this is a no-op.
+      if (shouldPopHistory) history.back()
     },
 
     closeAllMenus()

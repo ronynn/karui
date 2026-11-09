@@ -20,16 +20,19 @@
         if(f){document.documentElement.style.fontFamily=f.indexOf('CustomFont_')===0?"'"+f+"', system-ui, sans-serif":f;}
         var s=localStorage.getItem('uiScale');
         if(s){document.documentElement.style.setProperty('--ui-scale',s);}
+        if(localStorage.getItem('removeTransitions')==='true'){document.body.classList.add('no-transitions');}
       }catch(e){}})();
     </script>
 
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="layout.css">
+    <link rel="stylesheet" href="ui.css">
+    <link rel="stylesheet" href="features.css">
     <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="calendar.css">
     <link rel="stylesheet" href="games.css">
   </head>
 
-  <body v-scope v-cloak @vue:mounted="init">
+  <body v-scope v-cloak :class="{ 'no-transitions': removeTransitions }" @vue:mounted="init">
 
     <header id="top-bar" :class="{ scrolled: isScrolled }">
       <div id="app-title">Karui</div>
@@ -135,6 +138,7 @@
                 <span class="slider"></span>
               </label>
             </div>
+            
             <div class="toggle-container">
               <span>Keep keyboard when switching tabs</span>
               <label class="switch">
@@ -173,20 +177,15 @@
               </label>
             </div>
             <div class="toggle-container">
-              <span>Disable Screen Swipe</span>
-              <label class="switch">
-                <input type="checkbox" v-model="disableSwipe" @change="saveData">
-                <span class="slider"></span>
-              </label>
-            </div>
-            
-            <div class="toggle-container">
               <span>Disable Screenshots</span>
               <label class="switch">
                 <input type="checkbox" v-model="disableScreenshots" @change="toggleScreenshots">
                 <span class="slider"></span>
               </label>
             </div>
+
+
+            
             <div style="text-align:center;padding-top:15px;">Effects</div>
 
             <div class="toggle-container">
@@ -210,6 +209,22 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="toggle-container">
+              <span>Remove transitions</span>
+              <label class="switch">
+                <input type="checkbox" v-model="removeTransitions" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="toggle-container">
+              <span>Disable Screen Swipe</span>
+              <label class="switch">
+                <input type="checkbox" v-model="disableSwipe" @change="saveData">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            
             <div style="text-align:center;padding-top:15px;">Functionality</div>
 
             <div class="toggle-container">
@@ -315,7 +330,7 @@
       v-if="editVisible || (showFab && currentScreen === 'home' && !modalVisible)"
       @click="onFabClick"
       :title="editVisible ? 'Done' : 'Quick Input'"
-      :style="editVisible ? { fontSize: 'calc(17px * var(--ui-scale))' } : null">
+      :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
       {{ editVisible ? '~_' : '>_' }}
     </div>
 
@@ -348,9 +363,7 @@
       <div class="note-menu-stats note-menu-stats-bottom">CH: {{ activeNoteCharCount }}</div>
     </div>
 
-    <div id="edit-overlay" class="edit-overlay" v-if="editVisible">
-      <textarea id="edit-textarea" v-if="editVisible" v-model="editDraftText" @input="autosaveEdit" spellcheck="false"></textarea>   
-    </div>
+    <textarea id="edit-textarea" v-if="editVisible" v-model="editDraftText" @input="autosaveEdit" spellcheck="false"></textarea>
 
     <div id="modal-overlay" v-if="modalVisible">
       <div class="modal-box">
@@ -370,8 +383,9 @@
         <textarea id="paste-json-input" v-model="pasteJsonText" rows="10"
           placeholder="Paste JSON from Export, a Karui QR payload"></textarea>
         <div class="paste-json-buttons">
-          <button @click="importPastedJson">Save</button>
           <button class="btn-subtle" @click="closePasteJson">Cancel</button>
+         
+          <button @click="importPastedJson">Save</button>
         </div>
       </div>
     </div>
@@ -403,9 +417,10 @@
     <div id="theme-import-overlay" v-if="themeImportVisible">
       <div class="modal-box" style="max-width: 480px;">
         <div style="font-weight: bold;">Import Custom Theme</div>
-        <pre class="theme-format-hint">{
-          "name": "My Theme",
-          "vars": {
+        <pre class="theme-format-hint">
+    {
+      "name": "My Theme",
+      "vars": {
           "--bg": "#1d2021",
           "--surface": "#282828",
           "--border": "#3c3836",
@@ -413,8 +428,8 @@
           "--accent": "#fabd2f",
           "--accent-txt": "#1d2021",
           "--gray": "#928374"
-          }
-          }</pre>
+        }
+    }</pre>
         <textarea id="theme-import-input" v-model="themeImportText" rows="10" spellcheck="false"></textarea>
         <div style="display: flex; gap: 10px;">
           <button class="btn-subtle" @click="closeThemeImport">Cancel</button>
