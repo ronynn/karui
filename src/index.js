@@ -9,7 +9,6 @@ import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './set
 import { createQrModule } from './qr.js'
 import { createPomodoroModule } from './pomodoro.js'
 
-// Lazy-load confetti so first paint doesn't wait on it.
 let _confettiPromise = null
 function _loadConfetti()
 {
@@ -49,7 +48,6 @@ if (typeof window.confetti !== 'function')
   window.confetti = stub
 }
 
-// Auto-grow a textarea up to 45vh.
 export function autoExpandTextarea(el)
 {
   if (!el) return
@@ -71,7 +69,6 @@ function mergeModules(...mods)
   return result
 }
 
-// Hydrate persisted state from localStorage before mount.
 function hydrateStore(store)
 {
   const ls = (k) =>
@@ -126,7 +123,6 @@ function hydrateStore(store)
 
   store.activeCategory = store.noteCategories[0] || 'Inbox'
 
-  // Session-only state.
   store._unlockedTabs = {}
   store.searchTerm = ''
   store.modalIsPassword = false
@@ -148,7 +144,6 @@ const appStore = reactive(mergeModules(
     weekStartsMonday: false,
     removeTransitions: false,
 
-    // Full-screen note editor (autosave) state.
     editVisible: false,
     editNoteId: null,
     editDraftText: '',
@@ -158,6 +153,8 @@ const appStore = reactive(mergeModules(
     _vvListener: null,
     _editPushedState: false,
     _lastKbPad: null,
+    _selectionListener: null,
+    _selectionTimer: null,
 
     _sideEffectTimer: null,
 
@@ -559,6 +556,7 @@ const appStore = reactive(mergeModules(
       this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
+      this._addSelectionListener()
       if (!history.state || !history.state.karuiEdit)
       {
         history.pushState({ karuiEdit: true }, '')
@@ -573,7 +571,10 @@ const appStore = reactive(mergeModules(
           el.focus()
           const len = el.value.length
           try { el.selectionStart = el.selectionEnd = len } catch (_) {}
+          // Staggered scrolls to catch keyboard animation frames.
           requestAnimationFrame(() => this._scrollEditorToCursor())
+          setTimeout(() => this._scrollEditorToCursor(), 150)
+          setTimeout(() => this._scrollEditorToCursor(), 350)
         })
       }
     },
@@ -597,6 +598,7 @@ const appStore = reactive(mergeModules(
       this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
+      this._addSelectionListener()
       if (!history.state || !history.state.karuiEdit)
       {
         history.pushState({ karuiEdit: true }, '')
@@ -610,6 +612,8 @@ const appStore = reactive(mergeModules(
           if (!el) return
           el.focus()
           requestAnimationFrame(() => this._scrollEditorToCursor())
+          setTimeout(() => this._scrollEditorToCursor(), 150)
+          setTimeout(() => this._scrollEditorToCursor(), 350)
         })
       }
     },
@@ -631,8 +635,6 @@ const appStore = reactive(mergeModules(
 
     autosaveEdit()
     {
-      // Re-anchor the cursor after any content change so it never ends up
-      // below the visible area.
       if (this.editTabMode || this.editNoteId != null)
       {
         requestAnimationFrame(() => this._scrollEditorToCursor())
@@ -669,43 +671,128 @@ const appStore = reactive(mergeModules(
       {
         this._lastKbPad = padStr
         document.documentElement.style.setProperty('--kb-pad', padStr)
-        // Layout shifted — re-scroll after it settles.
         requestAnimationFrame(() => requestAnimationFrame(() =>
           this._scrollEditorToCursor()
         ))
       }
     },
 
-    // Force the textarea to scroll so the cursor line is well above the
-    // keyboard / bottom edge. Browsers usually handle this, but with a
-    // heavy padding-bottom the natural scroll can stop short of the safe
-    // zone. Called on every input and on keyboard-height changes.
+    // Measure the true rendered Y of the cursor within the textarea content,
+    // using a hidden mirror div. Line-count estimation fails for soft-wrapped
+    // text — a 200-char paragraph is 1 newline but ~10 rendered lines.
+    _measureCursorY(el, cursorPos)
+    {
+      try
+      {
+        const cs = getComputedStyle(el)
+        const div = document.createElement('div')
+        div.style.cssText = [
+          'position:absolute',
+          'top:-99999px',
+          'left:-99999px',
+          'visibility:hidden',
+          'pointer-events:none',
+          `white-space:${cs.whiteSpace || 'pre-wrap'}`,
+          `overflow-wrap:${cs.overflowWrap || 'break-word'}`,
+          `word-break:${cs.wordBreak || 'normal'}`,
+          `font-family:${cs.fontFamily}`,
+          `font-size:${cs.fontSize}`,
+          `font-weight:${cs.fontWeight}`,
+          `font-style:${cs.fontStyle}`,
+          `line-height:${cs.lineHeight}`,
+          `letter-spacing:${cs.letterSpacing}`,
+          `padding:${cs.paddingTop} ${cs.paddingRight} ${cs.paddingBottom} ${cs.paddingLeft}`,
+          `border:${cs.borderTopWidth} solid transparent`,
+          `box-sizing:border-box`,
+          `width:${el.clientWidth}px`
+        ].join(';')
+        div.textContent = el.value.slice(0, cursorPos)
+        const marker = document.createElement('span')
+        marker.textContent = '\u200b'
+        div.appendChild(marker)
+        document.body.appendChild(div)
+        const divRect = div.getBoundingClientRect()
+        const markerRect = marker.getBoundingClientRect()
+        const y = markerRect.top - divRect.top
+        document.body.removeChild(div)
+        return y
+      }
+      catch (e)
+      {
+        // Fallback: line-count estimate.
+        const before = el.value.slice(0, cursorPos)
+        const lines = before.split('\n').length
+        const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24
+        return lines * lineHeight
+      }
+    },
+
+    // Scroll the textarea so the cursor sits inside the *visible* viewport,
+    // i.e. above the keyboard. Uses screen coordinates so vv.height (which
+    // shrinks when the keyboard opens) is the authoritative visible bottom.
     _scrollEditorToCursor()
     {
+      if (!this.editVisible) return
       const el = document.getElementById('edit-textarea')
       if (!el) return
       const pos = el.selectionStart
       if (pos === null || pos === undefined) return
 
-      // Estimate cursor Y within the scrollable content.
-      const before = el.value.slice(0, pos)
-      const lineCount = before.split('\n').length
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24
-      const cursorY = lineCount * lineHeight
+      const cursorYInContent = this._measureCursorY(el, pos)
+      const scrollTop = el.scrollTop
+      const rect = el.getBoundingClientRect()
 
-      const viewH = el.clientHeight
-      const topSafe = 2 * lineHeight
-      const bottomSafe = viewH - 4 * lineHeight
-      const relativeY = cursorY - el.scrollTop
+      // Cursor's Y in screen space
+      const cursorScreenY = rect.top + cursorYInContent - scrollTop
 
-      if (relativeY < topSafe)
+      // Visible window on screen: top of textarea to bottom of visual viewport.
+      const vv = window.visualViewport
+      const visibleTop = rect.top
+      const visibleBottom = vv ? Math.min(rect.bottom, vv.height) : rect.bottom
+
+      const topSafe = visibleTop + 2 * lineHeight
+      const bottomSafe = visibleBottom - 3 * lineHeight
+
+      if (cursorScreenY < topSafe)
       {
-        el.scrollTop = Math.max(0, cursorY - topSafe)
+        const delta = topSafe - cursorScreenY
+        el.scrollTop = Math.max(0, scrollTop - delta)
       }
-      else if (relativeY > bottomSafe)
+      else if (cursorScreenY > bottomSafe)
       {
-        el.scrollTop = cursorY - bottomSafe
+        const delta = cursorScreenY - bottomSafe
+        el.scrollTop = scrollTop + delta
       }
+    },
+
+    _addSelectionListener()
+    {
+      if (this._selectionListener) return
+      this._selectionListener = () =>
+      {
+        if (!this.editVisible) return
+        const el = document.getElementById('edit-textarea')
+        if (!el) return
+        if (document.activeElement !== el) return
+        clearTimeout(this._selectionTimer)
+        this._selectionTimer = setTimeout(() =>
+        {
+          requestAnimationFrame(() => this._scrollEditorToCursor())
+        }, 40)
+      }
+      document.addEventListener('selectionchange', this._selectionListener)
+    },
+
+    _removeSelectionListener()
+    {
+      if (this._selectionListener)
+      {
+        document.removeEventListener('selectionchange', this._selectionListener)
+      }
+      this._selectionListener = null
+      clearTimeout(this._selectionTimer)
+      this._selectionTimer = null
     },
 
     _bindViewportListener()
@@ -733,9 +820,6 @@ const appStore = reactive(mergeModules(
     {
       if (!this.editVisible) return
 
-      // Read the textarea directly. v-model + @input order isn't guaranteed
-      // in petite-vue, so this catches any case where editDraftText is one
-      // edit behind what the user actually typed.
       const el = document.getElementById('edit-textarea')
       if (el && typeof el.value === 'string') this.editDraftText = el.value
 
@@ -753,6 +837,7 @@ const appStore = reactive(mergeModules(
       this.editNoteId = null
       clearTimeout(this._autosaveTimer)
       this._unbindViewportListener()
+      this._removeSelectionListener()
       try { localStorage.removeItem('tabEditDraft') } catch (e) {}
 
       if (wasTabMode && tabName)

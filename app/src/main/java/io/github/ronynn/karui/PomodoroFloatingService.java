@@ -254,7 +254,7 @@ public class PomodoroFloatingService extends Service
 
     // Rectangle (no corners), medium-grey translucent fill, thin border.
     GradientDrawable bg = new GradientDrawable();
-    bg.setColor(0xB0505050);
+    bg.setColor(0xC81A1A1A);
     bg.setStroke(dp(1), 0xFF8B8B8B);
     root.setBackground(bg);
 
