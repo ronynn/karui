@@ -2,6 +2,7 @@ package io.github.ronynn.karui;
 
 import android.Manifest;
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -317,7 +318,7 @@ public class WebAppInterface
     return CalendarNotificationReceiver.isPomodoroRunning(a);
   }
 
-  // Quick diagnostic for the JS console:
+  // Diagnostic. Call from JS console:
   //   JSON.parse(window.Android.diagnosePomodoro())
   @JavascriptInterface
   public String diagnosePomodoro()
