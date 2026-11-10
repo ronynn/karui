@@ -6,40 +6,30 @@
     android:viewportHeight="24"
     android:tint="?android:attr/colorControlNormal">
 
-    <!-- Top-left corner bracket -->
+    <!-- Top-left corner -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M3,3h6v2H5v4H3V3z"/>
 
-    <!-- Top-right corner bracket -->
+    <!-- Top-right corner -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M15,3h6v6h-2V5h-4V3z"/>
 
-    <!-- Bottom-left corner bracket -->
+    <!-- Bottom-left corner -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M3,15h2v4h4v2H3V15z"/>
 
-    <!-- Bottom-right corner bracket -->
+    <!-- Bottom-right corner -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M19,15h2v6h-6v-2h4V15z"/>
 
-    <!-- Center QR square (larger block, top-left of center) -->
+    <!-- Center scan line -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M8,8h4v4H8V8z"/>
-
-    <!-- Center QR square (small block, bottom-right) -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M13,13h3v3h-3V13z"/>
-
-    <!-- Scan line hint (horizontal) -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillAlpha="0.7"
-        android:pathData="M7,12h10v1H7z"/>
+        android:fillAlpha="0.6"
+        android:pathData="M7,11.5h10v1H7z"/>
 
 </vector>

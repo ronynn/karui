@@ -117,10 +117,12 @@ public class FloatingWindowService extends Service
 
   private void buildWindow()
   {
-    DisplayMetrics dm = new DisplayMetrics();
-    mWindowManager.getDefaultDisplay().getMetrics(dm);
-    mScreenWidth = dm.widthPixels;
-    mScreenHeight = dm.heightPixels;
+    // getRealMetrics gives the true display bounds (including cutout area).
+    // Drag limits use these so the window can be dragged fully off-screen.
+    DisplayMetrics realMetrics = new DisplayMetrics();
+    mWindowManager.getDefaultDisplay().getRealMetrics(realMetrics);
+    mScreenWidth = realMetrics.widthPixels;
+    mScreenHeight = realMetrics.heightPixels;
 
     final int minVisible = dp(MIN_VISIBLE_DP);
     final int minW = dp(MIN_WIDTH_DP);
@@ -137,14 +139,11 @@ public class FloatingWindowService extends Service
     rootLayout.setFocusableInTouchMode(true);
     rootLayout.setFocusable(true);
 
-    // ── Main column: title bar + EditText ────────────────────────
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
-    // Padding at bottom-right so the resize handle sits on top
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-    // ── Title bar ────────────────────────────────────────────────
     FrameLayout titleBar = new FrameLayout(this);
     GradientDrawable titleBg = new GradientDrawable();
     titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
@@ -173,7 +172,6 @@ public class FloatingWindowService extends Service
     closeBtn.setOnClickListener(v -> saveAndClose());
     titleBar.addView(closeBtn);
 
-    // ── EditText ─────────────────────────────────────────────────
     mEditText = new EditText(this);
     mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -186,7 +184,7 @@ public class FloatingWindowService extends Service
         | InputType.TYPE_TEXT_FLAG_MULTI_LINE
         | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
     mEditText.setGravity(Gravity.TOP | Gravity.START);
-    mEditText.setPadding(dp(14), dp(10), dp(14), dp(24)); // bottom pad for resize handle
+    mEditText.setPadding(dp(14), dp(10), dp(14), dp(24));
     mEditText.setMinLines(2);
     mEditText.setMaxLines(8);
 
@@ -212,7 +210,6 @@ public class FloatingWindowService extends Service
     contentLayout.addView(mEditText);
     rootLayout.addView(contentLayout);
 
-    // ── Resize handle (bottom-right corner) ─────────────────────
     View resizeHandle = new View(this);
     GradientDrawable resizeShape = new GradientDrawable();
     resizeShape.setColor(Color.parseColor(RESIZE_COLOR));
@@ -224,12 +221,12 @@ public class FloatingWindowService extends Service
     resizeHandle.setLayoutParams(rhParams);
     rootLayout.addView(resizeHandle);
 
-    // ── Focusable window ─────────────────────────────────────────
-    // We DO want focus so the EditText's keyboard works and drag/resize
-    // receive touches reliably. BACK is handled below so it closes the
-    // window rather than doing nothing. Tapping outside still goes to
-    // the app below because of FLAG_NOT_TOUCH_MODAL.
-    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+    // FLAG_LAYOUT_NO_LIMITS is REQUIRED to allow the window to be positioned
+    // outside the display bounds. Without it, the WindowManager (especially
+    // on MIUI/POCO) clamps the window to keep it fully on-screen — that was
+    // the "can't drag off-screen" bug.
+    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+              | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
     mParams = new WindowManager.LayoutParams(
         initialW,
@@ -251,11 +248,6 @@ public class FloatingWindowService extends Service
 
     mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
-    Intent opened = new Intent(MainActivity.ACTION_FLOATING_OPENED);
-    opened.setPackage(getPackageName());
-    sendBroadcast(opened);
-
-    // ── BACK closes window ───────────────────────────────────────
     mRootView.setOnKeyListener((v, keyCode, event) ->
     {
       if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP)
@@ -266,7 +258,6 @@ public class FloatingWindowService extends Service
       return false;
     });
 
-    // ── Auto-focus + keyboard ────────────────────────────────────
     mEditText.postDelayed(() ->
     {
       if (mEditText == null) return;
@@ -277,7 +268,6 @@ public class FloatingWindowService extends Service
       if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
     }, 150);
 
-    // ── Autosave every 800 ms ────────────────────────────────────
     mAutoSaveRunnable = new Runnable()
     {
       @Override public void run()
@@ -288,7 +278,6 @@ public class FloatingWindowService extends Service
     };
     mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
 
-    // ── Drag title bar to move ───────────────────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
@@ -338,7 +327,6 @@ public class FloatingWindowService extends Service
       }
     });
 
-    // ── Resize from bottom-right handle ──────────────────────────
     resizeHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int startW, startH;

@@ -41,7 +41,6 @@ public class ScannerActivity extends Activity
 
   private WebView mWebView;
 
-  // Active scan state — one batch at a time
   private String mBatchId = null;
   private int mBatchTotal = 0;
   private final Map<Integer, String> mChunks = new HashMap<>();
@@ -96,6 +95,9 @@ public class ScannerActivity extends Activity
     ws.setAllowFileAccess(true);
     ws.setAllowContentAccess(true);
     ws.setMediaPlaybackRequiresUserGesture(false);
+    // No-cache ensures a fresh load every time the scanner opens. This is
+    // what fixes "second open shows the loading state instead of camera".
+    ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
     mWebView.setWebViewClient(new WebViewClient()
     {
@@ -137,18 +139,6 @@ public class ScannerActivity extends Activity
         request.deny();
       }
 
-      /**
-       * WebView's built-in "custom view" playback mode is what paints the
-       * ugly play button on top of a <video> element. If we don't override
-       * this, WebView hands the video element to its own media player UI
-       * (with play/pause/seek controls) — which looks completely wrong for
-       * a live camera preview.
-       *
-       * Calling onCustomViewHidden() immediately tells WebView "we won't
-       * adopt your media view, keep rendering inline." The result: the
-       * camera feed shows in the normal <video> element with no play
-       * button overlay.
-       */
       @Override
       public void onShowCustomView(View view, CustomViewCallback callback)
       {
@@ -156,14 +146,14 @@ public class ScannerActivity extends Activity
       }
 
       @Override
-      public void onHideCustomView()
-      {
-        // no-op
-      }
+      public void onHideCustomView() {}
     });
 
     mWebView.addJavascriptInterface(new ScannerBridge(), "Android");
-    mWebView.loadUrl("https://karui.local/scanner.html");
+
+    // Cache-busting query string. The interceptRequest handler strips it,
+    // so the actual file path resolves correctly.
+    mWebView.loadUrl("https://karui.local/scanner.html?t=" + System.currentTimeMillis());
   }
 
   private String guessMime(String path)
@@ -174,14 +164,34 @@ public class ScannerActivity extends Activity
     return "application/octet-stream";
   }
 
+  @Override
+  protected void onDestroy()
+  {
+    if (mWebView != null)
+    {
+      try
+      {
+        mWebView.loadUrl("about:blank");
+        mWebView.stopLoading();
+        mWebView.clearHistory();
+        mWebView.clearCache(true);
+        mWebView.clearFormData();
+        mWebView.removeAllViews();
+        mWebView.destroy();
+      }
+      catch (Exception ignored) {}
+      mWebView = null;
+    }
+    super.onDestroy();
+  }
+
   public class ScannerBridge
   {
     @android.webkit.JavascriptInterface
     public String onScan(String text)
     {
       try { return acceptScan(text); }
-      catch (Exception e)
-      { return jsonError("Internal error"); }
+      catch (Exception e) { return jsonError("Internal error"); }
     }
 
     @android.webkit.JavascriptInterface
@@ -202,10 +212,7 @@ public class ScannerActivity extends Activity
         });
         return "{\"ok\":true}";
       }
-      catch (Exception e)
-      {
-        return jsonError("Save failed");
-      }
+      catch (Exception e) { return jsonError("Save failed"); }
     }
 
     @android.webkit.JavascriptInterface
@@ -247,7 +254,6 @@ public class ScannerActivity extends Activity
     if (raw == null || raw.trim().isEmpty()) return jsonError("Empty scan");
     raw = raw.trim();
 
-    // ── KARUI1 multi-chunk ─────────────────────────────────────────
     if (raw.startsWith(PREFIX + "/"))
     {
       String[] parts = raw.split("/", 5);
@@ -293,7 +299,6 @@ public class ScannerActivity extends Activity
           + ",\"total\":" + mBatchTotal + "}";
     }
 
-    // ── Single-frame payload (plaintext or complete JSON) ─────────
     mReadyPayload = raw;
     mBatchId = null;
     mChunks.clear();

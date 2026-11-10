@@ -48,7 +48,6 @@ public class MainActivity extends Activity
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
   public static final String ACTION_OPEN_FLOATING = "io.github.ronynn.karui.ACTION_OPEN_FLOATING";
   public static final String ACTION_CLOSE_FLOATING = "io.github.ronynn.karui.ACTION_CLOSE_FLOATING";
-  public static final String ACTION_FLOATING_OPENED = "io.github.ronynn.karui.ACTION_FLOATING_OPENED";
 
   static final int CREATE_FILE_REQUEST_CODE = 1;
   static final int IMPORT_FILE_REQUEST_CODE = 2;
@@ -63,7 +62,6 @@ public class MainActivity extends Activity
   private static final String PREFS_SYNC = "sync_prefs";
   private static final String KEY_SYNC_URI = "sync_file_uri";
   private static final String PREFS_NOTE_QUEUE = "note_queue";
-  private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
   private static final String KEY_PENDING_IMPORT = "pending_import_json";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
 
@@ -85,7 +83,6 @@ public class MainActivity extends Activity
   private boolean isPageLoaded = false;
   private boolean mInjecting = false;
   private boolean mImportingQr = false;
-  private boolean mJustClosedFloating = false;
   boolean pendingQuickNoteEnable = false;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
@@ -94,13 +91,6 @@ public class MainActivity extends Activity
     public void onReceive(Context context, Intent intent)
     {
       if (intent == null) return;
-      String action = intent.getAction();
-
-      if (ACTION_FLOATING_OPENED.equals(action))
-      {
-        finishAndRemoveTask();
-        return;
-      }
       if (isPageLoaded) injectPendingNotes();
     }
   };
@@ -122,7 +112,8 @@ public class MainActivity extends Activity
     boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
     boolean floatingTrigger = assistLaunch || tileLaunch;
 
-    // ── Floating-window fast path ─────────────────────────────────
+    // Floating-window fast path — open capture window, close ourselves.
+    // Note this does NOT touch any other floating window that might be open.
     if (floatingTrigger && canDrawOverlays())
     {
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -141,27 +132,12 @@ public class MainActivity extends Activity
       }
     }
 
-    // ── Close any running textbox window before showing full UI ──
-    if (!floatingTrigger)
-    {
-      SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-      if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
-      {
-        mJustClosedFloating = true;
-        Intent closeIntent = new Intent(ACTION_CLOSE_FLOATING);
-        closeIntent.setPackage(getPackageName());
-        sendBroadcast(closeIntent);
-        stopService(new Intent(this, FloatingWindowService.class));
-      }
-    }
-
-    // ── Normal / fallback launch ──────────────────────────────────
+    // ── Normal launch: nothing else to coordinate ─────────────────
     setContentView(R.layout.activity_main);
     SystemBarHelper.apply(this);
 
     mWebView = findViewById(R.id.activity_main_webview);
     splashScreen = findViewById(R.id.splash_screen);
-    splashScreen.setVisibility(View.GONE);
 
     mWebView.setBackgroundColor(WEBVIEW_BG_COLOR);
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -197,25 +173,9 @@ public class MainActivity extends Activity
       public void onPageFinished(WebView view, String url)
       {
         isPageLoaded = true;
-
-        Runnable deliver = () ->
-        {
-          if (!isPageLoaded || mWebView == null) return;
-          injectPendingNotes();
-          readSyncFileAndInject();
-          consumeImportQr();
-        };
-
-        if (mJustClosedFloating)
-        {
-          mJustClosedFloating = false;
-          new Handler(Looper.getMainLooper()).postDelayed(deliver, 500);
-        }
-        else
-        {
-          deliver.run();
-        }
-
+        injectPendingNotes();
+        readSyncFileAndInject();
+        consumeImportQr();
         SystemBarHelper.apply(MainActivity.this);
 
         splashScreen.animate()
@@ -267,7 +227,6 @@ public class MainActivity extends Activity
 
     IntentFilter filter = new IntentFilter();
     filter.addAction(ACTION_NOTE_ADDED);
-    filter.addAction(ACTION_FLOATING_OPENED);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
       registerReceiver(noteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
     else
@@ -296,8 +255,7 @@ public class MainActivity extends Activity
 
     if (isPageLoaded)
     {
-      SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-      if (!qp.getBoolean(KEY_OVERLAY_ACTIVE, false)) readSyncFileAndInject();
+      readSyncFileAndInject();
       injectPendingNotes();
       consumeImportQr();
     }
@@ -332,18 +290,6 @@ public class MainActivity extends Activity
         overridePendingTransition(0, 0);
       }
       catch (Exception e) { e.printStackTrace(); }
-    }
-    else
-    {
-      SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-      if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
-      {
-        mJustClosedFloating = true;
-        Intent closeIntent = new Intent(ACTION_CLOSE_FLOATING);
-        closeIntent.setPackage(getPackageName());
-        sendBroadcast(closeIntent);
-        stopService(new Intent(this, FloatingWindowService.class));
-      }
     }
   }
 
@@ -601,10 +547,9 @@ public class MainActivity extends Activity
 
   private void injectPendingNotes(final int attempt)
   {
-    SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false)) return;
     if (mInjecting || !isPageLoaded || mWebView == null) return;
 
+    final SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     final String jsonStr = qp.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
 
@@ -634,14 +579,6 @@ public class MainActivity extends Activity
 
   private void consumeImportQr() { consumeImportQr(0); }
 
-  /**
-   * Consumes QR payloads queued by ScannerActivity.
-   *
-   * Only removes entries from the queue after JS confirms receipt via
-   * importQrPayload returning "ok". If JS isn't ready ("missing"), retries
-   * briefly; if we still can't deliver, the entries stay in the queue and
-   * are retried on the next onResume / onPageFinished.
-   */
   private void consumeImportQr(final int attempt)
   {
     if (mImportingQr || !isPageLoaded || mWebView == null) return;
@@ -678,13 +615,10 @@ public class MainActivity extends Activity
   {
     if (index >= payloads.length)
     {
-      // All delivered — clear the queue only if nothing new arrived.
       String current = prefs.getString(KEY_PENDING_IMPORT, "[]");
       try
       {
         JSONArray remaining = new JSONArray(current);
-        // The queue still holds the same entries we've been reading from;
-        // if the count matches what we just delivered, clear it entirely.
         if (remaining.length() == payloads.length)
           prefs.edit().remove(KEY_PENDING_IMPORT).apply();
       }
@@ -720,7 +654,6 @@ public class MainActivity extends Activity
       }
       else
       {
-        // Give up for now — keep queue, retry later.
         mImportingQr = false;
       }
     });

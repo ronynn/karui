@@ -22,7 +22,10 @@
     width: 100%; height: 100%;
     object-fit: cover;
     pointer-events: none;
+    display: none;
+    background: #000;
   }
+  video.playing { display: block; }
   #overlay {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
@@ -33,7 +36,10 @@
     width: 70vmin; height: 70vmin;
     border: 2px solid #FABD2F;
     border-radius: 14px;
+    opacity: 0;
+    transition: opacity .3s;
   }
+  #frame.visible { opacity: 1; }
   #status {
     position: absolute;
     top: calc(50% - 35vmin - 44px);
@@ -48,112 +54,195 @@
     color: #EBDBB2; font-size: 13px; opacity: .85;
     text-shadow: 0 2px 8px #000;
   }
+  #status.saved { color: #B8BB26; }
+  #status.error { color: #FB4934; }
+
+  /* CLOSE button at TOP-RIGHT — above the navigation bar, always reachable */
+  #close {
+    position: fixed;
+    top: 20px; right: 16px;
+    background: rgba(40, 40, 40, .92);
+    color: #EBDBB2;
+    border: none;
+    width: 48px; height: 48px;
+    border-radius: 24px;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+    line-height: 1;
+  }
+  #close:active { background: #504945; }
+
   #controls {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    padding: 20px 16px 28px;
-    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+    position: fixed;
+    left: 0; right: 0;
+    bottom: 0;
+    padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px) + 40px);
+    display: none;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
     background: linear-gradient(to top, rgba(0,0,0,.9), transparent);
     z-index: 10;
   }
+  #controls.visible { display: flex; }
   #controls button {
     background: #3C3836; color: #EBDBB2;
     border: none; padding: 12px 20px;
     border-radius: 10px; font-size: 14px; font-weight: 600;
     letter-spacing: .5px; cursor: pointer;
-    min-width: 80px;
+    min-width: 90px;
   }
   #controls button:active { background: #504945; }
   #btn-save { background: #FABD2F; color: #282828; }
   #btn-save:active { background: #D79921; }
-  #status.saved { color: #B8BB26; }
-  #status.error { color: #FB4934; }
+
+  #loading {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #EBDBB2; font-size: 14px;
+    background: #000;
+    z-index: 5;
+    text-align: center;
+    padding: 20px;
+  }
+  #loading.hidden { display: none; }
 </style>
 </head>
 <body>
-<video id="v" autoplay playsinline muted></video>
+
+<button id="close" onclick="closeApp()">×</button>
+
+<video id="v" autoplay playsinline webkit-playsinline disableremoteplayback muted></video>
 <canvas id="c" style="display:none"></canvas>
+
+<div id="loading">Starting camera…</div>
+
 <div id="overlay">
   <div id="frame">
     <div id="status"></div>
-    <div id="hint">Point at a Karui QR code</div>
+    <div id="hint"></div>
   </div>
 </div>
+
 <div id="controls">
-  <button onclick="Android.close()">CLOSE</button>
-  <button id="btn-save" onclick="save()" style="display:none">SAVE</button>
-  <button id="btn-copy" onclick="copy()" style="display:none">COPY</button>
-  <button id="btn-rescan" onclick="rescan()" style="display:none">SCAN AGAIN</button>
+  <button id="btn-save" onclick="save()">SAVE</button>
+  <button id="btn-copy" onclick="copy()">COPY</button>
+  <button id="btn-rescan" onclick="rescan()">SCAN AGAIN</button>
 </div>
+
 <script src="jsqr.min.js"></script>
 <script>
-  const video    = document.getElementById('v');
-  const canvas   = document.getElementById('c');
-  const ctx      = canvas.getContext('2d', { willReadFrequently: true });
-  const statusEl = document.getElementById('status');
-  const hintEl   = document.getElementById('hint');
-  const controls = document.getElementById('controls');
-  const btnSave  = document.getElementById('btn-save');
-  const btnCopy  = document.getElementById('btn-copy');
-  const btnRescan= document.getElementById('btn-rescan');
+  const video     = document.getElementById('v');
+  const canvas    = document.getElementById('c');
+  const ctx       = canvas.getContext('2d', { willReadFrequently: true });
+  const statusEl  = document.getElementById('status');
+  const hintEl    = document.getElementById('hint');
+  const frameEl   = document.getElementById('frame');
+  const controls  = document.getElementById('controls');
+  const loadingEl = document.getElementById('loading');
+  const btnSave   = document.getElementById('btn-save');
+  const btnCopy   = document.getElementById('btn-copy');
+  const btnRescan = document.getElementById('btn-rescan');
 
   let scanning = true;
   let lastScanData = '';
   let lastScanTime = 0;
-  let frameCount = 0;
-
-  if (typeof jsQR !== 'function') {
-    statusEl.className = 'error';
-    statusEl.textContent = 'QR library failed to load';
-    hintEl.textContent = 'jsqr.min.js missing from assets/';
-  }
+  let stream = null;
 
   function setUI(state, message)
   {
     statusEl.className = '';
+    controls.classList.remove('visible');
+    btnSave.style.display = 'none';
+    btnCopy.style.display = 'none';
+    btnRescan.style.display = 'none';
+
     if (state === 'scanning') {
       statusEl.textContent = '';
       hintEl.textContent = 'Point at a Karui QR code';
-      controls.style.display = 'flex';
-      btnSave.style.display = 'none';
-      btnCopy.style.display = 'none';
-      btnRescan.style.display = 'none';
+      frameEl.classList.add('visible');
     } else if (state === 'partial') {
       statusEl.textContent = message;
       hintEl.textContent = 'Point at the next QR code';
+      frameEl.classList.add('visible');
     } else if (state === 'ready') {
       statusEl.className = 'saved';
       statusEl.textContent = '✓ ' + message;
       hintEl.textContent = 'Save, copy, or scan again';
-      controls.style.display = 'flex';
+      controls.classList.add('visible');
       btnSave.style.display = 'inline-block';
       btnCopy.style.display = 'inline-block';
       btnRescan.style.display = 'inline-block';
+      frameEl.classList.remove('visible');
     } else if (state === 'error') {
       statusEl.className = 'error';
       statusEl.textContent = '⚠ ' + message;
       hintEl.textContent = '';
+      frameEl.classList.remove('visible');
+    }
+  }
+
+  function stopStream()
+  {
+    if (stream) {
+      try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      stream = null;
     }
   }
 
   async function start()
   {
-    if (typeof jsQR !== 'function') return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+    // Verify jsQR loaded before doing anything else
+    if (typeof jsQR !== 'function') {
+      loadingEl.textContent =
+        'QR library not loaded.\n\n' +
+        'Place jsQR.js (or minified) in app/src/main/assets/ and rename to jsqr.min.js';
+      loadingEl.style.whiteSpace = 'pre-line';
+      setUI('error', 'jsqr.min.js missing');
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      loadingEl.textContent = 'This device does not support camera access in WebView.';
+      setUI('error', 'No camera support');
+      return;
+    }
+
+    try
+    {
+      stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       });
+
       video.srcObject = stream;
-      // Remove controls attribute in case WebView added it
+
+      // Prevent WebView from adding its own controls
       video.removeAttribute('controls');
       video.controls = false;
-      await video.play().catch(e => {
-        statusEl.textContent = 'Camera play failed: ' + e.message;
-      });
-      setUI('scanning', '');
-      requestAnimationFrame(tick);
-    } catch (e) {
-      setUI('error', 'Camera: ' + (e.message || 'unavailable'));
-      hintEl.textContent = 'Check camera permission for Karui in Settings';
+
+      // Show the video only once frames are actually flowing — prevents the
+      // "loading view" that appears when a <video> has srcObject but no
+      // rendered frame yet.
+      video.addEventListener('playing', () =>
+      {
+        video.classList.add('playing');
+        loadingEl.classList.add('hidden');
+        setUI('scanning', '');
+        requestAnimationFrame(tick);
+      }, { once: true });
+
+      await video.play();
+    }
+    catch (e)
+    {
+      loadingEl.textContent =
+        'Could not start camera.\n\n' +
+        (e.name || 'Error') + ': ' + (e.message || 'unknown');
+      loadingEl.style.whiteSpace = 'pre-line';
+      setUI('error', 'Camera failed');
     }
   }
 
@@ -161,7 +250,7 @@
   {
     if (!scanning) { requestAnimationFrame(tick); return; }
 
-    if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+    if (video.readyState >= 2 && video.videoWidth > 0) {
       const w = video.videoWidth, h = video.videoHeight;
       if (canvas.width !== w) canvas.width = w;
       if (canvas.height !== h) canvas.height = h;
@@ -176,16 +265,10 @@
             lastScanTime = now;
             handleScan(code.data);
           }
-        } else {
-          frameCount++;
-          if (frameCount % 60 === 0 && !statusEl.textContent) {
-            hintEl.textContent = 'Scanning ' + w + '×' + h + '…';
-          }
         }
       } catch (e) {
-        // If we hit a JS exception, stop scanning and show the reason
-        scanning = false;
         setUI('error', 'Decode error: ' + e.message);
+        scanning = false;
       }
     }
     requestAnimationFrame(tick);
@@ -195,10 +278,8 @@
   {
     let result;
     try { result = JSON.parse(Android.onScan(text)); }
-    catch (e) {
-      setUI('error', 'Bridge error');
-      return;
-    }
+    catch (e) { setUI('error', 'Bridge error'); return; }
+
     if (result.type === 'chunk') {
       setUI('partial', 'Scanned ' + result.received + '/' + result.total);
     } else if (result.type === 'ready') {
@@ -220,7 +301,7 @@
   function copy()
   {
     const r = JSON.parse(Android.copy());
-    if (r.ok) setUI('scanning', '');
+    if (r.ok) { setUI('scanning', ''); scanning = true; }
   }
 
   function rescan()
@@ -230,6 +311,15 @@
     scanning = true;
     setUI('scanning', '');
   }
+
+  function closeApp()
+  {
+    stopStream();
+    try { Android.close(); } catch (e) {}
+  }
+
+  window.addEventListener('pagehide', stopStream);
+  window.addEventListener('beforeunload', stopStream);
 
   start();
 </script>
