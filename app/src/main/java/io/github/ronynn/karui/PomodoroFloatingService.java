@@ -3,12 +3,14 @@ package io.github.ronynn.karui;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -32,6 +34,7 @@ public class PomodoroFloatingService extends Service
 
   private static final int FG_NOTIFICATION_ID = 998;
   private static final String FG_CHANNEL_ID = "pomodoro_fg_channel";
+  private static final int STOP_ACTION_REQ_ID = 1001;
 
   private WindowManager wm;
   private View timerView;
@@ -81,18 +84,17 @@ public class PomodoroFloatingService extends Service
 
     ensureForeground();
 
-    // No overlay permission → fall back to notification countdown, bail.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this))
+    // No overlay permission → the FGS notification IS the timer. Keep the
+    // service alive so the user has the live countdown + Stop action; no
+    // separate fallback notification needed. Just skip the overlay.
+    boolean hasOverlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+      || Settings.canDrawOverlays(this);
+
+    if (hasOverlay)
     {
-      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
-      catch (Throwable ignored) {}
-      try { CalendarNotificationReceiver.schedulePomodoroAlarm(this, endTimeMs); }
-      catch (Throwable ignored) {}
-      stopSelf();
-      return START_NOT_STICKY;
+      ensureOverlay();
     }
 
-    ensureOverlay();
     startTicking();
     return START_NOT_STICKY;
   }
@@ -102,20 +104,27 @@ public class PomodoroFloatingService extends Service
   {
     handler.removeCallbacksAndMessages(null);
     removeOverlay();
+    stopForeground(true);
     super.onDestroy();
   }
+
+  // ── Foreground notification (with live countdown + Stop action) ──
 
   private void ensureForeground()
   {
     NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null)
     {
+      // LOW, not MIN. MIN fully collapses the notification on most ROMs,
+      // which hides the chronometer area — the whole point of this notification.
+      // LOW shows it normally: no sound, no peek, hidden on lockscreen.
       NotificationChannel ch = new NotificationChannel(
           FG_CHANNEL_ID, "Pomodoro Timer",
           NotificationManager.IMPORTANCE_LOW);
       ch.setShowBadge(false);
       ch.setSound(null, null);
       ch.enableVibration(false);
+      ch.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
       nm.createNotificationChannel(ch);
     }
 
@@ -125,11 +134,48 @@ public class PomodoroFloatingService extends Service
     else
     {
       b = new Notification.Builder(this);
-      b.setPriority(Notification.PRIORITY_MIN);
+      b.setPriority(Notification.PRIORITY_LOW);
     }
-    b.setContentTitle("Pomodoro timer")
+
+    // Title only — no content text. With setUsesChronometer(true), the OS
+    // replaces the "when" field (usually the time-stamp, top-right of the
+    // notification) with a live ticker. setChronometerCountDown makes it
+    // count DOWN to `endTimeMs`. Result when collapsed:
+    //     [icon] Karui    24:53
+    //            Pomodoro
+    // When expanded: Stop button appears.
+    b.setContentTitle("Pomodoro")
      .setSmallIcon(R.drawable.ic_note)
-     .setOngoing(true);
+     .setOngoing(true)
+     .setShowWhen(true)
+     .setWhen(endTimeMs)
+     .setUsesChronometer(true)
+     .setCategory(Notification.CATEGORY_PROGRESS);
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+    {
+      b.setChronometerCountDown(true);
+    }
+
+    // Stop action — fires ACTION_POMODORO_CANCEL at the receiver, which
+    // cancels the alarm, clears state, and stops this service.
+    Intent stopIntent = new Intent(this, CalendarNotificationReceiver.class);
+    stopIntent.setAction(CalendarNotificationReceiver.ACTION_POMODORO_CANCEL);
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+    PendingIntent stopPi = PendingIntent.getBroadcast(this, STOP_ACTION_REQ_ID, stopIntent, flags);
+
+    Notification.Action.Builder ab;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+    {
+      ab = new Notification.Action.Builder(
+          Icon.createWithResource(this, R.drawable.ic_note), "Stop", stopPi);
+    }
+    else
+    {
+      ab = new Notification.Action.Builder(0, "Stop", stopPi);
+    }
+    b.addAction(ab.build());
 
     try
     {
@@ -142,16 +188,16 @@ public class PomodoroFloatingService extends Service
       {
         startForeground(FG_NOTIFICATION_ID, b.build());
       }
-      android.util.Log.i("KaruiPomodoro", "startForeground OK");
+      android.util.Log.i("KaruiPomodoro", "startForeground OK end=" + endTimeMs);
     }
     catch (Throwable t)
     {
       android.util.Log.e("KaruiPomodoro",
           "startForeground FAILED: " + t.getClass().getSimpleName() + ": " + t.getMessage());
-      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
-      catch (Throwable ignored) {}
     }
   }
+
+  // ── Draggable overlay window ────────────────────────────────────
 
   private void ensureOverlay()
   {
@@ -193,8 +239,6 @@ public class PomodoroFloatingService extends Service
       android.util.Log.e("KaruiPomodoro",
           "addView FAILED: " + t.getClass().getSimpleName() + ": " + t.getMessage());
       timerView = null;
-      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
-      catch (Throwable ignored) {}
     }
   }
 
@@ -208,9 +252,9 @@ public class PomodoroFloatingService extends Service
     int padV = dp(6);
     root.setPadding(padH, padV, padH, padV);
 
+    // Rectangle (no corners), medium-grey translucent fill, thin border.
     GradientDrawable bg = new GradientDrawable();
-    bg.setColor(0xCC1D1D1D);
-    bg.setCornerRadius(dp(8));
+    bg.setColor(0xB0505050);
     bg.setStroke(dp(1), 0xFF8B8B8B);
     root.setBackground(bg);
 
@@ -275,6 +319,8 @@ public class PomodoroFloatingService extends Service
     });
   }
 
+  // ── Timer loop ──────────────────────────────────────────────────
+
   private void startTicking()
   {
     handler.removeCallbacksAndMessages(null);
@@ -295,6 +341,8 @@ public class PomodoroFloatingService extends Service
   {
     if (finished) return;
     finished = true;
+    // Post completion notification first (ID 999). Then stopSelf → FGS
+    // notification (ID 998) is removed in onDestroy. End state: only 999.
     CalendarNotificationReceiver.notifyPomodoroDone(this);
     stopSelf();
   }

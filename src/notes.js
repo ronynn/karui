@@ -1,11 +1,9 @@
 import { playSound, tryRunGame } from './extras.js'
 
-// Recurrence token only; trailing body captures the rest (incl. @HHMM).
 const RECURRENCE_RE = /^!(\d+[dwmy]|m\d{1,2}|w(?:mo|tu|we|th|fr|sa|su)|y\d{2}-\d{2})\s+([\s\S]+)$/i
 const FUTURE_BUFFER = 3
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})([ap])?(?=\s|$)/
-// Reserved search prefix — notes never start with this.
 const SEARCH_PREFIX_RE = /^%s(?:\s|$)/
 const SEARCH_ACTIVE_RE = /^%s\s/
 
@@ -71,9 +69,6 @@ export function createNotesModule()
     _unlockedTabs: {},
     modalIsPassword: false,
 
-    // Native bridge haptic with browser fallback. Browser fallback uses a
-    // short pulse pattern because single 15ms pulses are filtered by most
-    // mobile OSes as noise.
     _vibrate()
     {
       if (window.Android && typeof window.Android.haptic === 'function')
@@ -538,15 +533,9 @@ export function createNotesModule()
 
       const firstDateStr = this.toDateStr(cursor)
       const firstNote = {
-        id: now,
-        text: `${firstDateStr} ${cleanText}`,
-        completed: false,
-        category: cat,
-        pinned: false,
-        updatedAt: now,
-        groupId,
-        scheduledDate: firstDateStr,
-        recurrence: token
+        id: now, text: `${firstDateStr} ${cleanText}`, completed: false,
+        category: cat, pinned: false, updatedAt: now,
+        groupId, scheduledDate: firstDateStr, recurrence: token
       }
       created.push(firstNote)
 
@@ -556,18 +545,11 @@ export function createNotesModule()
         if (!next) break
         cursor = next
         const nextStr = this.toDateStr(cursor)
-        const occ = {
-          id: now + i + 1,
-          text: `${nextStr} ${cleanText}`,
-          completed: false,
-          category: cat,
-          pinned: false,
-          updatedAt: now,
-          groupId,
-          scheduledDate: nextStr,
-          recurrence: token
-        }
-        created.push(occ)
+        created.push({
+          id: now + i + 1, text: `${nextStr} ${cleanText}`, completed: false,
+          category: cat, pinned: false, updatedAt: now,
+          groupId, scheduledDate: nextStr, recurrence: token
+        })
       }
       return created
     },
@@ -594,15 +576,9 @@ export function createNotesModule()
 
       const now = Date.now()
       const newNote = {
-        id: now,
-        text: `${nextStr} ${cleanText}`,
-        completed: false,
-        category: note.category,
-        pinned: false,
-        updatedAt: now,
-        groupId: note.groupId,
-        scheduledDate: nextStr,
-        recurrence: note.recurrence
+        id: now, text: `${nextStr} ${cleanText}`, completed: false,
+        category: note.category, pinned: false, updatedAt: now,
+        groupId: note.groupId, scheduledDate: nextStr, recurrence: note.recurrence
       }
       if (this.addNoteBottom) this.notes.push(newNote)
       else this.notes.unshift(newNote)
@@ -870,12 +846,6 @@ export function createNotesModule()
       this.startEdit(n)
     },
 
-    // ─── Tab markdown edit ────────────────────────────────────────────
-    // Each line carries the note's id in an HTML comment. That is the
-    // identity anchor: editing in place keeps the same note, deleting the
-    // line recycles it. Without the id (user pasted plain markdown), the
-    // parser falls back to text-matching.
-
     _generateTabMarkdown(tab)
     {
       return this.notes
@@ -907,6 +877,10 @@ export function createNotesModule()
       return out
     },
 
+    // Rebuild-based merge. Instead of filtering `this.notes` in place (which
+    // can silently fail if the reactive proxy doesn't see the removal), we
+    // construct a fresh array: `otherTabs + keptNotes`. Anything not in
+    // `keptNotes` for this tab is guaranteed to be gone.
     applyTabMarkdown(tab, mdText)
     {
       const parsed = this._parseTabMarkdown(mdText)
@@ -922,6 +896,7 @@ export function createNotesModule()
       }
 
       const keepIds = new Set()
+      const keptNotes = []
       let idSeed = 0
 
       const mintId = () =>
@@ -933,7 +908,6 @@ export function createNotesModule()
 
       for (const p of parsed)
       {
-        // 1) Explicit id → match by id (edit-in-place)
         if (p.id !== null && !isNaN(p.id))
         {
           const match = existingById.get(p.id)
@@ -943,22 +917,19 @@ export function createNotesModule()
             match.completed = p.completed
             match.updatedAt = now
             keepIds.add(match.id)
+            keptNotes.push(match)
             continue
           }
-          // id not present in this tab — honour it unless it already exists
-          // in the store (then mint a fresh one to avoid collisions)
           let newId = p.id
           if (this.notes.some(n => n.id === newId) || keepIds.has(newId)) newId = mintId()
-          const note = {
+          keptNotes.push({
             id: newId, text: p.text, completed: p.completed,
-            category: tab, pinned: false, updatedAt: now,
-          }
-          this.notes.push(note)
+            category: tab, pinned: false, updatedAt: now
+          })
           keepIds.add(newId)
           continue
         }
 
-        // 2) No id → text-match against remaining existing notes
         const bucket = existingByText.get(p.text)
         const textMatch = bucket && bucket.length > 0 ? bucket.shift() : null
         if (textMatch && !keepIds.has(textMatch.id))
@@ -966,39 +937,45 @@ export function createNotesModule()
           textMatch.completed = p.completed
           textMatch.updatedAt = now
           keepIds.add(textMatch.id)
+          keptNotes.push(textMatch)
           continue
         }
 
-        // 3) Nothing matched → new note
         const newId = mintId()
-        const note = {
+        keptNotes.push({
           id: newId, text: p.text, completed: p.completed,
-          category: tab, pinned: false, updatedAt: now,
-        }
-        this.notes.push(note)
+          category: tab, pinned: false, updatedAt: now
+        })
         keepIds.add(newId)
       }
 
-      // 4) Leftovers → recycle bin
-      const toRemove = []
-      for (const n of existing) if (!keepIds.has(n.id)) toRemove.push(n.id)
-      if (toRemove.length > 0)
+      const doomed = existing.filter(n => !keepIds.has(n.id))
+      for (const n of doomed)
       {
-        const doomed = new Set(toRemove)
-        const removed = []
-        this.notes = this.notes.filter(n =>
-        {
-          if (doomed.has(n.id)) { removed.push(n); return false }
-          return true
+        n.updatedAt = now
+        this.recycleBin.push(n)
+      }
+
+      const otherTabs = this.notes.filter(n => n.category !== tab)
+      this.notes = otherTabs.concat(keptNotes)
+
+      if (typeof console !== 'undefined')
+      {
+        console.log('[applyTabMarkdown]', {
+          tab,
+          parsed: parsed.length,
+          existing: existing.length,
+          kept: keptNotes.length,
+          doomed: doomed.length,
+          doomedIds: doomed.map(n => n.id),
+          finalNoteCount: this.notes.length,
+          finalRecycleCount: this.recycleBin.length
         })
-        for (const n of removed) { n.updatedAt = now; this.recycleBin.push(n) }
       }
 
       this._dirtyNotes = true
       this.saveData()
     },
-
-    // ─────────────────────────────────────────────────────────────────
 
     openContextMenu(e, tab)
     {
@@ -1062,14 +1039,8 @@ export function createNotesModule()
       this.noteCategories = this.noteCategories.filter(x => x !== trimmed)
 
       let idx = this.noteCategories.indexOf(oldName)
-      if (idx !== -1)
-      {
-        this.noteCategories.splice(idx, 1, trimmed)
-      }
-      else if (!this.noteCategories.includes(trimmed))
-      {
-        this.noteCategories.push(trimmed)
-      }
+      if (idx !== -1) this.noteCategories.splice(idx, 1, trimmed)
+      else if (!this.noteCategories.includes(trimmed)) this.noteCategories.push(trimmed)
 
       if (this.calendarTabName === oldName) this.calendarTabName = trimmed
 
@@ -1126,13 +1097,7 @@ export function createNotesModule()
       if (this.isTabLocked(cat)) { this.showToast('Unlock tab first'); this.closeAllMenus(); return }
 
       let catNotes = this.notes.filter(n => n.category === cat)
-
-      if (!catNotes.length)
-      {
-        this.showToast('Nothing to merge')
-        this.closeAllMenus()
-        return
-      }
+      if (!catNotes.length) { this.showToast('Nothing to merge'); this.closeAllMenus(); return }
 
       catNotes.sort((a, b) =>
       {
@@ -1145,12 +1110,8 @@ export function createNotesModule()
       let mergedText = catNotes.map(n => n.text).join('\n')
       let now = Date.now()
       let merged = {
-        id: now,
-        text: mergedText,
-        completed: false,
-        category: cat,
-        pinned: false,
-        updatedAt: now
+        id: now, text: mergedText, completed: false,
+        category: cat, pinned: false, updatedAt: now
       }
 
       if (this.addNoteBottom) this.notes.push(merged)
@@ -1180,9 +1141,6 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // Merge imported notes with local store. Matches by id, falls back to
-    // (text, category). Updates only on strictly-newer timestamp, or tied
-    // timestamps with genuine content change.
     mergeNotes(imported)
     {
       if (!Array.isArray(imported)) return { added: 0, updated: 0, skipped: 0 }
