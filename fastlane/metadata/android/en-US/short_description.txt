@@ -1,1 +1,1 @@
-145kB aesthetic todo list app with calendar, reminders, sync and widgets
+Under 200kB aesthetic todo list app with calendar, reminders, sync and widgets
