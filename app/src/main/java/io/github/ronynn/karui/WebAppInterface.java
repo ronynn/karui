@@ -27,10 +27,7 @@ public class WebAppInterface
 
   private final WeakReference<MainActivity> mRef;
 
-  WebAppInterface(MainActivity activity)
-  {
-    mRef = new WeakReference<>(activity);
-  }
+  WebAppInterface(MainActivity activity) { mRef = new WeakReference<>(activity); }
 
   private MainActivity act() { return mRef.get(); }
 
@@ -41,25 +38,19 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     a.pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty())
       ? defaultFileName : "file.md";
     a.pendingFileData = currentContent != null ? currentContent : "";
-
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
     intent.setType("text/markdown");
     intent.putExtra(Intent.EXTRA_TITLE, a.pendingFileName);
-
-    try
-      {
-        a.startActivityForResult(intent, MainActivity.SYNC_FILE_REQUEST_CODE);
-      }
+    try { a.startActivityForResult(intent, MainActivity.SYNC_FILE_REQUEST_CODE); }
     catch (ActivityNotFoundException e)
-      {
-        a.runOnUiThread(() -> Toast.makeText(a,
-                                             "No document picker found on device.", Toast.LENGTH_SHORT).show());
-      }
+    {
+      a.runOnUiThread(() -> Toast.makeText(a,
+          "No document picker found on device.", Toast.LENGTH_SHORT).show());
+    }
   }
 
   @JavascriptInterface
@@ -67,26 +58,21 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null || filePath == null || filePath.trim().isEmpty()) return;
-
     try
+    {
+      Uri uri = Uri.parse(filePath);
+      OutputStream out = a.getContentResolver().openOutputStream(uri, "rwt");
+      if (out == null) out = a.getContentResolver().openOutputStream(uri);
+      if (out != null)
       {
-        Uri uri = Uri.parse(filePath);
-        OutputStream out = a.getContentResolver().openOutputStream(uri, "rwt");
-        if (out == null) out = a.getContentResolver().openOutputStream(uri);
-        if (out != null)
-        {
-          out.write(content.getBytes());
-          out.close();
-
-          Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-          updateIntent.setPackage(a.getPackageName());
-          a.sendBroadcast(updateIntent);
-        }
+        out.write(content.getBytes());
+        out.close();
+        Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
+        updateIntent.setPackage(a.getPackageName());
+        a.sendBroadcast(updateIntent);
       }
-    catch (Exception e)
-      {
-        e.printStackTrace();
-      }
+    }
+    catch (Exception e) { e.printStackTrace(); }
   }
 
   @JavascriptInterface
@@ -102,22 +88,17 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
     String[] mimeTypes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
     intent.setType("*/*");
     intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-
-    try
-      {
-        a.startActivityForResult(intent, MainActivity.IMPORT_MD_FILE_REQUEST_CODE);
-      }
+    try { a.startActivityForResult(intent, MainActivity.IMPORT_MD_FILE_REQUEST_CODE); }
     catch (ActivityNotFoundException e)
-      {
-        a.runOnUiThread(() -> Toast.makeText(a,
-                                             "No document picker found", Toast.LENGTH_SHORT).show());
-      }
+    {
+      a.runOnUiThread(() -> Toast.makeText(a,
+          "No document picker found", Toast.LENGTH_SHORT).show());
+    }
   }
 
   @JavascriptInterface
@@ -125,11 +106,9 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     a.pendingFileName = fileName;
     a.pendingFileData = fileData;
     a.pendingFileType = fileType;
-
     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
     intent.setType(fileType);
@@ -142,7 +121,6 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
     intent.addCategory(Intent.CATEGORY_OPENABLE);
     intent.setType("application/json");
@@ -151,9 +129,6 @@ public class WebAppInterface
 
   // ── Haptics ─────────────────────────────────────────────────────
 
-  // Uses the exact same system haptic pathway as long-press feedback.
-  // Respects the user's global haptics setting — if they disabled haptics
-  // in the OS, this no-ops silently (correct behaviour).
   @JavascriptInterface
   public void haptic()
   {
@@ -171,30 +146,29 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     a.runOnUiThread(() ->
-                    {
-                      if (enable)
-                      {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                            != PackageManager.PERMISSION_GRANTED)
-                        {
-                          a.pendingQuickNoteEnable = true;
-                          a.requestPermissions(
-                            new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
-                          return;
-                        }
-                        NotificationHelper.setEnabled(a, true);
-                        NotificationHelper.show(a, false);
-                      }
-                      else
-                      {
-                        NotificationHelper.setEnabled(a, false);
-                        NotificationHelper.cancel(a);
-                      }
-                    });
+    {
+      if (enable)
+      {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED)
+        {
+          a.pendingQuickNoteEnable = true;
+          a.requestPermissions(
+            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
+          return;
+        }
+        NotificationHelper.setEnabled(a, true);
+        NotificationHelper.show(a, false);
+      }
+      else
+      {
+        NotificationHelper.setEnabled(a, false);
+        NotificationHelper.cancel(a);
+      }
+    });
   }
 
   @JavascriptInterface
@@ -222,13 +196,13 @@ public class WebAppInterface
     MainActivity a = act();
     if (a == null) return;
     a.runOnUiThread(() ->
-                    {
-                      if (disable) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-                      else         a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-                    });
+    {
+      if (disable) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+      else         a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+    });
   }
 
-  // ── Bubble / overlay compatibility stubs ────────────────────────
+  // ── Overlay helpers ─────────────────────────────────────────────
 
   @JavascriptInterface
   public boolean isOverlayPermissionGranted()
@@ -241,10 +215,7 @@ public class WebAppInterface
   }
 
   @JavascriptInterface
-  public void requestOverlayPermission()
-  {
-    // No-op: bubble API requires no overlay permission.
-  }
+  public void requestOverlayPermission() {}
 
   @JavascriptInterface
   public int getStatusBarHeight()
@@ -274,42 +245,72 @@ public class WebAppInterface
 
   // ── Pomodoro ────────────────────────────────────────────────────
 
+  /** Start a pomodoro. Shows the small floating timer if overlay permission
+   *  is granted, otherwise falls back to the notification countdown.
+   *  A completion notification fires in both cases at `endTimeMs`. */
   @JavascriptInterface
-  public void schedulePomodoro(long endTimeMs)
+  public void startPomodoroTimer(long endTimeMs)
   {
     MainActivity a = act();
-    if (a == null) return;
+    if (a == null || endTimeMs <= 0) return;
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-          != PackageManager.PERMISSION_GRANTED)
+    boolean hasOverlay = (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
+      || Settings.canDrawOverlays(a);
+
+    if (hasOverlay)
     {
-      // No notification permission → silently skip; JS toast handles UX.
-      return;
+      Intent i = new Intent(a, PomodoroFloatingService.class);
+      i.setAction(PomodoroFloatingService.ACTION_START);
+      i.putExtra(PomodoroFloatingService.EXTRA_END_TIME, endTimeMs);
+      try
+      {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+          a.startForegroundService(i);
+        else
+          a.startService(i);
+      }
+      catch (Exception e)
+      {
+        // Fall back to notification countdown if FGS start is rejected.
+        CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
+      }
     }
-    CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
+    else
+    {
+      CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
+    }
+
+    // Completion alarm — fires "Pomodoro complete" notification at endTimeMs.
+    CalendarNotificationReceiver.schedulePomodoroAlarm(a, endTimeMs);
   }
 
   @JavascriptInterface
-  public void cancelPomodoro()
+  public void stopPomodoroTimer()
   {
     MainActivity a = act();
     if (a == null) return;
+    try
+    {
+      Intent i = new Intent(a, PomodoroFloatingService.class);
+      i.setAction(PomodoroFloatingService.ACTION_STOP);
+      a.startService(i);
+    }
+    catch (Exception ignored) {}
     CalendarNotificationReceiver.cancelPomodoro(a);
   }
+
+  // Legacy methods — kept so older JS still works.
+  @JavascriptInterface
+  public void schedulePomodoro(long endTimeMs) { startPomodoroTimer(endTimeMs); }
+
+  @JavascriptInterface
+  public void cancelPomodoro() { stopPomodoroTimer(); }
 
   @JavascriptInterface
   public void notifyPomodoroDone()
   {
     MainActivity a = act();
     if (a == null) return;
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-          != PackageManager.PERMISSION_GRANTED)
-    {
-      return;
-    }
     CalendarNotificationReceiver.notifyPomodoroDone(a);
   }
 
@@ -332,38 +333,35 @@ public class WebAppInterface
     SharedPreferences prefs = a.getSharedPreferences(
       CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
     String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
-
     prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
 
     try
+    {
+      JSONArray oldArr = new JSONArray(oldJson);
+      JSONArray newArr = new JSONArray(json);
+      NotificationManager nm = (NotificationManager) a.getSystemService(Context.NOTIFICATION_SERVICE);
+      if (nm != null)
       {
-        JSONArray oldArr = new JSONArray(oldJson);
-        JSONArray newArr = new JSONArray(json);
-        NotificationManager nm = (NotificationManager) a.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null)
+        for (int i = 0; i < oldArr.length(); i++)
         {
-          for (int i = 0; i < oldArr.length(); i++)
+          JSONObject oldO = oldArr.getJSONObject(i);
+          int oldId = oldO.optInt("id", 0);
+          boolean stillActive = false;
+          for (int j = 0; j < newArr.length(); j++)
+          {
+            JSONObject newO = newArr.getJSONObject(j);
+            if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
             {
-              JSONObject oldO = oldArr.getJSONObject(i);
-              int oldId = oldO.optInt("id", 0);
-              boolean stillActive = false;
-              for (int j = 0; j < newArr.length(); j++)
-                {
-                  JSONObject newO = newArr.getJSONObject(j);
-                  if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
-                  {
-                    stillActive = true;
-                    break;
-                  }
-                }
-              if (!stillActive)
-              {
-                nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE
-                          + Math.abs(oldId % 100000));
-              }
+              stillActive = true;
+              break;
             }
+          }
+          if (!stillActive)
+            nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE
+                      + Math.abs(oldId % 100000));
         }
       }
+    }
     catch (Exception ignored) {}
 
     if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
@@ -379,54 +377,49 @@ public class WebAppInterface
   {
     MainActivity a = act();
     if (a == null) return;
-
     SharedPreferences prefs = a.getSharedPreferences(
       CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
     boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
     prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
-
     final boolean justEnabled = enabled && !wasEnabled;
 
     a.runOnUiThread(() ->
-                    {
-                      if (enabled)
-                      {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                            != PackageManager.PERMISSION_GRANTED)
-                        {
-                          a.requestPermissions(
-                            new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
-                        }
-
-                        if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                        {
-                          AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
-                          if (am != null && !am.canScheduleExactAlarms())
-                          {
-                            Toast.makeText(a,
-                                           "Allow 'Alarms & reminders' so calendar reminders fire on time.",
-                                           Toast.LENGTH_LONG).show();
-                            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-                            i.setData(Uri.parse("package:" + a.getPackageName()));
-                            try { a.startActivity(i); } catch (Exception ignored) {}
-                          }
-                        }
-
-                        CalendarNotificationReceiver.scheduleNext(a);
-                        CalendarNotificationReceiver.scheduleEventReminders(a);
-
-                        if (justEnabled)
-                        {
-                          Intent show = new Intent(a, CalendarNotificationReceiver.class);
-                          a.sendBroadcast(show);
-                        }
-                      }
-                      else
-                      {
-                        CalendarNotificationReceiver.cancel(a);
-                      }
-                    });
+    {
+      if (enabled)
+      {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED)
+        {
+          a.requestPermissions(
+            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+            MainActivity.NOTIFICATION_REQUEST_CODE);
+        }
+        if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        {
+          AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
+          if (am != null && !am.canScheduleExactAlarms())
+          {
+            Toast.makeText(a,
+                "Allow 'Alarms & reminders' so calendar reminders fire on time.",
+                Toast.LENGTH_LONG).show();
+            Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+            i.setData(Uri.parse("package:" + a.getPackageName()));
+            try { a.startActivity(i); } catch (Exception ignored) {}
+          }
+        }
+        CalendarNotificationReceiver.scheduleNext(a);
+        CalendarNotificationReceiver.scheduleEventReminders(a);
+        if (justEnabled)
+        {
+          Intent show = new Intent(a, CalendarNotificationReceiver.class);
+          a.sendBroadcast(show);
+        }
+      }
+      else
+      {
+        CalendarNotificationReceiver.cancel(a);
+      }
+    });
   }
 }

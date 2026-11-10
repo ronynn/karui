@@ -71,10 +71,9 @@ export function createNotesModule()
     _unlockedTabs: {},
     modalIsPassword: false,
 
-    // Shared vibration helper. Native bridge is the primary path (uses the
-    // exact system haptic the long-press tab fires). Browser fallback uses
-    // a short double-tap pattern because a single 15ms pulse is usually
-    // filtered out by mobile Chrome/OS as noise.
+    // Native bridge haptic with browser fallback. Browser fallback uses a
+    // short pulse pattern because single 15ms pulses are filtered by most
+    // mobile OSes as noise.
     _vibrate()
     {
       if (window.Android && typeof window.Android.haptic === 'function')
@@ -724,7 +723,6 @@ export function createNotesModule()
         if (n.groupId) this.extendRecurrenceGroup(n)
       }
 
-      // System haptic — matches the long-press tab feel.
       this._vibrate()
 
       let txt = n.text.trim()
@@ -872,19 +870,25 @@ export function createNotesModule()
       this.startEdit(n)
     },
 
-    // Serialise a tab's notes to markdown (`- [ ]` / `- [x]` lines).
-    // Skips empty notes and strips internal newlines.
+    // ─── Tab markdown edit ────────────────────────────────────────────
+    // Each line carries the note's id in an HTML comment. That is the
+    // identity anchor: editing in place keeps the same note, deleting the
+    // line recycles it. Without the id (user pasted plain markdown), the
+    // parser falls back to text-matching.
+
     _generateTabMarkdown(tab)
     {
       return this.notes
         .filter(n => n.category === tab)
         .filter(n => typeof n.text === 'string' && n.text.trim().length > 0)
-        .map(n => `- [${n.completed ? 'x' : ' '}] ${n.text.replace(/\r?\n/g, ' ')}`)
+        .map(n =>
+        {
+          const text = n.text.replace(/\r?\n/g, ' ')
+          return `- [${n.completed ? 'x' : ' '}] ${text} <!-- id:${n.id} -->`
+        })
         .join('\n')
     },
 
-    // Parse markdown back into {text, completed} entries.
-    // Skips blank and malformed lines cleanly.
     _parseTabMarkdown(md)
     {
       const out = []
@@ -893,30 +897,22 @@ export function createNotesModule()
       {
         const trimmed = line.trim()
         if (!trimmed) continue
-        const m = trimmed.match(/^-\s*\[([ xX])\]\s*(.+)$/)
+        const m = trimmed.match(/^-\s*\[([ xX])\]\s*(.+?)(?:\s*<!--\s*id:(\d+)\s*-->)?\s*$/)
         if (!m) continue
         const text = m[2].trim()
         if (!text) continue
-        out.push({ text, completed: m[1].toLowerCase() === 'x' })
+        const id = (m[3] !== undefined && m[3] !== null && m[3] !== '') ? parseInt(m[3], 10) : null
+        out.push({ id, text, completed: m[1].toLowerCase() === 'x' })
       }
       return out
     },
 
-    // Apply edited markdown back to a tab.
-    //   * Unchanged text  → keep existing note (preserves pinned/groupId/etc)
-    //   * New text        → append as new note with a guaranteed-unique ID
-    //   * Removed text    → move existing note to recycle bin
-    // Uses an incrementing counter for new IDs so repeated saves can't
-    // collide with previously generated IDs (that collision caused
-    // duplicated notes and unreachable deletes in earlier versions).
     applyTabMarkdown(tab, mdText)
     {
       const parsed = this._parseTabMarkdown(mdText)
       const now = Date.now()
       const existing = this.notes.filter(n => n.category === tab)
-
-      // Bucket existing notes by trimmed text so duplicate bodies
-      // (`buy milk` × 2) are handled one-by-one.
+      const existingById = new Map(existing.map(n => [n.id, n]))
       const existingByText = new Map()
       for (const n of existing)
       {
@@ -928,69 +924,81 @@ export function createNotesModule()
       const keepIds = new Set()
       let idSeed = 0
 
+      const mintId = () =>
+      {
+        let id = now + (++idSeed)
+        while (this.notes.some(n => n.id === id) || keepIds.has(id)) id = now + (++idSeed)
+        return id
+      }
+
       for (const p of parsed)
       {
-        const candidates = existingByText.get(p.text)
-        if (candidates && candidates.length > 0)
+        // 1) Explicit id → match by id (edit-in-place)
+        if (p.id !== null && !isNaN(p.id))
         {
-          const match = candidates.shift()
-          match.completed = p.completed
-          match.updatedAt = now
-          keepIds.add(match.id)
-        }
-        else
-        {
-          // Guaranteed-unique ID: increment counter, loop if by some
-          // impossible chance it collides with an existing note.
-          let newId = now + (++idSeed)
-          while (this.notes.some(n => n.id === newId))
+          const match = existingById.get(p.id)
+          if (match && !keepIds.has(match.id))
           {
-            newId = now + (++idSeed)
+            match.text = p.text
+            match.completed = p.completed
+            match.updatedAt = now
+            keepIds.add(match.id)
+            continue
           }
-          const newNote = {
-            id: newId,
-            text: p.text,
-            completed: p.completed,
-            category: tab,
-            pinned: false,
-            updatedAt: now,
+          // id not present in this tab — honour it unless it already exists
+          // in the store (then mint a fresh one to avoid collisions)
+          let newId = p.id
+          if (this.notes.some(n => n.id === newId) || keepIds.has(newId)) newId = mintId()
+          const note = {
+            id: newId, text: p.text, completed: p.completed,
+            category: tab, pinned: false, updatedAt: now,
           }
-          this.notes.push(newNote)
-          keepIds.add(newNote.id)
+          this.notes.push(note)
+          keepIds.add(newId)
+          continue
         }
+
+        // 2) No id → text-match against remaining existing notes
+        const bucket = existingByText.get(p.text)
+        const textMatch = bucket && bucket.length > 0 ? bucket.shift() : null
+        if (textMatch && !keepIds.has(textMatch.id))
+        {
+          textMatch.completed = p.completed
+          textMatch.updatedAt = now
+          keepIds.add(textMatch.id)
+          continue
+        }
+
+        // 3) Nothing matched → new note
+        const newId = mintId()
+        const note = {
+          id: newId, text: p.text, completed: p.completed,
+          category: tab, pinned: false, updatedAt: now,
+        }
+        this.notes.push(note)
+        keepIds.add(newId)
       }
 
-      // Collect IDs to remove first, then reassign `this.notes` once.
-      // Filter is safer than splice/indexOf here because petite-vue's
-      // reactive proxies can shift indices mid-loop.
-      const toRemoveIds = new Set()
-      for (const n of existing)
+      // 4) Leftovers → recycle bin
+      const toRemove = []
+      for (const n of existing) if (!keepIds.has(n.id)) toRemove.push(n.id)
+      if (toRemove.length > 0)
       {
-        if (!keepIds.has(n.id)) toRemoveIds.add(n.id)
-      }
-
-      if (toRemoveIds.size > 0)
-      {
+        const doomed = new Set(toRemove)
         const removed = []
         this.notes = this.notes.filter(n =>
         {
-          if (toRemoveIds.has(n.id))
-          {
-            removed.push(n)
-            return false
-          }
+          if (doomed.has(n.id)) { removed.push(n); return false }
           return true
         })
-        for (const n of removed)
-        {
-          n.updatedAt = now
-          this.recycleBin.push(n)
-        }
+        for (const n of removed) { n.updatedAt = now; this.recycleBin.push(n) }
       }
 
       this._dirtyNotes = true
       this.saveData()
     },
+
+    // ─────────────────────────────────────────────────────────────────
 
     openContextMenu(e, tab)
     {

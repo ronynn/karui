@@ -1,7 +1,3 @@
-// Pomodoro module. JS drives the in-app 1Hz timer. Native AlarmManager
-// handles the notification when backgrounded/killed — only if the OS
-// notification permission is granted. Otherwise the toast is the only
-// signal.
 const POMODORO_KEY = 'pomodoroEndTime'
 
 export function createPomodoroModule()
@@ -23,7 +19,7 @@ export function createPomodoroModule()
 
     startPomodoro(minutes)
     {
-      this._stopPomodoroInternal()
+      this._stopPomodoroInternal(true)
       const m = minutes || 25
       const ms = m * 60 * 1000
       this.pomodoroEndTime = Date.now() + ms
@@ -31,21 +27,31 @@ export function createPomodoroModule()
       this.pomodoroRemaining = m * 60
       this.pomodoroRunning = true
       try { localStorage.setItem(POMODORO_KEY, String(this.pomodoroEndTime)) } catch (e) {}
-      this._pomodoroIntervalId = setInterval(() => this._tickPomodoro(), 1000)
-      if (window.Android && typeof window.Android.schedulePomodoro === 'function')
+
+      // Native: shows the small floating overlay if overlay permission is
+      // granted, otherwise shows the notification countdown. Either way,
+      // a completion notification fires at endTime.
+      if (window.Android && typeof window.Android.startPomodoroTimer === 'function')
+      {
+        try { window.Android.startPomodoroTimer(this.pomodoroEndTime) } catch (e) {}
+      }
+      else if (window.Android && typeof window.Android.schedulePomodoro === 'function')
       {
         try { window.Android.schedulePomodoro(this.pomodoroEndTime) } catch (e) {}
       }
+
+      // In-app ticker (visible when user is looking at the Karui UI).
+      this._pomodoroIntervalId = setInterval(() => this._tickPomodoro(), 1000)
     },
 
     stopPomodoro()
     {
       const was = this.pomodoroRunning
-      this._stopPomodoroInternal()
+      this._stopPomodoroInternal(true)
       if (was && this.showToast) this.showToast('Pomodoro stopped')
     },
 
-    _stopPomodoroInternal()
+    _stopPomodoroInternal(notifyNative)
     {
       if (this._pomodoroIntervalId)
       {
@@ -56,9 +62,10 @@ export function createPomodoroModule()
       this.pomodoroEndTime = null
       this.pomodoroRemaining = this.pomodoroTotal || 25 * 60
       try { localStorage.removeItem(POMODORO_KEY) } catch (e) {}
-      if (window.Android && typeof window.Android.cancelPomodoro === 'function')
+
+      if (notifyNative && window.Android && typeof window.Android.stopPomodoroTimer === 'function')
       {
-        try { window.Android.cancelPomodoro() } catch (e) {}
+        try { window.Android.stopPomodoroTimer() } catch (e) {}
       }
     },
 
@@ -82,8 +89,11 @@ export function createPomodoroModule()
       this.pomodoroRemaining = 0
       try { localStorage.removeItem(POMODORO_KEY) } catch (e) {}
       if (this.showToast) this.showToast('Pomodoro complete!')
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200])
-      // Native path handles the notification transition + clears prefs.
+      if (typeof navigator !== 'undefined' && navigator.vibrate)
+      {
+        try { navigator.vibrate([200, 100, 200, 100, 200]) } catch (e) {}
+      }
+      // Native handles the completion notification + cancels the alarm.
       if (window.Android && typeof window.Android.notifyPomodoroDone === 'function')
       {
         try { window.Android.notifyPomodoroDone() } catch (e) {}
@@ -102,10 +112,8 @@ export function createPomodoroModule()
       const remaining = Math.floor((stored - Date.now()) / 1000)
       if (remaining > 0)
       {
-        // Native is authoritative. If native says "not running" but the JS
-        // local storage still has a future endTime, the user must have
-        // tapped Stop from the notification action while the app was
-        // backgrounded. Clear local state so we don't ghost-resume.
+        // Reconcile with native — if user tapped Stop from the notification
+        // action while the app was closed, don't ghost-resume the JS timer.
         if (window.Android && typeof window.Android.isPomodoroRunning === 'function')
         {
           let nativeRunning = false
@@ -125,6 +133,13 @@ export function createPomodoroModule()
         this.pomodoroRemaining = remaining
         this.pomodoroRunning = true
         this._pomodoroIntervalId = setInterval(() => this._tickPomodoro(), 1000)
+
+        // Ensure the native overlay / countdown is showing again — the
+        // process may have been killed and restarted.
+        if (window.Android && typeof window.Android.startPomodoroTimer === 'function')
+        {
+          try { window.Android.startPomodoroTimer(stored) } catch (e) {}
+        }
       }
       else
       {

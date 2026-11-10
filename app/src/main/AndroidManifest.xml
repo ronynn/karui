@@ -8,6 +8,9 @@
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <!-- SYSTEM_ALERT_WINDOW already present for the main floating window -->
 
   <application
     android:allowBackup="true"
@@ -97,6 +100,15 @@
     <service
       android:name=".FloatingWindowService"
       android:exported="false" />
+    
+    <service
+      android:name=".PomodoroFloatingService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Draggable pomodoro countdown overlay shown while the timer runs" />
+    </service>
 
     <service
       android:name=".KaruiTileService"

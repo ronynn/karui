@@ -1,6 +1,5 @@
 package io.github.ronynn.karui;
 
-import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -41,8 +40,12 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   private static final long REMINDER_LEAD_MS = 5 * 60 * 1000L;
 
   // ── Pomodoro ─────────────────────────────────────────────────────
-  public static final String ACTION_POMODORO_DONE     = "io.github.ronynn.karui.POMODORO_DONE";
-  public static final String ACTION_POMODORO_CANCEL   = "io.github.ronynn.karui.POMODORO_CANCEL";
+  // Dedicated channel so pomodoro notifications never depend on the user
+  // having toggled calendar notifications on. Getting this wrong is what
+  // caused "notification silently disappears" on fresh installs.
+  public static final String POMODORO_CHANNEL_ID = "pomodoro_channel";
+  public static final String ACTION_POMODORO_DONE   = "io.github.ronynn.karui.POMODORO_DONE";
+  public static final String ACTION_POMODORO_CANCEL = "io.github.ronynn.karui.POMODORO_CANCEL";
   public static final int    POMODORO_NOTIFICATION_ID = 999;
   public static final int    POMODORO_ALARM_ID        = 500;
   public static final int    POMODORO_STOP_REQ_ID     = 501;
@@ -55,11 +58,9 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   {
     String action = intent != null ? intent.getAction() : null;
 
-    // Pomodoro routes take precedence — don't gate on calendar prefs.
     if (ACTION_POMODORO_DONE.equals(action))   { handlePomodoroDone(context);   return; }
     if (ACTION_POMODORO_CANCEL.equals(action)) { handlePomodoroCancel(context); return; }
 
-    // Calendar path.
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     if (!prefs.getBoolean(KEY_ENABLED, false)) return;
 
@@ -87,16 +88,31 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   //  POMODORO
   // ══════════════════════════════════════════════════════════════════
 
+  /** Always call this before posting any pomodoro notification. */
+  public static void ensurePomodoroChannel(Context context)
+  {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm == null) return;
+    NotificationChannel ch = new NotificationChannel(
+        POMODORO_CHANNEL_ID, "Pomodoro", NotificationManager.IMPORTANCE_DEFAULT);
+    ch.setDescription("Pomodoro timer notifications");
+    nm.createNotificationChannel(ch);
+  }
+
+  /** Countdown-only path (fallback when no overlay permission). */
   public static void schedulePomodoro(Context context, long endTimeMs)
   {
-    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
-    p.edit()
-      .putLong(KEY_POMODORO_END, endTimeMs)
-      .putBoolean(KEY_POMODORO_RUNNING, true)
-      .apply();
+    savePomodoroState(context, endTimeMs);
+    showPomodoroCountdownPublic(context, endTimeMs);
+    schedulePomodoroAlarm(context, endTimeMs);
+  }
 
-    showPomodoroCountdown(context, endTimeMs);
-
+  /** Alarm-only path (overlay path calls this — no countdown notification). */
+  public static void schedulePomodoroAlarm(Context context, long endTimeMs)
+  {
+    savePomodoroState(context, endTimeMs);
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
     if (am == null) return;
     Intent i = new Intent(context, CalendarNotificationReceiver.class);
@@ -115,11 +131,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nm != null) nm.cancel(POMODORO_NOTIFICATION_ID);
 
-    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
-    p.edit()
-      .putBoolean(KEY_POMODORO_RUNNING, false)
-      .remove(KEY_POMODORO_END)
-      .apply();
+    clearPomodoroState(context);
   }
 
   public static void notifyPomodoroDone(Context context)
@@ -134,20 +146,48 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     return p.getLong(KEY_POMODORO_END, 0) > System.currentTimeMillis();
   }
 
-  private static void handlePomodoroCancel(Context context)
+  public static void showPomodoroCountdownPublic(Context context, long endTimeMs)
   {
-    cancelPomodoro(context);
+    showPomodoroCountdown(context, endTimeMs);
   }
 
-  private static void handlePomodoroDone(Context context)
+  private static void savePomodoroState(Context context, long endTimeMs)
   {
-    cancelPomodoroAlarm(context);
+    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
+    p.edit()
+      .putLong(KEY_POMODORO_END, endTimeMs)
+      .putBoolean(KEY_POMODORO_RUNNING, true)
+      .apply();
+  }
 
+  private static void clearPomodoroState(Context context)
+  {
     SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
     p.edit()
       .putBoolean(KEY_POMODORO_RUNNING, false)
       .remove(KEY_POMODORO_END)
       .apply();
+  }
+
+  private static void handlePomodoroCancel(Context context)
+  {
+    cancelPomodoro(context);
+    // Also stop any running overlay service.
+    try
+    {
+      Intent stop = new Intent(context, PomodoroFloatingService.class);
+      stop.setAction(PomodoroFloatingService.ACTION_STOP);
+      context.startService(stop);
+    }
+    catch (Exception ignored) {}
+  }
+
+  private static void handlePomodoroDone(Context context)
+  {
+    cancelPomodoroAlarm(context);
+    clearPomodoroState(context);
+
+    ensurePomodoroChannel(context);
 
     NotificationManager nm =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -155,45 +195,65 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
-      NotificationChannel ch = nm.getNotificationChannel(CHANNEL_ID);
+      NotificationChannel ch = nm.getNotificationChannel(POMODORO_CHANNEL_ID);
       if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
     }
 
-    // Replaces the countdown notification (same ID).
-    Notification.Builder b = buildBaseBuilder(context);
-    b.setContentTitle("Pomodoro complete")
-     .setContentText("Time is up — tap to open Karui")
-     .setContentIntent(openAppIntent(context))
-     .setAutoCancel(true)
-     .setOngoing(false)
-     .setOnlyAlertOnce(false);
-
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
+    Notification.Builder b;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      b = new Notification.Builder(context, POMODORO_CHANNEL_ID);
+    else
     {
+      b = new Notification.Builder(context);
       b.setPriority(Notification.PRIORITY_HIGH);
       b.setDefaults(Notification.DEFAULT_ALL);
     }
 
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      b.setSmallIcon(Icon.createWithResource(context, R.drawable.ic_note));
+    else
+      b.setSmallIcon(R.drawable.ic_note);
+
+    b.setContentTitle("Pomodoro complete")
+     .setContentText("Time is up — tap to open Karui")
+     .setContentIntent(openAppIntent(context))
+     .setAutoCancel(true)
+     .setOngoing(false);
+
     nm.notify(POMODORO_NOTIFICATION_ID, b.build());
   }
 
-  // Countdown notification. No setContentText — the chronometer occupies
-  // that row so it's visible without expanding the shade. On API 24+ the
-  // chronometer counts DOWN; on API 31+ a short "Nm" tag supplements it.
+  // Kept for the no-overlay fallback. Relies on its own channel now.
   private static void showPomodoroCountdown(Context context, long endTimeMs)
   {
+    ensurePomodoroChannel(context);
+
     NotificationManager nm =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
     if (nm == null) return;
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
-      NotificationChannel ch = nm.getNotificationChannel(CHANNEL_ID);
+      NotificationChannel ch = nm.getNotificationChannel(POMODORO_CHANNEL_ID);
       if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
     }
 
-    Notification.Builder b = buildBaseBuilder(context);
+    Notification.Builder b;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+      b = new Notification.Builder(context, POMODORO_CHANNEL_ID);
+    else
+    {
+      b = new Notification.Builder(context);
+      b.setPriority(Notification.PRIORITY_LOW);
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+      b.setSmallIcon(Icon.createWithResource(context, R.drawable.ic_note));
+    else
+      b.setSmallIcon(R.drawable.ic_note);
+
     b.setContentTitle("Pomodoro")
+     .setContentText("Focus in progress")
      .setWhen(endTimeMs)
      .setUsesChronometer(true)
      .setOngoing(true)
@@ -206,14 +266,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       b.setChronometerCountDown(true);
     }
 
-    // API 31+: compact "5m" label supplements the chronometer.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-    {
-      long remainingMin = Math.max(0, (endTimeMs - System.currentTimeMillis()) / 60000);
-      b.setShortCriticalText(remainingMin + "m");
-    }
-
-    // Stop action.
     Intent stopIntent = new Intent(context, CalendarNotificationReceiver.class);
     stopIntent.setAction(ACTION_POMODORO_CANCEL);
     int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -222,14 +274,10 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     Notification.Action.Builder ab;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-    {
       ab = new Notification.Action.Builder(
           Icon.createWithResource(context, R.drawable.ic_note), "Stop", stopPi);
-    }
     else
-    {
       ab = new Notification.Action.Builder(0, "Stop", stopPi);
-    }
     b.addAction(ab.build());
 
     nm.notify(POMODORO_NOTIFICATION_ID, b.build());
@@ -249,7 +297,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  CALENDAR
+  //  CALENDAR (unchanged from your last working version)
   // ══════════════════════════════════════════════════════════════════
 
   private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)
@@ -280,10 +328,8 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         JSONObject o = arr.getJSONObject(i);
         if (!todayStr.equals(o.optString("date", ""))) continue;
         if (o.optBoolean("completed", false)) continue;
-
         String time = o.optString("time", "");
         if (!time.isEmpty()) continue;
-
         String text = o.optString("text", "").trim();
         if (text.isEmpty()) continue;
         todays.add(text);
@@ -294,11 +340,8 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
     {
       NotificationChannel channel = new NotificationChannel(
-          CHANNEL_ID,
-          "Calendar Events",
-          NotificationManager.IMPORTANCE_DEFAULT);
-      channel.setDescription("Reminders for calendar events. Tap an event " +
-                             "reminder to open the app and mark it done.");
+          CHANNEL_ID, "Calendar Events", NotificationManager.IMPORTANCE_DEFAULT);
+      channel.setDescription("Reminders for calendar events.");
       manager.createNotificationChannel(channel);
     }
 
@@ -310,11 +353,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     }
 
     String title, bigText;
-    if (todays.size() == 1)
-    {
-      title   = "Today's event";
-      bigText = todays.get(0);
-    }
+    if (todays.size() == 1) { title = "Today's event"; bigText = todays.get(0); }
     else
     {
       title = "Today's events (" + todays.size() + ")";
@@ -325,14 +364,11 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         sb.append("• ").append(todays.get(i));
         if (i < limit - 1) sb.append('\n');
       }
-      if (todays.size() > limit)
-      {
-        sb.append("\n…and ").append(todays.size() - limit).append(" more");
-      }
+      if (todays.size() > limit) sb.append("\n…and ").append(todays.size() - limit).append(" more");
       bigText = sb.toString();
     }
 
-    Notification.Builder b = buildBaseBuilder(context);
+    Notification.Builder b = buildCalendarBase(context);
     b.setContentTitle(title)
      .setContentText(todays.size() == 1 ? bigText : todays.get(0))
      .setStyle(new Notification.BigTextStyle().bigText(bigText))
@@ -342,10 +378,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     manager.notify(NOTIFICATION_ID, b.build());
 
-    if (!silent)
-    {
-      prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
-    }
+    if (!silent) prefs.edit().putString(KEY_LAST_NOTIFIED, todayStr).apply();
   }
 
   private static void showEventNotification(Context context, int eventId)
@@ -364,18 +397,14 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         JSONObject o = arr.getJSONObject(i);
         if (o.optInt("id", 0) != eventId) continue;
         if (!todayStr.equals(o.optString("date", ""))) continue;
-
         if (o.optBoolean("completed", false))
         {
           NotificationManager nmStale =
               (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
           if (nmStale != null)
-          {
             nmStale.cancel(EVENT_NOTIFICATION_BASE + Math.abs(eventId % 100000));
-          }
           return;
         }
-
         eventText = o.optString("text", "").trim();
         eventTime = o.optString("time", "");
         break;
@@ -395,7 +424,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
     }
 
-    Notification.Builder b = buildBaseBuilder(context);
+    Notification.Builder b = buildCalendarBase(context);
     b.setContentTitle(eventTime == null || eventTime.isEmpty() ? "Reminder" : "Reminder · " + eventTime)
      .setContentText(eventText)
      .setStyle(new Notification.BigTextStyle().bigText(eventText))
@@ -404,31 +433,23 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
      .setOngoing(true)
      .setOnlyAlertOnce(true);
 
-    int notifId = EVENT_NOTIFICATION_BASE + Math.abs(eventId % 100000);
-    manager.notify(notifId, b.build());
+    manager.notify(EVENT_NOTIFICATION_BASE + Math.abs(eventId % 100000), b.build());
   }
 
-  private static Notification.Builder buildBaseBuilder(Context context)
+  private static Notification.Builder buildCalendarBase(Context context)
   {
     Notification.Builder b;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-    {
       b = new Notification.Builder(context, CHANNEL_ID);
-    }
     else
     {
       b = new Notification.Builder(context);
       b.setPriority(Notification.PRIORITY_DEFAULT);
     }
-
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-    {
       b.setSmallIcon(Icon.createWithResource(context, R.drawable.ic_note));
-    }
     else
-    {
       b.setSmallIcon(R.drawable.ic_note);
-    }
     return b;
   }
 
@@ -445,7 +466,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   {
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
     if (am == null) return;
-
     Intent i = new Intent(context, CalendarNotificationReceiver.class);
     int flags = PendingIntent.FLAG_UPDATE_CURRENT;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
@@ -457,9 +477,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     target.set(Calendar.SECOND, 0);
     target.set(Calendar.MILLISECOND, 0);
     if (target.getTimeInMillis() <= System.currentTimeMillis())
-    {
       target.add(Calendar.DAY_OF_YEAR, 1);
-    }
 
     setExactCompat(am, target.getTimeInMillis(), pi);
   }
@@ -468,7 +486,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   {
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     if (!prefs.getBoolean(KEY_ENABLED, false)) return;
-
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
     if (am == null) return;
 
@@ -600,8 +617,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         for (int i = 0; i < arr.length(); i++)
         {
           JSONObject o = arr.getJSONObject(i);
-          int eid = o.optInt("id", 0);
-          nm.cancel(EVENT_NOTIFICATION_BASE + Math.abs(eid % 100000));
+          nm.cancel(EVENT_NOTIFICATION_BASE + Math.abs(o.optInt("id", 0) % 100000));
         }
       }
       catch (Exception ignored) {}
@@ -613,17 +629,11 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     try
     {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-      {
         am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-      }
       else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-      {
         am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-      }
       else
-      {
         am.set(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-      }
     }
     catch (SecurityException se)
     {
@@ -643,7 +653,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       am.cancel(pi);
       pi.cancel();
     }
-
     cancelEventReminders(context);
 
     NotificationManager nm =

@@ -244,7 +244,6 @@ const appStore = reactive(mergeModules(
 
       window.addEventListener('click', e => this.handleGlobalClick(e), true)
 
-      // Un-hide header + flag keyboard-open whenever a text field is focused.
       window.addEventListener('focusin', (e) =>
       {
         const t = e.target
@@ -271,7 +270,6 @@ const appStore = reactive(mergeModules(
         }
       })
 
-      // ESC closes the editor (desktop / external keyboards).
       window.addEventListener('keydown', (e) =>
       {
         if (e.key === 'Escape' && this.editVisible)
@@ -281,13 +279,11 @@ const appStore = reactive(mergeModules(
         }
       })
 
-      // Hardware / gesture back closes the editor.
       window.addEventListener('popstate', () =>
       {
         if (this.editVisible) this.finishEdit()
       })
 
-      // Flush deferred side effects before backgrounding.
       document.addEventListener('visibilitychange', () =>
       {
         if (document.hidden && this._sideEffectTimer)
@@ -326,11 +322,9 @@ const appStore = reactive(mergeModules(
         }, 50)
       }
 
-      // Resume an in-flight pomodoro + recover an unsaved tab edit.
       this.resumePomodoroIfNeeded()
       this._recoverTabEditDraft()
 
-      // Defensive blur for old WebViews that auto-focus a clickable on load.
       requestAnimationFrame(() => requestAnimationFrame(() =>
       {
         const ae = document.activeElement
@@ -382,9 +376,6 @@ const appStore = reactive(mergeModules(
 
       this._scheduleSideEffects()
 
-      // Re-evaluate scroll state after any state change. The removeTransitions
-      // toggle changes padding without firing a scroll event, leaving
-      // isScrolled stale — this catches it.
       requestAnimationFrame(() =>
       {
         const vv = window.visualViewport
@@ -407,7 +398,19 @@ const appStore = reactive(mergeModules(
       {
         this._sideEffectTimer = null
         this._runSideEffects()
-      }, 1000)
+      }, 400)
+    },
+
+    // Synchronous flush. Call after any discrete action (tab edit save,
+    // note edit save) so the sync file never lags behind user intent.
+    _flushSideEffectsNow()
+    {
+      if (this._sideEffectTimer)
+      {
+        clearTimeout(this._sideEffectTimer)
+        this._sideEffectTimer = null
+      }
+      this._runSideEffects()
     },
 
     _runSideEffects()
@@ -496,11 +499,6 @@ const appStore = reactive(mergeModules(
         const scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
         {
-          // Only suppress header-hide when the keyboard is actually up
-          // (detected via visualViewport), NOT when an input merely retains
-          // focus. The old activeElement check left isScrolled stuck at
-          // false after toggling remove-transitions, because padding changes
-          // never fire a scroll event.
           const vv = window.visualViewport
           const kbOpen = vv
             ? (window.innerHeight - vv.height) > 100
@@ -539,7 +537,6 @@ const appStore = reactive(mergeModules(
       this.focusNoteInput()
     },
 
-    // FAB doubles as Done button while the editor is open.
     onFabClick(e)
     {
       if (this.editVisible) this.finishEdit()
@@ -553,8 +550,6 @@ const appStore = reactive(mergeModules(
       if (inp) inp.focus()
     },
 
-    // Open the full-screen single-note editor. Keyboard only pops when
-    // keepKeyboard is on.
     startEdit(note)
     {
       if (!note) return
@@ -584,7 +579,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // Open the full-screen editor with the whole tab as markdown.
     editTabAsMarkdown()
     {
       const tab = this.contextTab
@@ -619,8 +613,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // Recover a tab-edit that was open when the app was killed. Persists
-    // to localStorage on every keystroke (autosave), so nothing is lost.
     _recoverTabEditDraft()
     {
       let draft = null
@@ -636,11 +628,8 @@ const appStore = reactive(mergeModules(
       this.showToast('Recovered unsaved tab edits')
     },
 
-    // Debounced autosave. Store updates immediately; localStorage follows in 400ms.
     autosaveEdit()
     {
-      // Tab-mode: persist draft to localStorage (crash recovery only).
-      // Actual merge happens in finishEdit.
       if (this.editTabMode)
       {
         try
@@ -662,8 +651,6 @@ const appStore = reactive(mergeModules(
       this._autosaveTimer = setTimeout(() => this.saveData(), 400)
     },
 
-    // Compute keyboard height from visualViewport and publish it as --kb-pad.
-    // Skips the write if the value hasn't changed to avoid style recalcs.
     _updateKeyboardPadding()
     {
       if (!this.editVisible) return
@@ -699,7 +686,6 @@ const appStore = reactive(mergeModules(
       document.documentElement.style.removeProperty('--kb-pad')
     },
 
-    // Flush pending save and close the editor.
     finishEdit()
     {
       if (!this.editVisible) return
@@ -722,6 +708,7 @@ const appStore = reactive(mergeModules(
       if (wasTabMode && tabName)
       {
         this.applyTabMarkdown(tabName, draft)
+        this._flushSideEffectsNow()
       }
       else if (id != null)
       {
@@ -732,6 +719,7 @@ const appStore = reactive(mergeModules(
           n.updatedAt = Date.now()
         }
         this.saveData()
+        this._flushSideEffectsNow()
       }
       this.editDraftText = ''
       const ae = document.activeElement
