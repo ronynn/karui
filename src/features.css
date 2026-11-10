@@ -76,7 +76,7 @@
   height: 100vh;
   height: 100dvh;
   margin: 0;
-  padding: calc(64px * var(--ui-scale) + env(safe-area-inset-top, 0px)) calc(24px * var(--ui-scale)) calc(240px + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px)) calc(24px * var(--ui-scale));
+  padding: calc(64px * var(--ui-scale) + env(safe-area-inset-top, 0px)) calc(24px * var(--ui-scale)) calc(50vh + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px)) calc(24px * var(--ui-scale));
   background: var(--bg);
   color: var(--text);
   border: none;
@@ -107,7 +107,7 @@
 
 /* No FAB → editor doesn't need the big bottom gap reserved for it. */
 body.no-fab #edit-textarea {
-  padding-bottom: calc(140px + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(50vh + var(--kb-pad, 0px) + env(safe-area-inset-bottom, 0px));
 }
 /* Click-catcher under the menu. Clicks on it close the menu without
    reaching the app underneath. Above all app UI, below `.menu` (2000). */

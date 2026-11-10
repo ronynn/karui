@@ -44,16 +44,8 @@ let session = null
 
 function lerp(a, b, t) { return a + (b - a) * t }
 
-// Font state is cached per-session; assigning ctx.font re-parses the string,
-// so avoid it on every draw when the value hasn't changed.
-function setFont(s, ctx, font)
-{
-  if (s._font !== font) { ctx.font = font; s._font = font }
-}
-
-// localStorage.setItem is a synchronous IPC to the browser process on
-// Android WebView (often 1-10 ms). Do NOT call it inside the game loop.
-// We keep the high score in memory and flush once, when the round ends.
+// localStorage.setItem is a synchronous IPC on Android WebView.
+// Keep the high score in memory and flush once, when the round ends.
 function persistHighScore()
 {
   if (!session) return
@@ -64,6 +56,133 @@ function handlePageHide()
 {
   persistHighScore()
 }
+
+// ---------------------------------------------------------------------------
+// DOM element builders
+//
+// The world is a fixed 360x476 box that gets CSS-scaled to fit the stage.
+// Every game object lives at logical coordinates inside it, exactly like the
+// canvas version. Positions are driven by `transform: translate3d(...)` so
+// the browser can composite them without touching layout.
+// ---------------------------------------------------------------------------
+
+function makePipe(theme)
+{
+  const el = document.createElement('div')
+  Object.assign(el.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${PIPE_W}px`,
+    height: `${CANVAS_H}px`,
+    display: 'none',
+    willChange: 'transform'
+  })
+
+  const body = () =>
+  {
+    const d = document.createElement('div')
+    Object.assign(d.style, {
+      position: 'absolute',
+      left: '0',
+      width: `${PIPE_W}px`,
+      background: theme.border
+    })
+    return d
+  }
+  const cap = () =>
+  {
+    const d = document.createElement('div')
+    Object.assign(d.style, {
+      position: 'absolute',
+      left: `${-PIPE_CAP_OVERHANG}px`,
+      width: `${PIPE_W + PIPE_CAP_OVERHANG * 2}px`,
+      height: `${PIPE_CAP_H}px`,
+      background: theme.accent
+    })
+    return d
+  }
+
+  const topBody = body()
+  const topCap = cap()
+  const bottomBody = body()
+  const bottomCap = cap()
+  el.append(topBody, topCap, bottomBody, bottomCap)
+
+  return { el, topBody, topCap, bottomBody, bottomCap }
+}
+
+function makeParticle(theme)
+{
+  const el = document.createElement('div')
+  Object.assign(el.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: '1px',
+    height: '1px',
+    marginLeft: '-0.5px',
+    marginTop: '-0.5px',
+    background: theme.text,
+    display: 'none',
+    transformOrigin: 'center center',
+    willChange: 'transform, opacity',
+    pointerEvents: 'none'
+  })
+  return el
+}
+
+function makeBird(theme)
+{
+  const el = document.createElement('div')
+  Object.assign(el.style, {
+    position: 'absolute',
+    left: `${BIRD_X}px`,
+    top: '0',
+    width: `${BIRD_W}px`,
+    height: `${BIRD_H}px`,
+    background: theme.accent,
+    transformOrigin: 'center center',
+    willChange: 'transform'
+  })
+  const eye = document.createElement('div')
+  Object.assign(eye.style, {
+    position: 'absolute',
+    left: `${BIRD_W - 6}px`,
+    top: '4px',
+    width: '4px',
+    height: '4px',
+    background: theme.accentTxt
+  })
+  el.appendChild(eye)
+  return el
+}
+
+function makeGround(theme)
+{
+  const el = document.createElement('div')
+  Object.assign(el.style, {
+    position: 'absolute',
+    left: '0',
+    bottom: '0',
+    width: '100%',
+    height: `${GROUND_H}px`,
+    background: theme.gray
+  })
+  const stripe = document.createElement('div')
+  Object.assign(stripe.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: '100%',
+    height: '4px',
+    background: theme.accent
+  })
+  el.appendChild(stripe)
+  return el
+}
+
+// ---------------------------------------------------------------------------
 
 export function startFlapGame()
 {
@@ -83,50 +202,170 @@ export function startFlapGame()
     resetLabel: 'reset'
   })
 
-  const canvas = document.createElement('canvas')
-  canvas.width = CANVAS_W
-  canvas.height = CANVAS_H
-  canvas.className = 'game-canvas'
-  Object.assign(canvas.style, {
+  // The bordered stage.
+  const stage = document.createElement('div')
+  stage.className = 'game-stage'
+  Object.assign(stage.style, {
+    position: 'relative',
     border: `2px solid ${theme.border}`,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surface,
     aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
     width: '94%',
     height: 'auto',
     maxHeight: '72vh',
+    overflow: 'hidden',
     touchAction: 'manipulation',
-    // Give the canvas its own composited layer so the overlay/page
-    // doesn't have to repaint when the canvas contents change.
     display: 'block',
+    boxSizing: 'content-box',
+    contain: 'layout paint style',
     willChange: 'transform',
     transform: 'translateZ(0)',
-    imageRendering: 'pixelated',
-    contain: 'paint'
+    userSelect: 'none',
+    webkitUserSelect: 'none',
+    webkitTapHighlightColor: 'transparent'
   })
-  overlay.contentHost.appendChild(canvas)
+  overlay.contentHost.appendChild(stage)
 
-  // `desynchronized: true` lets the compositor show the frame immediately
-  // instead of queueing it, cutting ~1 frame of latency on Chromium WebView.
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true })
-  ctx.imageSmoothingEnabled = false
-  // Paint the canvas with --bg immediately so the first paint matches the
-  // overlay background (no flash of black/surface).
-  ctx.fillStyle = theme.bg
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+  // Fixed-size logical viewport. Scaled as a whole to match the stage so
+  // every coordinate inside stays consistent with the original canvas.
+  const viewport = document.createElement('div')
+  Object.assign(viewport.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${CANVAS_W}px`,
+    height: `${CANVAS_H}px`,
+    transformOrigin: 'top left',
+    willChange: 'transform'
+  })
+  stage.appendChild(viewport)
 
-  const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
+  // Everything that shakes on game over lives here.
+  const world = document.createElement('div')
+  Object.assign(world.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${CANVAS_W}px`,
+    height: `${CANVAS_H}px`,
+    willChange: 'transform'
+  })
+  viewport.appendChild(world)
 
+  // Pipes
   const pipes = []
   for (let i = 0; i < MAX_PIPES; i++)
   {
-    pipes.push({ active: false, x: 0, prevX: 0, top: 0, bottom: 0, passed: false })
+    const parts = makePipe(theme)
+    world.appendChild(parts.el)
+    pipes.push({
+      active: false, x: 0, prevX: 0, top: 0, bottom: 0, passed: false,
+      el: parts.el,
+      topBody: parts.topBody, topCap: parts.topCap,
+      bottomBody: parts.bottomBody, bottomCap: parts.bottomCap
+    })
   }
 
+  // Ground
+  world.appendChild(makeGround(theme))
+
+  // Particles
   const particles = []
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
-    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, size: 0, life: 0 })
+    const el = makeParticle(theme)
+    world.appendChild(el)
+    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, size: 0, life: 0, el })
   }
+
+  // Bird
+  const birdEl = makeBird(theme)
+  world.appendChild(birdEl)
+
+  // HUD (inside the viewport so it scales with the game, but outside the
+  // world so it does not shake).
+  const scoreEl = document.createElement('div')
+  Object.assign(scoreEl.style, {
+    position: 'absolute',
+    left: '12px',
+    top: '16px',
+    font: 'bold 16px monospace',
+    lineHeight: '1',
+    color: theme.text,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap'
+  })
+  viewport.appendChild(scoreEl)
+
+  const hiEl = document.createElement('div')
+  Object.assign(hiEl.style, {
+    position: 'absolute',
+    right: '12px',
+    top: '16px',
+    font: 'bold 16px monospace',
+    lineHeight: '1',
+    color: theme.text,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap'
+  })
+  viewport.appendChild(hiEl)
+
+  const hintEl = document.createElement('div')
+  Object.assign(hintEl.style, {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    font: '15px monospace',
+    color: theme.text,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap'
+  })
+  hintEl.textContent = 'Tap or Space to Jump'
+  viewport.appendChild(hintEl)
+
+  // Game over overlay
+  const gameoverEl = document.createElement('div')
+  Object.assign(gameoverEl.style, {
+    position: 'absolute',
+    inset: '0',
+    background: 'rgba(0,0,0,0.5)',
+    display: 'none',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    pointerEvents: 'none'
+  })
+  const goTitle = document.createElement('div')
+  Object.assign(goTitle.style, {
+    font: 'bold 26px monospace',
+    color: '#fff',
+    whiteSpace: 'nowrap'
+  })
+  goTitle.textContent = 'GAME OVER'
+  const goSub = document.createElement('div')
+  Object.assign(goSub.style, {
+    font: 'bold 14px monospace',
+    color: '#fff',
+    whiteSpace: 'nowrap'
+  })
+  goSub.textContent = 'Tap to Restart'
+  gameoverEl.append(goTitle, goSub)
+  viewport.appendChild(gameoverEl)
+
+  // Flash overlay
+  const flashEl = document.createElement('div')
+  Object.assign(flashEl.style, {
+    position: 'absolute',
+    inset: '0',
+    background: '#fff',
+    opacity: '0',
+    pointerEvents: 'none'
+  })
+  viewport.appendChild(flashEl)
+
+  const highScore = parseInt(localStorage.getItem('flap_highscore') || '0', 10)
 
   const heights = new Float32Array(TRACK_SIZE)
   const minH = 40
@@ -138,19 +377,24 @@ export function startFlapGame()
 
   session = {
     overlay,
-    canvas,
-    ctx,
+    stage,
+    viewport,
+    world,
     theme,
     highScore,
     highScoreBeaten: false,
-    // Score text is cached: template literals allocate every frame otherwise.
     scoreText: 'PTS 0',
     hiText: `HI ${highScore}`,
+    scoreEl,
+    hiEl,
+    hintEl,
+    gameoverEl,
+    flashEl,
     pipes,
     particles,
     heights,
     trackIndex: 0,
-    bird: { y: CANVAS_H / 2, prevY: CANVAS_H / 2, vy: 0, rot: 0, prevRot: 0 },
+    bird: { el: birdEl, y: CANVAS_H / 2, prevY: CANVAS_H / 2, vy: 0, rot: 0, prevRot: 0 },
     spawnAccumulator: 0,
     score: 0,
     started: false,
@@ -161,19 +405,14 @@ export function startFlapGame()
     accumulator: 0,
     alpha: 0,
     needsDraw: true,
-    _font: '',
     rafId: null,
-    applyCanvasSize: null,
+    applyStageSize: null,
     onViewportChange: null
   }
 
   resetFlapGame()
 
-  // Preload confetti on idle, NOT mid-run. `ensureConfettiLoaded` appends
-  // a <script> tag; its fetch + compile + execute would otherwise land
-  // right in the middle of the game and cause a visible hitch.
-  // requestIdleCallback fires between frames when the main thread is free;
-  // the timeout guarantees it eventually runs even if the thread stays busy.
+  // Preload confetti on idle, not mid-run.
   if (typeof requestIdleCallback === 'function')
   {
     requestIdleCallback(() => { ensureConfettiLoaded().catch(() => {}) }, { timeout: 1500 })
@@ -183,36 +422,41 @@ export function startFlapGame()
     setTimeout(() => { ensureConfettiLoaded().catch(() => {}) }, 1200)
   }
 
-  function applyCanvasSize()
+  function applyStageSize()
   {
     if (overlay.isLandscape())
     {
-      canvas.style.width = 'auto'
-      canvas.style.height = '100%'
-      canvas.style.maxHeight = 'calc(100vh - 24px)'
-      canvas.style.maxWidth = '100%'
+      stage.style.width = 'auto'
+      stage.style.height = '100%'
+      stage.style.maxHeight = 'calc(100vh - 24px)'
+      stage.style.maxWidth = '100%'
     }
     else
     {
-      canvas.style.width = '94%'
-      canvas.style.height = 'auto'
-      canvas.style.maxHeight = '72vh'
-      canvas.style.maxWidth = ''
+      stage.style.width = '94%'
+      stage.style.height = 'auto'
+      stage.style.maxHeight = '72vh'
+      stage.style.maxWidth = ''
     }
-    // Reading clientWidth forces layout. Only draw when the box is actually
-    // big enough; otherwise the first rAF fallback below will retry.
-    if (canvas.clientWidth > 100 && canvas.clientHeight > 100)
+
+    const cw = stage.clientWidth
+    const ch = stage.clientHeight
+    if (cw > 100 && ch > 100)
     {
-      try { draw() } catch (e) {}
+      // Uniform scale keeps the game undistorted. If max-height clamps
+      // the stage's aspect ratio, the game letterboxes instead of
+      // stretching (canvas would have stretched).
+      const scale = Math.min(cw / CANVAS_W, ch / CANVAS_H)
+      const dx = (cw - CANVAS_W * scale) / 2
+      const dy = (ch - CANVAS_H * scale) / 2
+      viewport.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${scale.toFixed(5)})`
+      draw()
       if (session) session.needsDraw = false
     }
   }
 
-  session.applyCanvasSize = applyCanvasSize
+  session.applyStageSize = applyStageSize
 
-  // Coalesce resize/orientationchange bursts into a single rAF callback.
-  // The URL bar never shows in this app, so continuous resize storms aren't
-  // a concern, but orientationchange can fire several times in a row.
   let resizeRaf = 0
   const onViewportChange = () =>
   {
@@ -220,17 +464,15 @@ export function startFlapGame()
     resizeRaf = requestAnimationFrame(() =>
     {
       resizeRaf = 0
-      if (session) applyCanvasSize()
+      if (session) applyStageSize()
     })
   }
   session.onViewportChange = onViewportChange
 
-  // Draw synchronously; no paint can happen between here and the return
-  // of startFlapGame(), so the first frame already shows content.
-  applyCanvasSize()
-  if (canvas.clientWidth < 100 || canvas.clientHeight < 100)
+  applyStageSize()
+  if (stage.clientWidth < 100 || stage.clientHeight < 100)
   {
-    requestAnimationFrame(applyCanvasSize)
+    requestAnimationFrame(applyStageSize)
   }
 
   window.addEventListener('resize', onViewportChange)
@@ -242,8 +484,8 @@ export function startFlapGame()
     if (e) e.preventDefault()
     flapAction()
   }
-  canvas.addEventListener('mousedown', handleTap)
-  canvas.addEventListener('touchstart', handleTap, { passive: false })
+  stage.addEventListener('mousedown', handleTap)
+  stage.addEventListener('touchstart', handleTap, { passive: false })
   window.addEventListener('keydown', handleKey)
 
   session.lastFrame = performance.now()
@@ -289,9 +531,6 @@ function flapAction()
   spawnJumpParticles(BIRD_X + BIRD_W / 2, s.bird.y + BIRD_H)
 }
 
-// Particles leave from under the bird and trail down-and-left in a puff,
-// angled 20°–55° below horizontal (mirroring the bird's downward flap).
-// They grow slightly and fade out as they die.
 function spawnJumpParticles(x, y)
 {
   const s = session
@@ -307,10 +546,11 @@ function spawnJumpParticles(x, y)
       p.active = true
       p.x = x + (Math.random() - 0.5) * BIRD_W * 0.7
       p.y = y + Math.random() * 2
-      p.vx = -Math.cos(angle) * speed   // always leftward
-      p.vy = Math.sin(angle) * speed    // always downward
-      p.size = 3 + Math.random() * 2    // 3–5 px base
+      p.vx = -Math.cos(angle) * speed
+      p.vy = Math.sin(angle) * speed
+      p.size = 3 + Math.random() * 2
       p.life = PARTICLE_LIFE
+      p.el.style.display = 'block'
       spawned++
     }
   }
@@ -336,15 +576,19 @@ function resetFlapGame()
   s.bird.vy = 0
   s.bird.rot = 0
   s.bird.prevRot = 0
+
   for (let i = 0; i < MAX_PIPES; i++)
   {
     s.pipes[i].active = false
     s.pipes[i].prevX = 0
+    s.pipes[i].el.style.display = 'none'
   }
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
     s.particles[i].active = false
+    s.particles[i].el.style.display = 'none'
   }
+
   s.trackIndex = 0
   s.spawnAccumulator = 0
   s.score = 0
@@ -356,6 +600,16 @@ function resetFlapGame()
   s.accumulator = 0
   s.alpha = 0
   s.needsDraw = true
+
+  // Put the DOM back into its idle state synchronously so a restart
+  // does not flash the previous round's elements for one frame.
+  s.world.style.transform = ''
+  s.gameoverEl.style.display = 'none'
+  s.hintEl.style.display = 'block'
+  s.flashEl.style.opacity = '0'
+  s.scoreEl.textContent = s.scoreText
+  s.hiEl.textContent = s.hiText
+  s.bird.el.style.transform = `translate3d(0, ${(CANVAS_H / 2).toFixed(2)}px, 0) rotate(0rad)`
 }
 
 function spawnPipe()
@@ -375,6 +629,17 @@ function spawnPipe()
       p.top = top
       p.bottom = CANVAS_H - GROUND_H - top - PIPE_GAP
       p.passed = false
+
+      const bottomY = CANVAS_H - GROUND_H - p.bottom
+
+      p.topBody.style.height = `${top}px`
+      p.topCap.style.top = `${top - PIPE_CAP_H}px`
+      p.bottomBody.style.top = `${bottomY}px`
+      p.bottomBody.style.height = `${p.bottom}px`
+      p.bottomCap.style.top = `${bottomY}px`
+
+      p.el.style.transform = `translate3d(${CANVAS_W}px, 0, 0)`
+      p.el.style.display = 'block'
       return
     }
   }
@@ -394,7 +659,7 @@ function triggerGameOver()
   {
     s.highScore = s.score
     s.hiText = `HI ${s.highScore}`
-    persistHighScore()   // one synchronous write, at round end
+    persistHighScore()
   }
 }
 
@@ -438,7 +703,6 @@ function update()
         }
         s.highScore = s.score
         s.hiText = `HI ${s.highScore}`
-        // NO localStorage write here — persisted on game over.
       }
     }
 
@@ -508,11 +772,17 @@ function loop(now)
 
   s.alpha = s.accumulator / FIXED_MS
 
-  if (s.shakeFrames > 0) s.shakeFrames--
-  if (s.flashFrames > 0) s.flashFrames--
+  if (s.shakeFrames > 0)
+  {
+    s.shakeFrames--
+    if (s.shakeFrames === 0) s.needsDraw = true
+  }
+  if (s.flashFrames > 0)
+  {
+    s.flashFrames--
+    if (s.flashFrames === 0) s.needsDraw = true
+  }
 
-  // Skip drawing on frames where nothing can have visually changed:
-  // pre-start idle (waiting for first tap) and fully-settled game over.
   const active =
     (s.started && !s.gameOver) ||
     s.shakeFrames > 0 ||
@@ -531,103 +801,77 @@ function draw()
 {
   const s = session
   if (!s) return
-  const ctx = s.ctx
-  const theme = s.theme
   const alpha = s.alpha
 
-  ctx.save()
-
+  // Shake: only the world shakes. HUD and overlays are outside it,
+  // matching the canvas version where they are drawn after ctx.restore().
   if (s.shakeFrames > 0)
   {
     const amp = (s.shakeFrames / SHAKE_FRAMES) * 8
-    ctx.translate((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp)
+    const dx = (Math.random() - 0.5) * amp
+    const dy = (Math.random() - 0.5) * amp
+    s.world.style.transform = `translate3d(${dx.toFixed(2)}px, ${dy.toFixed(2)}px, 0)`
+  }
+  else if (s.world.style.transform !== '')
+  {
+    s.world.style.transform = ''
   }
 
-  ctx.fillStyle = theme.surface
-  ctx.fillRect(-12, -12, CANVAS_W + 24, CANVAS_H + 24)
-
+  // Pipes
   for (let i = 0; i < MAX_PIPES; i++)
   {
     const p = s.pipes[i]
-    if (!p.active) continue
+    if (!p.active)
+    {
+      if (p.el.style.display !== 'none') p.el.style.display = 'none'
+      continue
+    }
+    if (p.el.style.display !== 'block') p.el.style.display = 'block'
     const x = lerp(p.prevX, p.x, alpha)
-    const bottomY = CANVAS_H - GROUND_H - p.bottom
-
-    ctx.fillStyle = theme.border
-    ctx.fillRect(x, 0, PIPE_W, p.top)
-    ctx.fillStyle = theme.accent
-    ctx.fillRect(x - PIPE_CAP_OVERHANG, p.top - PIPE_CAP_H, PIPE_W + PIPE_CAP_OVERHANG * 2, PIPE_CAP_H)
-
-    ctx.fillStyle = theme.border
-    ctx.fillRect(x, bottomY, PIPE_W, p.bottom)
-    ctx.fillStyle = theme.accent
-    ctx.fillRect(x - PIPE_CAP_OVERHANG, bottomY, PIPE_W + PIPE_CAP_OVERHANG * 2, PIPE_CAP_H)
+    p.el.style.transform = `translate3d(${x.toFixed(2)}px, 0, 0)`
   }
 
-  ctx.fillStyle = theme.gray
-  ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, GROUND_H)
-  ctx.fillStyle = theme.accent
-  ctx.fillRect(0, CANVAS_H - GROUND_H, CANVAS_W, 4)
-
-  // Particles: grow slightly as they fade out (puff effect), in text color
-  // so they read as distinct from the accent-colored bird and pipes.
-  ctx.fillStyle = theme.text
+  // Particles: 1x1 div scaled to the target size. Birth scale is size,
+  // death scale is size * 1.5 (grows as it fades), matching the canvas.
   for (let i = 0; i < MAX_PARTICLES; i++)
   {
     const p = s.particles[i]
-    if (!p.active) continue
-    const t = p.life / PARTICLE_LIFE               // 1 (new) → 0 (dead)
-    ctx.globalAlpha = t
-    const sz = p.size * (1.5 - t * 0.5)            // 1× → 1.5× as it fades
-    ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz)
-  }
-  ctx.globalAlpha = 1
-
-  // Bird: pure rotation, no squash/stretch.
-  const birdY = lerp(s.bird.prevY, s.bird.y, alpha)
-  const birdRot = lerp(s.bird.prevRot, s.bird.rot, alpha)
-
-  ctx.save()
-  ctx.translate(BIRD_X + BIRD_W / 2, birdY + BIRD_H / 2)
-  ctx.rotate(birdRot)
-  ctx.fillStyle = theme.accent
-  ctx.fillRect(-BIRD_W / 2, -BIRD_H / 2, BIRD_W, BIRD_H)
-  ctx.fillStyle = theme.accentTxt
-  ctx.fillRect(BIRD_W / 2 - 6, -BIRD_H / 2 + 4, 4, 4)
-  ctx.restore()
-
-  ctx.restore()
-
-  setFont(s, ctx, 'bold 16px monospace')
-  ctx.fillStyle = theme.text
-  ctx.textAlign = 'left'
-  ctx.fillText(s.scoreText, 12, 28)
-  ctx.textAlign = 'right'
-  ctx.fillText(s.hiText, CANVAS_W - 12, 28)
-
-  if (!s.started && !s.gameOver)
-  {
-    setFont(s, ctx, '15px monospace')
-    ctx.fillStyle = theme.text
-    ctx.textAlign = 'center'
-    ctx.fillText('Tap or Space to Jump', CANVAS_W / 2, CANVAS_H / 2)
+    if (!p.active)
+    {
+      if (p.el.style.display !== 'none') p.el.style.display = 'none'
+      continue
+    }
+    if (p.el.style.display !== 'block') p.el.style.display = 'block'
+    const t = p.life / PARTICLE_LIFE
+    const scale = p.size * (1.5 - t * 0.5)
+    p.el.style.transform = `translate3d(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px, 0) scale(${scale.toFixed(3)})`
+    p.el.style.opacity = t.toFixed(3)
   }
 
-  if (s.gameOver)
-  {
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
-    setFont(s, ctx, 'bold 26px monospace')
-    ctx.fillStyle = '#fff'
-    ctx.textAlign = 'center'
-    ctx.fillText('GAME OVER', CANVAS_W / 2, CANVAS_H / 2 - 10)
-    setFont(s, ctx, 'bold 14px monospace')
-    ctx.fillText('Tap Canvas to Restart', CANVAS_W / 2, CANVAS_H / 2 + 20)
-  }
+  // Bird
+  const by = lerp(s.bird.prevY, s.bird.y, alpha)
+  const br = lerp(s.bird.prevRot, s.bird.rot, alpha)
+  s.bird.el.style.transform = `translate3d(0, ${by.toFixed(2)}px, 0) rotate(${br.toFixed(4)}rad)`
 
+  // HUD (guard textContent writes to avoid needless reflow)
+  if (s.scoreEl.textContent !== s.scoreText) s.scoreEl.textContent = s.scoreText
+  if (s.hiEl.textContent !== s.hiText) s.hiEl.textContent = s.hiText
+
+  // Hint
+  const showHint = !s.started && !s.gameOver ? 'block' : 'none'
+  if (s.hintEl.style.display !== showHint) s.hintEl.style.display = showHint
+
+  // Game over overlay
+  const goDisp = s.gameOver ? 'flex' : 'none'
+  if (s.gameoverEl.style.display !== goDisp) s.gameoverEl.style.display = goDisp
+
+  // Flash
   if (s.flashFrames > 0)
   {
-    ctx.fillStyle = `rgba(255,255,255,${(s.flashFrames / FLASH_FRAMES) * 0.3})`
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+    s.flashEl.style.opacity = ((s.flashFrames / FLASH_FRAMES) * 0.3).toFixed(3)
+  }
+  else if (s.flashEl.style.opacity !== '0')
+  {
+    s.flashEl.style.opacity = '0'
   }
 }
