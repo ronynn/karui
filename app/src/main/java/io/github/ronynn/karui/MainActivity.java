@@ -21,6 +21,7 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -62,9 +63,11 @@ public class MainActivity extends Activity
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_PENDING_IMPORT = "pending_import_json";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
+  private static final String KEY_THEME_BG = "theme_bg_color";
+  private static final String KEY_THEME_LIGHT = "theme_light";
 
-  /** Gruvbox bg0 — used for window background and WebView loading bg. */
-  private static final int DARK_GREY_BG = 0xFF282828;
+  /** Fallback background — gruvbox bg0. Used until JS reports the real theme bg. */
+  private static final int DEFAULT_BG = 0xFF282828;
 
   // ═══════════════════════════════════════════════════════════════
   //  SECTION 2 — FIELDS
@@ -110,16 +113,18 @@ public class MainActivity extends Activity
     boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
     boolean floatingTrigger = assistLaunch || tileLaunch;
 
-    // Floating-window fast path — open capture window and stay alive in
-    // background. The activity is NOT finished, so reopening it doesn't
-    // cost a full cold start.
+    // ── Floating-window fast path ─────────────────────────────────
+    // The activity exists only long enough to start the service.
+    // After that, finish it so the transparent (i.e. black) window
+    // doesn't linger behind the floating panel.
     if (floatingTrigger && canDrawOverlays())
     {
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
       try
       {
         startService(new Intent(this, FloatingWindowService.class));
-        // Do NOT finish the activity. Stay paused behind the floating window.
+        finishAndRemoveTask();
+        overridePendingTransition(0, 0);
         return;
       }
       catch (Exception e)
@@ -127,27 +132,26 @@ public class MainActivity extends Activity
         Toast.makeText(this,
             "Could not open capture window: " + e.getMessage(),
             Toast.LENGTH_LONG).show();
+        // Fall through — show the full UI rather than an empty window.
       }
     }
 
-    // ── Dark grey from the first frame ───────────────────────────
-    // Overrides the theme windowBackground (which is #000000 in
-    // styles.xml). Set BEFORE setContentView so the initial paint is
-    // gruvbox bg0, not black.
-    getWindow().setBackgroundDrawable(new ColorDrawable(DARK_GREY_BG));
+    // ── Normal launch — theme-matched background ──────────────────
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    int themeBg = readThemeBg(prefs);
+    boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
+
+    getWindow().setBackgroundDrawable(new ColorDrawable(themeBg));
 
     setContentView(R.layout.activity_main);
-    SystemBarHelper.apply(this);
+    SystemBarHelper.apply(this, lightBars);
 
-    // Hide splash immediately — not used. The layout still contains the
-    // view; we just GONE it. Remove from activity_main.xml later if you
-    // want to trim the layout too.
     View splash = findViewById(R.id.splash_screen);
     if (splash != null) splash.setVisibility(View.GONE);
 
     mWebView = findViewById(R.id.activity_main_webview);
-    mWebView.setVisibility(View.VISIBLE);          // was GONE in XML
-    mWebView.setBackgroundColor(DARK_GREY_BG);    // match window
+    mWebView.setVisibility(View.VISIBLE);
+    mWebView.setBackgroundColor(themeBg);
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     mWebView.setVerticalScrollBarEnabled(false);
     mWebView.setHorizontalScrollBarEnabled(false);
@@ -184,7 +188,9 @@ public class MainActivity extends Activity
         injectPendingNotes();
         readSyncFileAndInject();
         consumeImportQr();
-        SystemBarHelper.apply(MainActivity.this);
+
+        SharedPreferences p = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+        SystemBarHelper.apply(MainActivity.this, p.getBoolean(KEY_THEME_LIGHT, false));
       }
     });
 
@@ -245,8 +251,12 @@ public class MainActivity extends Activity
   protected void onResume()
   {
     super.onResume();
+
+    SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
+
     NotificationHelper.ensureMatchesPreference(this);
-    SystemBarHelper.apply(this);
+    SystemBarHelper.apply(this, lightBars);
 
     if (isPageLoaded)
     {
@@ -281,7 +291,11 @@ public class MainActivity extends Activity
       try
       {
         startService(new Intent(this, FloatingWindowService.class));
-        // Do NOT finish. Stay paused behind the floating window.
+        // Move to back rather than finishing — preserves any in-progress
+        // Karui state (open notes, scroll position, etc.) but removes
+        // the full-screen window from view so the floating panel sits
+        // over whatever the user was actually doing.
+        moveTaskToBack(true);
       }
       catch (Exception e) { e.printStackTrace(); }
     }
@@ -534,7 +548,20 @@ public class MainActivity extends Activity
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  SECTION 5 — DATA INJECTION & QR IMPORT
+  //  SECTION 5 — THEME HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Reads the cached theme background. Falls back to gruvbox bg0. */
+  private int readThemeBg(SharedPreferences prefs)
+  {
+    String hex = prefs.getString(KEY_THEME_BG, null);
+    if (hex == null || hex.isEmpty()) return DEFAULT_BG;
+    try { return Color.parseColor(hex); }
+    catch (Exception e) { return DEFAULT_BG; }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SECTION 6 — DATA INJECTION & QR IMPORT
   // ═══════════════════════════════════════════════════════════════
 
   private void injectPendingNotes() { injectPendingNotes(0); }
@@ -702,7 +729,293 @@ public class MainActivity extends Activity
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  SECTION 6 — PERMISSION RESULT ROUTING
+  //  SECTION 7 — JAVASCRIPT BRIDGE
+  // ═══════════════════════════════════════════════════════════════
+
+  public class WebAppInterface
+  {
+    MainActivity mActivity;
+    WebAppInterface(MainActivity a) { mActivity = a; }
+
+    @JavascriptInterface
+    public void setupSyncFile(String defaultFileName, String currentContent)
+    {
+      mActivity.pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty())
+          ? defaultFileName : "file.md";
+      mActivity.pendingFileData = currentContent != null ? currentContent : "";
+
+      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType("text/markdown");
+      intent.putExtra(Intent.EXTRA_TITLE, mActivity.pendingFileName);
+
+      try { mActivity.startActivityForResult(intent, SYNC_FILE_REQUEST_CODE); }
+      catch (ActivityNotFoundException e)
+      {
+        mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
+            "No document picker found on device.", Toast.LENGTH_SHORT).show());
+      }
+    }
+
+    @JavascriptInterface
+    public void saveFileSync(String filePath, String content)
+    {
+      if (filePath == null || filePath.trim().isEmpty()) return;
+      try
+      {
+        Uri uri = Uri.parse(filePath);
+        OutputStream os = mActivity.getContentResolver().openOutputStream(uri, "rwt");
+        if (os == null) os = mActivity.getContentResolver().openOutputStream(uri);
+        if (os != null)
+        {
+          os.write(content.getBytes());
+          os.close();
+          Intent update = new Intent(ACTION_NOTE_ADDED);
+          update.setPackage(mActivity.getPackageName());
+          mActivity.sendBroadcast(update);
+        }
+      }
+      catch (Exception e) { e.printStackTrace(); }
+    }
+
+    @JavascriptInterface
+    public void triggerManualReadSync() { mActivity.runOnUiThread(mActivity::readSyncFileAndInject); }
+
+    @JavascriptInterface
+    public void importMarkdownFile()
+    {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      String[] mimes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
+      intent.setType("*/*");
+      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes);
+      try { mActivity.startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE); }
+      catch (ActivityNotFoundException e)
+      {
+        mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
+            "No document picker found", Toast.LENGTH_SHORT).show());
+      }
+    }
+
+    @JavascriptInterface
+    public void saveFile(String fileName, String fileData, String fileType)
+    {
+      mActivity.pendingFileName = fileName;
+      mActivity.pendingFileData = fileData;
+      mActivity.pendingFileType = fileType;
+      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType(fileType);
+      intent.putExtra(Intent.EXTRA_TITLE, fileName);
+      mActivity.startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
+    }
+
+    @JavascriptInterface
+    public void importJsonFile()
+    {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      intent.setType("application/json");
+      mActivity.startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
+    }
+
+    @JavascriptInterface
+    public void toggleNotification(boolean enable)
+    {
+      mActivity.runOnUiThread(() ->
+      {
+        if (enable)
+        {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+              && mActivity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                 != PackageManager.PERMISSION_GRANTED)
+          {
+            mActivity.pendingQuickNoteEnable = true;
+            mActivity.requestPermissions(
+              new String[]{Manifest.permission.POST_NOTIFICATIONS},
+              NOTIFICATION_PERMISSION_REQUEST);
+            return;
+          }
+          NotificationHelper.setEnabled(mActivity, true);
+          NotificationHelper.show(mActivity, false);
+        }
+        else
+        {
+          NotificationHelper.setEnabled(mActivity, false);
+          NotificationHelper.cancel(mActivity);
+        }
+      });
+    }
+
+    @JavascriptInterface
+    public boolean isNotificationEnabled() { return NotificationHelper.isEnabled(mActivity); }
+
+    @JavascriptInterface
+    public void setInboxTabName(String tabName)
+    {
+      if (tabName == null || tabName.trim().isEmpty()) tabName = "Inbox";
+      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
+        .edit().putString("inbox_tab_name", tabName.trim()).apply();
+    }
+
+    @JavascriptInterface
+    public void toggleScreenshots(boolean disable)
+    {
+      mActivity.runOnUiThread(() ->
+      {
+        if (disable) mActivity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        else         mActivity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+      });
+    }
+
+    @JavascriptInterface
+    public boolean isOverlayPermissionGranted()
+    {
+      return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+          || Settings.canDrawOverlays(mActivity);
+    }
+
+    @JavascriptInterface
+    public void requestOverlayPermission() { mActivity.runOnUiThread(mActivity::openOverlaySettings); }
+
+    @JavascriptInterface
+    public int getStatusBarHeight()
+    {
+      int id = mActivity.getResources().getIdentifier("status_bar_height", "dimen", "android");
+      return id > 0 ? mActivity.getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    @JavascriptInterface
+    public int getNavBarHeight()
+    {
+      int id = mActivity.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+      return id > 0 ? mActivity.getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    /**
+     * JS calls this whenever the theme is applied. Two side effects:
+     *  1. Persist the background colour so the next launch starts with
+     *     the correct window bg (no "grey → darker → content" flicker).
+     *  2. Persist whether the theme is light so we can pick bar icon
+     *     colour (dark icons on light theme, light icons on dark theme).
+     */
+    @JavascriptInterface
+    public void setThemeBackgroundColor(String hex)
+    {
+      if (hex == null || hex.isEmpty()) return;
+      try { Color.parseColor(hex); } catch (Exception e) { return; }
+      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
+        .edit().putString(KEY_THEME_BG, hex).apply();
+    }
+
+    @JavascriptInterface
+    public void setSystemBarsLightMode(boolean light)
+    {
+      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
+        .edit().putBoolean(KEY_THEME_LIGHT, light).apply();
+      mActivity.runOnUiThread(() ->
+        SystemBarHelper.apply(mActivity, light));
+    }
+
+    @JavascriptInterface
+    public void updateCalendarEvents(String json)
+    {
+      if (json == null) json = "[]";
+      SharedPreferences prefs = mActivity.getSharedPreferences(
+          CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
+      String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
+      prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
+
+      try
+      {
+        JSONArray oldArr = new JSONArray(oldJson);
+        JSONArray newArr = new JSONArray(json);
+        android.app.NotificationManager nm =
+            (android.app.NotificationManager) mActivity.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null)
+        {
+          for (int i = 0; i < oldArr.length(); i++)
+          {
+            JSONObject oldO = oldArr.getJSONObject(i);
+            int oldId = oldO.optInt("id", 0);
+            boolean stillActive = false;
+            for (int j = 0; j < newArr.length(); j++)
+            {
+              JSONObject newO = newArr.getJSONObject(j);
+              if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
+              { stillActive = true; break; }
+            }
+            if (!stillActive)
+              nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE + Math.abs(oldId % 100000));
+          }
+        }
+      }
+      catch (Exception ignored) {}
+
+      if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
+      {
+        Intent refresh = new Intent(mActivity, CalendarNotificationReceiver.class);
+        refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
+        mActivity.sendBroadcast(refresh);
+      }
+    }
+
+    @JavascriptInterface
+    public void setCalendarNotificationsEnabled(final boolean enabled)
+    {
+      SharedPreferences prefs = mActivity.getSharedPreferences(
+          CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
+      boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
+      prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
+      final boolean justEnabled = enabled && !wasEnabled;
+
+      mActivity.runOnUiThread(() ->
+      {
+        if (enabled)
+        {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+              && mActivity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                 != PackageManager.PERMISSION_GRANTED)
+          {
+            mActivity.requestPermissions(
+              new String[]{Manifest.permission.POST_NOTIFICATIONS},
+              NOTIFICATION_PERMISSION_REQUEST);
+          }
+
+          if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+          {
+            android.app.AlarmManager am =
+                (android.app.AlarmManager) mActivity.getSystemService(Context.ALARM_SERVICE);
+            if (am != null && !am.canScheduleExactAlarms())
+            {
+              Toast.makeText(mActivity,
+                "Allow 'Alarms & reminders' so calendar reminders fire on time.",
+                Toast.LENGTH_LONG).show();
+              Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+              i.setData(Uri.parse("package:" + mActivity.getPackageName()));
+              try { mActivity.startActivity(i); } catch (Exception ignored) {}
+            }
+          }
+
+          CalendarNotificationReceiver.scheduleNext(mActivity);
+          CalendarNotificationReceiver.scheduleEventReminders(mActivity);
+
+          if (justEnabled)
+          {
+            Intent show = new Intent(mActivity, CalendarNotificationReceiver.class);
+            mActivity.sendBroadcast(show);
+          }
+        }
+        else
+        {
+          CalendarNotificationReceiver.cancel(mActivity);
+        }
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  SECTION 8 — PERMISSION RESULT ROUTING
   // ═══════════════════════════════════════════════════════════════
 
   @Override

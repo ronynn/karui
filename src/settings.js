@@ -56,7 +56,64 @@ export function applyTheme(theme, customThemes)
     clearInlineThemeVars()
     document.documentElement.setAttribute('data-theme', theme)
   }
+
+
+  // Notify Android of bar icon mode + background colour for smoother next launch.
+  // Deferred to rAF because CSS custom properties are set synchronously but
+  // getComputedStyle needs a frame to pick them up.
+  if (window.Android)
+  {
+    requestAnimationFrame(() =>
+    {
+      const bg = getComputedStyle(document.documentElement)
+        .getPropertyValue('--bg').trim()
+      if (!bg) return
+
+      if (window.Android.setThemeBackgroundColor)
+        window.Android.setThemeBackgroundColor(bg)
+
+      if (window.Android.setSystemBarsLightMode)
+        window.Android.setSystemBarsLightMode(isLightColor(bg))
+    })
+  }
 }
+
+function isLightColor(color)
+{
+  let r = 0, g = 0, b = 0
+  try
+  {
+    if (color.startsWith('#'))
+    {
+      const h = color.slice(1)
+      if (h.length === 3)
+      {
+        r = parseInt(h[0] + h[0], 16)
+        g = parseInt(h[1] + h[1], 16)
+        b = parseInt(h[2] + h[2], 16)
+      }
+      else
+      {
+        r = parseInt(h.slice(0, 2), 16)
+        g = parseInt(h.slice(2, 4), 16)
+        b = parseInt(h.slice(4, 6), 16)
+      }
+    }
+    else
+    {
+      const m = color.match(/(\d+)/g)
+      if (m && m.length >= 3) { r = +m[0]; g = +m[1]; b = +m[2] }
+    }
+  }
+  catch (e) { return false }
+  // Perceived luminance (ITU-R BT.601)
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 128
+}
+
+
+
+
+
 
 export function applyFont(font)
 {
