@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?android:attr/colorControlNormal">
+
+    <!-- Top-left corner bracket -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,3h6v2H5v4H3V3z"/>
+
+    <!-- Top-right corner bracket -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,3h6v6h-2V5h-4V3z"/>
+
+    <!-- Bottom-left corner bracket -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,15h2v4h4v2H3V15z"/>
+
+    <!-- Bottom-right corner bracket -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M19,15h2v6h-6v-2h4V15z"/>
+
+    <!-- Center QR square (larger block, top-left of center) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,8h4v4H8V8z"/>
+
+    <!-- Center QR square (small block, bottom-right) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,13h3v3h-3V13z"/>
+
+    <!-- Scan line hint (horizontal) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M7,12h10v1H7z"/>
+
+</vector>

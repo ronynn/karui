@@ -19,6 +19,7 @@ import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -41,10 +42,14 @@ public class FloatingWindowService extends Service
   private static final String CLOSE_COLOR      = "#EBDBB2";
   private static final String TEXT_COLOR       = "#EBDBB2";
   private static final String HINT_COLOR       = "#928374";
+  private static final String RESIZE_COLOR     = "#504945";
 
   private static final long AUTOSAVE_INTERVAL_MS = 800L;
-  private static final int INITIAL_WIDTH_DP   = 340;
-  private static final int INITIAL_HEIGHT_DP  = 150;
+  private static final int INITIAL_WIDTH_DP  = 340;
+  private static final int INITIAL_HEIGHT_DP = 150;
+  private static final int MIN_WIDTH_DP      = 200;
+  private static final int MIN_HEIGHT_DP     = 120;
+  private static final int MIN_VISIBLE_DP    = 48;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
   private WindowManager mWindowManager;
@@ -53,6 +58,11 @@ public class FloatingWindowService extends Service
   private EditText mEditText;
   private SharedPreferences mPrefs;
   private Runnable mAutoSaveRunnable;
+
+  private int mScreenWidth;
+  private int mScreenHeight;
+  private int mPreOffscreenX, mPreOffscreenY;
+  private boolean mMostlyOffscreen = false;
 
   private final BroadcastReceiver closeReceiver = new BroadcastReceiver()
   {
@@ -98,6 +108,10 @@ public class FloatingWindowService extends Service
         return START_NOT_STICKY;
       }
     }
+    else if (mMostlyOffscreen)
+    {
+      restoreOnScreen();
+    }
     return START_NOT_STICKY;
   }
 
@@ -105,9 +119,14 @@ public class FloatingWindowService extends Service
   {
     DisplayMetrics dm = new DisplayMetrics();
     mWindowManager.getDefaultDisplay().getMetrics(dm);
-    int screenWidth = dm.widthPixels;
+    mScreenWidth = dm.widthPixels;
+    mScreenHeight = dm.heightPixels;
 
-    int widthPx = Math.min(dp(INITIAL_WIDTH_DP), screenWidth - dp(32));
+    final int minVisible = dp(MIN_VISIBLE_DP);
+    final int minW = dp(MIN_WIDTH_DP);
+    final int minH = dp(MIN_HEIGHT_DP);
+
+    int initialW = Math.min(dp(INITIAL_WIDTH_DP), mScreenWidth - dp(32));
 
     FrameLayout rootLayout = new FrameLayout(this);
     GradientDrawable bg = new GradientDrawable();
@@ -115,13 +134,17 @@ public class FloatingWindowService extends Service
     bg.setCornerRadius(dp(10));
     rootLayout.setBackground(bg);
     rootLayout.setClipToOutline(true);
-    rootLayout.setElevation(dp(12));
+    rootLayout.setFocusableInTouchMode(true);
+    rootLayout.setFocusable(true);
 
+    // ── Main column: title bar + EditText ────────────────────────
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
+    // Padding at bottom-right so the resize handle sits on top
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+    // ── Title bar ────────────────────────────────────────────────
     FrameLayout titleBar = new FrameLayout(this);
     GradientDrawable titleBg = new GradientDrawable();
     titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
@@ -150,6 +173,7 @@ public class FloatingWindowService extends Service
     closeBtn.setOnClickListener(v -> saveAndClose());
     titleBar.addView(closeBtn);
 
+    // ── EditText ─────────────────────────────────────────────────
     mEditText = new EditText(this);
     mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -162,7 +186,7 @@ public class FloatingWindowService extends Service
         | InputType.TYPE_TEXT_FLAG_MULTI_LINE
         | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
     mEditText.setGravity(Gravity.TOP | Gravity.START);
-    mEditText.setPadding(dp(14), dp(10), dp(14), dp(10));
+    mEditText.setPadding(dp(14), dp(10), dp(14), dp(24)); // bottom pad for resize handle
     mEditText.setMinLines(2);
     mEditText.setMaxLines(8);
 
@@ -175,8 +199,8 @@ public class FloatingWindowService extends Service
 
     mEditText.addTextChangedListener(new TextWatcher()
     {
-      @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-      @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+      @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+      @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
       @Override public void afterTextChanged(Editable s)
       {
         if (s.toString().trim().isEmpty())
@@ -188,14 +212,27 @@ public class FloatingWindowService extends Service
     contentLayout.addView(mEditText);
     rootLayout.addView(contentLayout);
 
-    // NOT_FOCUSABLE → BACK goes to Gallery
-    // ALT_FOCUSABLE_IM → keyboard still reaches the EditText
-    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-              | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-              | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+    // ── Resize handle (bottom-right corner) ─────────────────────
+    View resizeHandle = new View(this);
+    GradientDrawable resizeShape = new GradientDrawable();
+    resizeShape.setColor(Color.parseColor(RESIZE_COLOR));
+    resizeShape.setCornerRadius(dp(3));
+    resizeHandle.setBackground(resizeShape);
+    FrameLayout.LayoutParams rhParams = new FrameLayout.LayoutParams(
+        dp(20), dp(20), Gravity.BOTTOM | Gravity.END);
+    rhParams.setMargins(0, 0, dp(4), dp(4));
+    resizeHandle.setLayoutParams(rhParams);
+    rootLayout.addView(resizeHandle);
+
+    // ── Focusable window ─────────────────────────────────────────
+    // We DO want focus so the EditText's keyboard works and drag/resize
+    // receive touches reliably. BACK is handled below so it closes the
+    // window rather than doing nothing. Tapping outside still goes to
+    // the app below because of FLAG_NOT_TOUCH_MODAL.
+    int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
     mParams = new WindowManager.LayoutParams(
-        widthPx,
+        initialW,
         dp(INITIAL_HEIGHT_DP),
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -209,23 +246,41 @@ public class FloatingWindowService extends Service
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
 
+    mPreOffscreenX = mParams.x;
+    mPreOffscreenY = mParams.y;
+
     mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
     Intent opened = new Intent(MainActivity.ACTION_FLOATING_OPENED);
     opened.setPackage(getPackageName());
     sendBroadcast(opened);
 
-    mEditText.post(() ->
+    // ── BACK closes window ───────────────────────────────────────
+    mRootView.setOnKeyListener((v, keyCode, event) ->
     {
-      mEditText.requestFocus();
-      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+      if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP)
+      {
+        saveAndClose();
+        return true;
+      }
+      return false;
     });
 
+    // ── Auto-focus + keyboard ────────────────────────────────────
+    mEditText.postDelayed(() ->
+    {
+      if (mEditText == null) return;
+      mEditText.requestFocus();
+      mRootView.requestFocus();
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+    }, 150);
+
+    // ── Autosave every 800 ms ────────────────────────────────────
     mAutoSaveRunnable = new Runnable()
     {
-      @Override
-      public void run()
+      @Override public void run()
       {
         saveDraft();
         mHandler.postDelayed(this, AUTOSAVE_INTERVAL_MS);
@@ -233,10 +288,12 @@ public class FloatingWindowService extends Service
     };
     mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
 
+    // ── Drag title bar to move ───────────────────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
       private float startTouchX, startTouchY;
+      private boolean moved;
 
       @Override
       public boolean onTouch(View v, MotionEvent e)
@@ -248,17 +305,97 @@ public class FloatingWindowService extends Service
             startY = mParams.y;
             startTouchX = e.getRawX();
             startTouchY = e.getRawY();
+            moved = false;
             return true;
+
           case MotionEvent.ACTION_MOVE:
-            mParams.x = startX + (int) (e.getRawX() - startTouchX);
-            mParams.y = startY + (int) (e.getRawY() - startTouchY);
-            try { mWindowManager.updateViewLayout(mRootView, mParams); }
-            catch (Exception ignored) {}
+            float dx = e.getRawX() - startTouchX;
+            float dy = e.getRawY() - startTouchY;
+            if (Math.abs(dx) > dp(3) || Math.abs(dy) > dp(3)) moved = true;
+            if (moved)
+            {
+              int newX = Math.max(-mParams.width + minVisible,
+                       Math.min(mScreenWidth - minVisible, startX + (int) dx));
+              int newY = Math.max(0,
+                       Math.min(mScreenHeight - dp(60), startY + (int) dy));
+              mParams.x = newX;
+              mParams.y = newY;
+              mWindowManager.updateViewLayout(mRootView, mParams);
+              updateOffscreenState();
+            }
+            return true;
+
+          case MotionEvent.ACTION_UP:
+          case MotionEvent.ACTION_CANCEL:
+            if (moved && !mMostlyOffscreen)
+            {
+              mPreOffscreenX = mParams.x;
+              mPreOffscreenY = mParams.y;
+            }
             return true;
         }
         return false;
       }
     });
+
+    // ── Resize from bottom-right handle ──────────────────────────
+    resizeHandle.setOnTouchListener(new View.OnTouchListener()
+    {
+      private int startW, startH;
+      private float startTouchX, startTouchY;
+
+      @Override
+      public boolean onTouch(View v, MotionEvent e)
+      {
+        switch (e.getActionMasked())
+        {
+          case MotionEvent.ACTION_DOWN:
+            startW = mParams.width;
+            startH = mParams.height;
+            startTouchX = e.getRawX();
+            startTouchY = e.getRawY();
+            return true;
+
+          case MotionEvent.ACTION_MOVE:
+            int newW = startW + (int) (e.getRawX() - startTouchX);
+            int newH = startH + (int) (e.getRawY() - startTouchY);
+            newW = Math.max(minW, Math.min(mScreenWidth - mParams.x, newW));
+            newH = Math.max(minH, Math.min(mScreenHeight - mParams.y, newH));
+            if (newW != mParams.width || newH != mParams.height)
+            {
+              mParams.width = newW;
+              mParams.height = newH;
+              mWindowManager.updateViewLayout(mRootView, mParams);
+            }
+            return true;
+        }
+        return false;
+      }
+    });
+  }
+
+  private void updateOffscreenState()
+  {
+    int visLeft = Math.max(0, mParams.x);
+    int visRight = Math.min(mScreenWidth, mParams.x + mParams.width);
+    mMostlyOffscreen = (visRight - visLeft) < mParams.width / 2;
+  }
+
+  private void restoreOnScreen()
+  {
+    if (mRootView == null) return;
+    mParams.x = mPreOffscreenX;
+    mParams.y = mPreOffscreenY;
+    try { mWindowManager.updateViewLayout(mRootView, mParams); }
+    catch (Exception ignored) {}
+    mMostlyOffscreen = false;
+    if (mEditText != null)
+    {
+      mEditText.requestFocus();
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+    }
   }
 
   private void saveDraft()

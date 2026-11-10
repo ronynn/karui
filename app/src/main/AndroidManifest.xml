@@ -131,7 +131,7 @@
 <service
     android:name=".KaruiScanTileService"
     android:label="Scan into Karui"
-    android:icon="@drawable/ic_note"
+    android:icon="@drawable/ic_qr_scan"
     android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
     android:exported="true">
   <intent-filter>

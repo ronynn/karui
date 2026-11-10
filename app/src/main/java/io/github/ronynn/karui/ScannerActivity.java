@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.View;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -134,6 +135,30 @@ public class ScannerActivity extends Activity
           }
         }
         request.deny();
+      }
+
+      /**
+       * WebView's built-in "custom view" playback mode is what paints the
+       * ugly play button on top of a <video> element. If we don't override
+       * this, WebView hands the video element to its own media player UI
+       * (with play/pause/seek controls) — which looks completely wrong for
+       * a live camera preview.
+       *
+       * Calling onCustomViewHidden() immediately tells WebView "we won't
+       * adopt your media view, keep rendering inline." The result: the
+       * camera feed shows in the normal <video> element with no play
+       * button overlay.
+       */
+      @Override
+      public void onShowCustomView(View view, CustomViewCallback callback)
+      {
+        try { callback.onCustomViewHidden(); } catch (Exception ignored) {}
+      }
+
+      @Override
+      public void onHideCustomView()
+      {
+        // no-op
       }
     });
 
