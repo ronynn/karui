@@ -1,10 +1,16 @@
-import { initFontSystem, processFontUpload, deleteFontFromDB } from './fonts.js'
-
-import { startFontLongPress, clearFontLongPress } from './fonts.js'
+import { initFontSystem, processFontUpload, deleteFontFromDB,
+         startFontLongPress, clearFontLongPress } from './fonts.js'
 
 // Whitelist — only these vars are honoured. Anything else in a custom
 // theme JSON is silently dropped, so a malformed paste can't nuke layout.
 const THEME_VARS = ['--bg', '--surface', '--border', '--text', '--accent', '--accent-txt', '--gray']
+
+// DYNAMIC is a built-in pseudo-theme. Its vars are stored under their
+// own localStorage key so it never appears in `customThemes` — otherwise
+// the theme grid would render a duplicate button next to the hardcoded
+// DYNAMIC button in the HTML.
+const DYNAMIC_KEY = 'dynamic_wallpaper'
+const DYNAMIC_STORAGE = 'dynamicThemeVars'
 
 function clearInlineThemeVars()
 {
@@ -22,6 +28,23 @@ export function applyCustomThemeVars(vars)
 
 export function applyTheme(theme, customThemes)
 {
+  if (theme === DYNAMIC_KEY)
+  {
+    let vars = null
+    try { vars = JSON.parse(localStorage.getItem(DYNAMIC_STORAGE) || 'null') } catch (e) {}
+    if (vars)
+    {
+      document.documentElement.removeAttribute('data-theme')
+      applyCustomThemeVars(vars)
+      return
+    }
+    // Vars missing (e.g., app data cleared) — fall back to gruvbox so
+    // the UI is never left in a broken state.
+    clearInlineThemeVars()
+    document.documentElement.setAttribute('data-theme', 'gruvbox')
+    return
+  }
+
   const ct = (customThemes || []).find(t => t.key === theme)
   if (ct)
   {
@@ -123,46 +146,49 @@ export function createSettingsModule()
       { label: 'XL', scale: 1.3 }
     ],
 
-
-  applyDynamicTheme(silent)
-{
-  if (!window.Android || !window.Android.getDynamicWallpaperTheme)
-  {
-    if (!silent) this.showToast('Not available on this build')
-    return
-  }
-
-  try
-  {
-    const json = window.Android.getDynamicWallpaperTheme()
-    const data = JSON.parse(json)
-    if (!data.ok) throw new Error(data.error || 'no_color')
-
-    const key = 'dynamic_wallpaper'
-    const theme = {
-      key,
-      name: 'DYNAMIC',
-      vars: {
-        '--bg': data.bg,
-        '--surface': data.surface,
-        '--border': data.border,
-        '--text': data.text,
-        '--accent': data.accent,
-        '--accent-txt': data.accentTxt,
-        '--gray': data.gray
+    // --- dynamic wallpaper theme ---
+    applyDynamicTheme(silent)
+    {
+      // Prune any stale DYNAMIC entry left in customThemes by a previous
+      // build. Runs on every click and on silent startup, so the
+      // duplicate button disappears without user action.
+      if ((this.customThemes || []).some(t => t.key === DYNAMIC_KEY))
+      {
+        this.customThemes = this.customThemes.filter(t => t.key !== DYNAMIC_KEY)
+        localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
       }
-    }
 
-    this.customThemes = this.customThemes.filter(t => t.key !== key).concat(theme)
-    localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
-    this.setTheme(key)
-    if (!silent) this.showToast('Dynamic theme applied')
-  }
-  catch (e)
-  {
-    if (!silent) this.showToast('Could not read wallpaper')
-  }
-},
+      if (!window.Android || !window.Android.getDynamicWallpaperTheme)
+      {
+        if (!silent) this.showToast('Not available on this build')
+        return
+      }
+
+      try
+      {
+        const json = window.Android.getDynamicWallpaperTheme()
+        const data = JSON.parse(json)
+        if (!data.ok) throw new Error(data.error || 'no_color')
+
+        const vars = {
+          '--bg': data.bg,
+          '--surface': data.surface,
+          '--border': data.border,
+          '--text': data.text,
+          '--accent': data.accent,
+          '--accent-txt': data.accentTxt,
+          '--gray': data.gray
+        }
+
+        localStorage.setItem(DYNAMIC_STORAGE, JSON.stringify(vars))
+        this.setTheme(DYNAMIC_KEY)
+        if (!silent) this.showToast('Dynamic theme applied')
+      }
+      catch (e)
+      {
+        if (!silent) this.showToast('Could not read wallpaper')
+      }
+    },
 
     // --- setters ---
     setTheme(t)
@@ -368,4 +394,3 @@ export function createSettingsModule()
     cancelFontHold() { clearFontLongPress() }
   }
 }
-

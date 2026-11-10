@@ -24,19 +24,16 @@ public class KaruiTileService extends TileService
       return;
     }
 
-    // Try to start the service directly — no activity, no pause.
-    try
-    {
-      startService(new Intent(this, FloatingWindowService.class));
-      return;
-    }
-    catch (Exception ignored) { /* fall through to activity approach */ }
-
-    // Fallback: launch via MainActivity (adds a brief activity switch)
-    Intent fallback = new Intent(this, MainActivity.class);
-    fallback.setAction(MainActivity.ACTION_OPEN_FLOATING);
-    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    launchIntent(fallback);
+    // Launch MainActivity with ACTION_OPEN_FLOATING. The activity's
+    // onCreate sees the floating trigger, sets a transparent window
+    // background, starts FloatingWindowService, and finishes itself
+    // — so the activity is invisible, but its launch is what collapses
+    // the notification shade. startService() alone does not collapse
+    // the shade, which is why the tile felt like it "did nothing".
+    Intent intent = new Intent(this, MainActivity.class);
+    intent.setAction(MainActivity.ACTION_OPEN_FLOATING);
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    launchIntent(intent);
   }
 
   private void launchIntent(Intent intent)
