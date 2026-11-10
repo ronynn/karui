@@ -26,42 +26,40 @@ import java.util.Locale;
 public class CalendarNotificationReceiver extends BroadcastReceiver
 {
   // ── Calendar ─────────────────────────────────────────────────────
-  public static final String CHANNEL_ID             = "calendar_events_channel";
-  public static final int    NOTIFICATION_ID        = 100;
+  public static final String CHANNEL_ID              = "calendar_events_channel";
+  public static final int    NOTIFICATION_ID         = 100;
   public static final int    EVENT_NOTIFICATION_BASE = 1000;
-  public static final String PREFS                  = "calendar_prefs";
-  public static final String KEY_EVENTS_JSON        = "events_json";
-  public static final String KEY_ENABLED            = "calendar_notifications_enabled";
-  public static final String KEY_LAST_NOTIFIED      = "last_notified_date";
-  public static final String KEY_SCHEDULED_IDS      = "scheduled_event_ids";
-  public static final int    ALARM_REQUEST_ID       = 200;
-  public static final String EXTRA_EVENT_ID         = "event_id";
-  public static final String ACTION_REFRESH         = "io.github.ronynn.karui.REFRESH_CALENDAR";
+  public static final String PREFS                   = "calendar_prefs";
+  public static final String KEY_EVENTS_JSON         = "events_json";
+  public static final String KEY_ENABLED             = "calendar_notifications_enabled";
+  public static final String KEY_LAST_NOTIFIED       = "last_notified_date";
+  public static final String KEY_SCHEDULED_IDS       = "scheduled_event_ids";
+  public static final int    ALARM_REQUEST_ID        = 200;
+  public static final String EXTRA_EVENT_ID          = "event_id";
+  public static final String ACTION_REFRESH          = "io.github.ronynn.karui.REFRESH_CALENDAR";
 
   private static final long REMINDER_LEAD_MS = 5 * 60 * 1000L;
 
   // ── Pomodoro ─────────────────────────────────────────────────────
-  // Countdown notification uses setUsesChronometer + setChronometerCountDown
-  // so the OS ticks the display every second — no JS or service loop needed.
-  public static final String ACTION_POMODORO_DONE   = "io.github.ronynn.karui.POMODORO_DONE";
-  public static final String ACTION_POMODORO_CANCEL = "io.github.ronynn.karui.POMODORO_CANCEL";
+  public static final String ACTION_POMODORO_DONE     = "io.github.ronynn.karui.POMODORO_DONE";
+  public static final String ACTION_POMODORO_CANCEL   = "io.github.ronynn.karui.POMODORO_CANCEL";
   public static final int    POMODORO_NOTIFICATION_ID = 999;
   public static final int    POMODORO_ALARM_ID        = 500;
   public static final int    POMODORO_STOP_REQ_ID     = 501;
-  public static final String PREFS_POMODORO         = "pomodoro_prefs";
-  public static final String KEY_POMODORO_END       = "pomodoro_end";
-  public static final String KEY_POMODORO_RUNNING   = "pomodoro_running";
+  public static final String PREFS_POMODORO           = "pomodoro_prefs";
+  public static final String KEY_POMODORO_END         = "pomodoro_end";
+  public static final String KEY_POMODORO_RUNNING     = "pomodoro_running";
 
   @Override
   public void onReceive(Context context, Intent intent)
   {
     String action = intent != null ? intent.getAction() : null;
 
-    // Pomodoro routes take precedence — they don't gate on calendar prefs.
+    // Pomodoro routes take precedence — don't gate on calendar prefs.
     if (ACTION_POMODORO_DONE.equals(action))   { handlePomodoroDone(context);   return; }
     if (ACTION_POMODORO_CANCEL.equals(action)) { handlePomodoroCancel(context); return; }
 
-    // Calendar path (unchanged from before).
+    // Calendar path.
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     if (!prefs.getBoolean(KEY_ENABLED, false)) return;
 
@@ -89,7 +87,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   //  POMODORO
   // ══════════════════════════════════════════════════════════════════
 
-  /** Called from WebAppInterface when the user starts a timer in-app. */
   public static void schedulePomodoro(Context context, long endTimeMs)
   {
     SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
@@ -110,7 +107,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     setExactCompat(am, endTimeMs, pi);
   }
 
-  /** Called when the user taps Stop in-app or in the notification action. */
   public static void cancelPomodoro(Context context)
   {
     cancelPomodoroAlarm(context);
@@ -126,13 +122,11 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
       .apply();
   }
 
-  /** Called when the JS timer hits zero while the app is foregrounded. */
   public static void notifyPomodoroDone(Context context)
   {
     handlePomodoroDone(context);
   }
 
-  /** JS asks "is a pomodoro still live?" when resuming the app. */
   public static boolean isPomodoroRunning(Context context)
   {
     SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
@@ -183,6 +177,9 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     nm.notify(POMODORO_NOTIFICATION_ID, b.build());
   }
 
+  // Countdown notification. No setContentText — the chronometer occupies
+  // that row so it's visible without expanding the shade. On API 24+ the
+  // chronometer counts DOWN; on API 31+ a short "Nm" tag supplements it.
   private static void showPomodoroCountdown(Context context, long endTimeMs)
   {
     NotificationManager nm =
@@ -197,7 +194,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
 
     Notification.Builder b = buildBaseBuilder(context);
     b.setContentTitle("Pomodoro")
-     .setContentText("Focus in progress")
      .setWhen(endTimeMs)
      .setUsesChronometer(true)
      .setOngoing(true)
@@ -205,10 +201,16 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
      .setContentIntent(openAppIntent(context))
      .setCategory(Notification.CATEGORY_PROGRESS);
 
-    // API 24+ shows a live countdown; older shows the target time.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
     {
       b.setChronometerCountDown(true);
+    }
+
+    // API 31+: compact "5m" label supplements the chronometer.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+    {
+      long remainingMin = Math.max(0, (endTimeMs - System.currentTimeMillis()) / 60000);
+      b.setShortCriticalText(remainingMin + "m");
     }
 
     // Stop action.
@@ -247,7 +249,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  CALENDAR (unchanged)
+  //  CALENDAR
   // ══════════════════════════════════════════════════════════════════
 
   private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)

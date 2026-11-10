@@ -185,8 +185,10 @@ public class FloatingWindowService extends Service
     mCloseBtn.setTextSize(20);
     mCloseBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
     mCloseBtn.setGravity(Gravity.CENTER);
+    mCloseBtn.setIncludeFontPadding(false);          // ← removes the extra blank space
     mCloseBtn.setLayoutParams(new FrameLayout.LayoutParams(
-        dp(32), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END));
+        dp(32), FrameLayout.LayoutParams.MATCH_PARENT,
+        Gravity.END | Gravity.CENTER_VERTICAL));      // ← vertical centering, was implicit TOP
     mCloseBtn.setOnClickListener(v -> dismiss());
     titleBar.addView(mCloseBtn);
 

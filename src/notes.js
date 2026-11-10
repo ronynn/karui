@@ -873,22 +873,27 @@ export function createNotesModule()
     },
 
     // Serialise a tab's notes to markdown (`- [ ]` / `- [x]` lines).
+    // Skips empty notes and strips internal newlines.
     _generateTabMarkdown(tab)
     {
       return this.notes
         .filter(n => n.category === tab)
-        .map(n => `- [${n.completed ? 'x' : ' '}] ${(n.text || '').replace(/\r?\n/g, ' ')}`)
+        .filter(n => typeof n.text === 'string' && n.text.trim().length > 0)
+        .map(n => `- [${n.completed ? 'x' : ' '}] ${n.text.replace(/\r?\n/g, ' ')}`)
         .join('\n')
     },
 
     // Parse markdown back into {text, completed} entries.
+    // Skips blank and malformed lines cleanly.
     _parseTabMarkdown(md)
     {
       const out = []
       const lines = (md || '').split(/\r?\n/)
       for (const line of lines)
       {
-        const m = line.trim().match(/^-\s*\[([ xX])\]\s*(.+)$/)
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        const m = trimmed.match(/^-\s*\[([ xX])\]\s*(.+)$/)
         if (!m) continue
         const text = m[2].trim()
         if (!text) continue
@@ -897,29 +902,53 @@ export function createNotesModule()
       return out
     },
 
-    // Apply edited markdown back to a tab. Unchanged text keeps the existing
-    // note (preserves pinned/groupId/etc.), new text appends, removed text
-    // moves to the recycle bin.
+    // Apply edited markdown back to a tab.
+    //   * Unchanged text  → keep existing note (preserves pinned/groupId/etc)
+    //   * New text        → append as new note with a guaranteed-unique ID
+    //   * Removed text    → move existing note to recycle bin
+    // Uses an incrementing counter for new IDs so repeated saves can't
+    // collide with previously generated IDs (that collision caused
+    // duplicated notes and unreachable deletes in earlier versions).
     applyTabMarkdown(tab, mdText)
     {
       const parsed = this._parseTabMarkdown(mdText)
       const now = Date.now()
       const existing = this.notes.filter(n => n.category === tab)
-      const matchedIds = new Set()
+
+      // Bucket existing notes by trimmed text so duplicate bodies
+      // (`buy milk` × 2) are handled one-by-one.
+      const existingByText = new Map()
+      for (const n of existing)
+      {
+        const key = (n.text || '').trim()
+        if (!existingByText.has(key)) existingByText.set(key, [])
+        existingByText.get(key).push(n)
+      }
+
+      const keepIds = new Set()
+      let idSeed = 0
 
       for (const p of parsed)
       {
-        const match = existing.find(n => !matchedIds.has(n.id) && n.text === p.text)
-        if (match)
+        const candidates = existingByText.get(p.text)
+        if (candidates && candidates.length > 0)
         {
+          const match = candidates.shift()
           match.completed = p.completed
           match.updatedAt = now
-          matchedIds.add(match.id)
+          keepIds.add(match.id)
         }
         else
         {
+          // Guaranteed-unique ID: increment counter, loop if by some
+          // impossible chance it collides with an existing note.
+          let newId = now + (++idSeed)
+          while (this.notes.some(n => n.id === newId))
+          {
+            newId = now + (++idSeed)
+          }
           const newNote = {
-            id: now + Math.floor(Math.random() * 100000),
+            id: newId,
             text: p.text,
             completed: p.completed,
             category: tab,
@@ -927,21 +956,35 @@ export function createNotesModule()
             updatedAt: now,
           }
           this.notes.push(newNote)
-          matchedIds.add(newNote.id)
+          keepIds.add(newNote.id)
         }
       }
 
+      // Collect IDs to remove first, then reassign `this.notes` once.
+      // Filter is safer than splice/indexOf here because petite-vue's
+      // reactive proxies can shift indices mid-loop.
+      const toRemoveIds = new Set()
       for (const n of existing)
       {
-        if (!matchedIds.has(n.id))
+        if (!keepIds.has(n.id)) toRemoveIds.add(n.id)
+      }
+
+      if (toRemoveIds.size > 0)
+      {
+        const removed = []
+        this.notes = this.notes.filter(n =>
         {
-          const idx = this.notes.indexOf(n)
-          if (idx >= 0)
+          if (toRemoveIds.has(n.id))
           {
-            this.notes.splice(idx, 1)
-            n.updatedAt = now
-            this.recycleBin.push(n)
+            removed.push(n)
+            return false
           }
+          return true
+        })
+        for (const n of removed)
+        {
+          n.updatedAt = now
+          this.recycleBin.push(n)
         }
       }
 
