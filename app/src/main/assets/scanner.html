@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  body{background:#000;height:100vh;overflow:hidden;font-family:system-ui,sans-serif;position:relative;color:#EBDBB2}
+  video{width:100%;height:100%;object-fit:cover}
+  #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  #frame{width:70vmin;height:70vmin;border:2px solid #FABD2F;border-radius:14px}
+  #status{position:absolute;top:calc(50% - 35vmin - 40px);width:100%;text-align:center;color:#FABD2F;font-size:18px;font-weight:600;text-shadow:0 2px 6px #000}
+  #hint{position:absolute;bottom:calc(50% - 35vmin - 30px);width:100%;text-align:center;color:#EBDBB2;font-size:13px;opacity:.85;text-shadow:0 2px 6px #000}
+  #close{position:absolute;top:16px;right:16px;background:rgba(40,40,40,.9);color:#EBDBB2;border:none;width:44px;height:44px;border-radius:22px;font-size:22px;cursor:pointer;z-index:10}
+  #controls{position:absolute;bottom:0;left:0;right:0;padding:20px;display:none;justify-content:center;gap:12px;background:linear-gradient(to top,rgba(0,0,0,.85),transparent);z-index:5}
+  #controls button{background:#3C3836;color:#EBDBB2;border:none;padding:12px 22px;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:.5px;cursor:pointer}
+  #controls button:active{background:#504945}
+  #btn-save{background:#FABD2F;color:#282828}
+  #btn-save:active{background:#D79921}
+  #status.saved{color:#B8BB26}
+  #status.error{color:#FB4934}
+</style>
+</head>
+<body>
+<button id="close" onclick="Android.close()">×</button>
+<video id="v" autoplay playsinline muted></video>
+<canvas id="c" style="display:none"></canvas>
+<div id="overlay">
+  <div id="frame">
+    <div id="status"></div>
+    <div id="hint">Point at a Karui QR code</div>
+  </div>
+</div>
+<div id="controls">
+  <button id="btn-save" onclick="save()">SAVE</button>
+  <button id="btn-copy" onclick="copy()">COPY</button>
+  <button id="btn-rescan" onclick="rescan()">SCAN AGAIN</button>
+</div>
+<script src="jsqr.min.js"></script>
+<script>
+  const video   = document.getElementById('v');
+  const canvas  = document.getElementById('c');
+  const ctx     = canvas.getContext('2d', { willReadFrequently: true });
+  const status  = document.getElementById('status');
+  const hint    = document.getElementById('hint');
+  const controls = document.getElementById('controls');
+  const btnSave   = document.getElementById('btn-save');
+  const btnCopy   = document.getElementById('btn-copy');
+  const btnRescan = document.getElementById('btn-rescan');
+
+  let scanning = true;
+  let lastScanData = '';
+  let lastScanTime = 0;
+
+  function setUI(state, message)
+  {
+    status.className = '';
+    if (state === 'scanning')
+    {
+      status.textContent = '';
+      hint.textContent = 'Point at a Karui QR code';
+      controls.style.display = 'none';
+    }
+    else if (state === 'partial')
+    {
+      status.textContent = message;
+      hint.textContent = 'Point at the next QR code';
+      controls.style.display = 'none';
+    }
+    else if (state === 'ready')
+    {
+      status.className = 'saved';
+      status.textContent = '✓ ' + message;
+      hint.textContent = 'Save, copy, or scan again';
+      controls.style.display = 'flex';
+      btnSave.style.display = 'inline-block';
+      btnCopy.style.display = 'inline-block';
+      btnRescan.style.display = 'inline-block';
+    }
+    else if (state === 'error')
+    {
+      status.className = 'error';
+      status.textContent = '⚠ ' + message;
+      hint.textContent = '';
+      controls.style.display = 'none';
+    }
+  }
+
+  async function start()
+  {
+    try
+    {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      video.srcObject = stream;
+      await video.play();
+      requestAnimationFrame(tick);
+    }
+    catch (e)
+    {
+      setUI('error', 'Camera: ' + e.message);
+    }
+  }
+
+  function tick()
+  {
+    if (scanning && video.readyState === video.HAVE_ENOUGH_DATA)
+    {
+      const w = video.videoWidth, h = video.videoHeight;
+      if (w && h)
+      {
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+        const img = ctx.getImageData(0, 0, w, h);
+        const code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
+        if (code && code.data)
+        {
+          const now = Date.now();
+          if (code.data !== lastScanData || now - lastScanTime > 1500)
+          {
+            lastScanData = code.data;
+            lastScanTime = now;
+            handleScan(code.data);
+          }
+        }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function handleScan(text)
+  {
+    let result;
+    try { result = JSON.parse(Android.onScan(text)); }
+    catch (e) { return; }
+
+    if (result.type === 'chunk')
+    {
+      setUI('partial', 'Scanned ' + result.received + '/' + result.total);
+    }
+    else if (result.type === 'ready')
+    {
+      scanning = false;
+      setUI('ready', result.summary);
+    }
+    else if (result.type === 'error')
+    {
+      setUI('error', result.message);
+      setTimeout(() => { if (!scanning) return; setUI('scanning', ''); }, 1800);
+    }
+  }
+
+  function save()
+  {
+    const r = JSON.parse(Android.save());
+    if (r.ok) setUI('ready', 'Saved — closing...');
+    else setUI('error', r.message || 'Save failed');
+  }
+
+  function copy()
+  {
+    const r = JSON.parse(Android.copy());
+    if (r.ok) setUI('scanning', '');
+  }
+
+  function rescan()
+  {
+    Android.rescan();
+    lastScanData = '';
+    scanning = true;
+    setUI('scanning', '');
+  }
+
+  start();
+</script>
+</body>
+</html>

@@ -317,6 +317,44 @@ export function setupNativeHooks(appStore)
   // simply be hidden behind the PIN on the next read. This was a deliberate
   // call (see policy comment at top of file).
   // ==========================================================================
+ window.importQrPayload = (json) =>
+{
+  try
+  {
+    const trimmed = String(json || '').trim()
+    if (!trimmed) return 'error'
+
+    // Structured Karui payload (JSON) — route through QR merge so tabs
+    // are created / notes are merged with locked-tab guards.
+    if (trimmed[0] === '{' || trimmed[0] === '[')
+    {
+      if (typeof appStore._qrImportPayload !== 'function') return 'missing'
+      appStore._qrImportPayload(trimmed)
+      return 'ok'
+    }
+
+    // Plain text scan — drop into the inbox tab, same as status-bar capture.
+    const tab = appStore.inboxTabName || 'Inbox'
+    if (!appStore.noteCategories.includes(tab)) appStore.noteCategories.push(tab)
+    appStore.notes.unshift({
+      id: Date.now(),
+      text: trimmed,
+      completed: false,
+      category: tab,
+      updatedAt: Date.now()
+    })
+    appStore.saveData()
+    appStore.showToast('Scanned note added to ' + tab)
+    return 'ok'
+  }
+  catch (e)
+  {
+    return 'error'
+  }
+}
+
+
+  
   window.syncNotesArrayFromAndroid = (jsonInput) =>
   {
     try

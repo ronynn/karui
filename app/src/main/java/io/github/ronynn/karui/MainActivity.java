@@ -30,6 +30,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -63,6 +64,7 @@ public class MainActivity extends Activity
   private static final String KEY_SYNC_URI = "sync_file_uri";
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_OVERLAY_ACTIVE = "overlay_active";
+  private static final String KEY_PENDING_IMPORT = "pending_import_json";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
 
   private static final int WEBVIEW_BG_COLOR = 0xFF000000;
@@ -82,6 +84,7 @@ public class MainActivity extends Activity
 
   private boolean isPageLoaded = false;
   private boolean mInjecting = false;
+  private boolean mImportingQr = false;
   private boolean mJustClosedFloating = false;
   boolean pendingQuickNoteEnable = false;
 
@@ -95,8 +98,6 @@ public class MainActivity extends Activity
 
       if (ACTION_FLOATING_OPENED.equals(action))
       {
-        // Floating window attached. Close ourselves so only one Karui
-        // UI is on screen at a time.
         finishAndRemoveTask();
         return;
       }
@@ -135,12 +136,12 @@ public class MainActivity extends Activity
       catch (Exception e)
       {
         Toast.makeText(this,
-            "Could not open floating window: " + e.getMessage(),
+            "Could not open capture window: " + e.getMessage(),
             Toast.LENGTH_LONG).show();
       }
     }
 
-    // ── Close any running floating window before showing full UI ──
+    // ── Close any running textbox window before showing full UI ──
     if (!floatingTrigger)
     {
       SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
@@ -150,8 +151,6 @@ public class MainActivity extends Activity
         Intent closeIntent = new Intent(ACTION_CLOSE_FLOATING);
         closeIntent.setPackage(getPackageName());
         sendBroadcast(closeIntent);
-        // stopService as belt-and-suspenders in case the broadcast
-        // misses (rare, but OEM skins can be flaky).
         stopService(new Intent(this, FloatingWindowService.class));
       }
     }
@@ -162,6 +161,7 @@ public class MainActivity extends Activity
 
     mWebView = findViewById(R.id.activity_main_webview);
     splashScreen = findViewById(R.id.splash_screen);
+    splashScreen.setVisibility(View.GONE);
 
     mWebView.setBackgroundColor(WEBVIEW_BG_COLOR);
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -198,22 +198,22 @@ public class MainActivity extends Activity
       {
         isPageLoaded = true;
 
+        Runnable deliver = () ->
+        {
+          if (!isPageLoaded || mWebView == null) return;
+          injectPendingNotes();
+          readSyncFileAndInject();
+          consumeImportQr();
+        };
+
         if (mJustClosedFloating)
         {
           mJustClosedFloating = false;
-          new Handler(Looper.getMainLooper()).postDelayed(() ->
-          {
-            if (isPageLoaded && mWebView != null)
-            {
-              injectPendingNotes();
-              readSyncFileAndInject();
-            }
-          }, 500);
+          new Handler(Looper.getMainLooper()).postDelayed(deliver, 500);
         }
         else
         {
-          injectPendingNotes();
-          readSyncFileAndInject();
+          deliver.run();
         }
 
         SystemBarHelper.apply(MainActivity.this);
@@ -284,10 +284,7 @@ public class MainActivity extends Activity
       }
     });
 
-    if (floatingTrigger && !canDrawOverlays())
-    {
-      onboardOverlayPermission();
-    }
+    if (floatingTrigger && !canDrawOverlays()) onboardOverlayPermission();
   }
 
   @Override
@@ -302,6 +299,7 @@ public class MainActivity extends Activity
       SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
       if (!qp.getBoolean(KEY_OVERLAY_ACTIVE, false)) readSyncFileAndInject();
       injectPendingNotes();
+      consumeImportQr();
     }
 
     SharedPreferences calPrefs = getSharedPreferences(
@@ -319,8 +317,8 @@ public class MainActivity extends Activity
   {
     super.onNewIntent(intent);
     setIntent(intent);
-
     if (intent == null) return;
+
     String action = intent.getAction();
     boolean floatingTrigger = Intent.ACTION_ASSIST.equals(action)
         || ACTION_OPEN_FLOATING.equals(action);
@@ -337,9 +335,6 @@ public class MainActivity extends Activity
     }
     else
     {
-      // We were brought back to foreground by some other path (e.g.,
-      // a launcher tap while the activity already existed). Close any
-      // floating window so only one Karui UI is visible.
       SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
       if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
       {
@@ -592,14 +587,14 @@ public class MainActivity extends Activity
     else
     {
       Toast.makeText(this,
-          "Floating window needs 'Display over other apps' permission. "
-              + "Grant it from Settings → Privacy protection → Special permissions.",
+          "Quick capture needs 'Display over other apps' permission. "
+              + "Grant it from Settings → Privacy → Special permissions.",
           Toast.LENGTH_LONG).show();
     }
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  SECTION 5 — DATA INJECTION
+  //  SECTION 5 — DATA INJECTION & QR IMPORT
   // ═══════════════════════════════════════════════════════════════
 
   private void injectPendingNotes() { injectPendingNotes(0); }
@@ -633,6 +628,100 @@ public class MainActivity extends Activity
       {
         new Handler(Looper.getMainLooper()).postDelayed(
             () -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
+      }
+    });
+  }
+
+  private void consumeImportQr() { consumeImportQr(0); }
+
+  /**
+   * Consumes QR payloads queued by ScannerActivity.
+   *
+   * Only removes entries from the queue after JS confirms receipt via
+   * importQrPayload returning "ok". If JS isn't ready ("missing"), retries
+   * briefly; if we still can't deliver, the entries stay in the queue and
+   * are retried on the next onResume / onPageFinished.
+   */
+  private void consumeImportQr(final int attempt)
+  {
+    if (mImportingQr || !isPageLoaded || mWebView == null) return;
+
+    final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+    final String payloadsJson = prefs.getString(KEY_PENDING_IMPORT, "[]");
+    if (payloadsJson.equals("[]") || payloadsJson.isEmpty()) return;
+
+    mImportingQr = true;
+
+    JSONArray arr;
+    try { arr = new JSONArray(payloadsJson); }
+    catch (Exception e)
+    {
+      prefs.edit().remove(KEY_PENDING_IMPORT).apply();
+      mImportingQr = false;
+      return;
+    }
+
+    final String[] payloads = new String[arr.length()];
+    for (int i = 0; i < arr.length(); i++) payloads[i] = arr.optString(i, "");
+    if (payloads.length == 0)
+    {
+      prefs.edit().remove(KEY_PENDING_IMPORT).apply();
+      mImportingQr = false;
+      return;
+    }
+
+    deliverQrPayload(prefs, payloads, 0, attempt);
+  }
+
+  private void deliverQrPayload(final SharedPreferences prefs, final String[] payloads,
+                                final int index, final int attempt)
+  {
+    if (index >= payloads.length)
+    {
+      // All delivered — clear the queue only if nothing new arrived.
+      String current = prefs.getString(KEY_PENDING_IMPORT, "[]");
+      try
+      {
+        JSONArray remaining = new JSONArray(current);
+        // The queue still holds the same entries we've been reading from;
+        // if the count matches what we just delivered, clear it entirely.
+        if (remaining.length() == payloads.length)
+          prefs.edit().remove(KEY_PENDING_IMPORT).apply();
+      }
+      catch (Exception ignored) {}
+      mImportingQr = false;
+      return;
+    }
+
+    String payload = payloads[index];
+    if (payload == null || payload.isEmpty())
+    {
+      deliverQrPayload(prefs, payloads, index + 1, attempt);
+      return;
+    }
+
+    String js = "(function(){"
+        + "if (typeof window.importQrPayload !== 'function') return 'missing';"
+        + "try { return window.importQrPayload(" + JSONObject.quote(payload) + "); }"
+        + "catch(e) { return 'error'; }"
+        + "})()";
+
+    mWebView.evaluateJavascript(js, value ->
+    {
+      if ("\"ok\"".equals(value) || "\"error\"".equals(value))
+      {
+        deliverQrPayload(prefs, payloads, index + 1, attempt);
+      }
+      else if (attempt < INJECT_RETRY_COUNT)
+      {
+        new Handler(Looper.getMainLooper()).postDelayed(
+            () -> deliverQrPayload(prefs, payloads, index, attempt + 1),
+            INJECT_RETRY_DELAY_MS);
+      }
+      else
+      {
+        // Give up for now — keep queue, retry later.
+        mImportingQr = false;
       }
     });
   }

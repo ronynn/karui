@@ -9,95 +9,58 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-
 public class FloatingWindowService extends Service
 {
-  private static final String PREFS_SYNC = "sync_prefs";
-  private static final String KEY_SYNC_URI = "sync_file_uri";
   private static final String PREFS_NOTE_QUEUE = "note_queue";
-  private static final String KEY_NOTIFICATION_ENABLED = "notification_enabled";
+  private static final String KEY_DRAFT = "quick_capture_draft";
   static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
-  private static final String PANEL_BG_COLOR  = "#282828";
-  private static final String TITLE_BG_COLOR  = "#3C3836";
-  private static final String PILL_COLOR      = "#928374";
-  private static final String CLOSE_COLOR     = "#EBDBB2";
-  private static final String RESIZE_HINT     = "#504945";
+  private static final String PANEL_BG_COLOR   = "#282828";
+  private static final String HANDLE_BG_COLOR  = "#3C3836";
+  private static final String PILL_COLOR       = "#928374";
+  private static final String CLOSE_COLOR      = "#EBDBB2";
+  private static final String TEXT_COLOR       = "#EBDBB2";
+  private static final String HINT_COLOR       = "#928374";
 
-  private static final int  INJECT_RETRY_COUNT    = 10;
-  private static final long INJECT_RETRY_DELAY_MS = 300L;
-
-  private static final int INITIAL_WIDTH_DP  = 340;
-  private static final int INITIAL_HEIGHT_DP = 500;
-  private static final int MIN_WIDTH_DP      = 220;
-  private static final int MIN_HEIGHT_DP     = 200;
-
-  /** Minimum on-screen strip when window is dragged mostly off-screen. */
-  private static final int MIN_VISIBLE_DP = 48;
+  private static final long AUTOSAVE_INTERVAL_MS = 800L;
+  private static final int INITIAL_WIDTH_DP   = 340;
+  private static final int INITIAL_HEIGHT_DP  = 150;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
-
   private WindowManager mWindowManager;
   private View mRootView;
   private WindowManager.LayoutParams mParams;
-  private BackAwareWebView mWebView;
-  private TextView mCloseBtn;
+  private EditText mEditText;
+  private SharedPreferences mPrefs;
+  private Runnable mAutoSaveRunnable;
 
-  private int mScreenWidth;
-  private int mScreenHeight;
-
-  private boolean mPageLoaded = false;
-  private boolean mInjecting = false;
-
-  // Last known in-screen position. Restored when the user taps a
-  // window that has been dragged mostly off-screen.
-  private int mPreOffscreenX, mPreOffscreenY;
-
-  private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
+  private final BroadcastReceiver closeReceiver = new BroadcastReceiver()
   {
     @Override
     public void onReceive(Context context, Intent intent)
     {
-      if (intent == null) return;
-      String action = intent.getAction();
-
-      if (MainActivity.ACTION_CLOSE_FLOATING.equals(action))
-      {
-        dismiss();
-        return;
-      }
-      if (MainActivity.ACTION_NOTE_ADDED.equals(action))
-      {
-        if (mPageLoaded && mWebView != null) injectPendingNotes();
-      }
+      if (intent != null && MainActivity.ACTION_CLOSE_FLOATING.equals(intent.getAction()))
+        saveAndClose();
     }
   };
 
@@ -106,14 +69,13 @@ public class FloatingWindowService extends Service
   {
     super.onCreate();
     mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+    mPrefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
 
-    IntentFilter filter = new IntentFilter();
-    filter.addAction(MainActivity.ACTION_NOTE_ADDED);
-    filter.addAction(MainActivity.ACTION_CLOSE_FLOATING);
+    IntentFilter filter = new IntentFilter(MainActivity.ACTION_CLOSE_FLOATING);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-      registerReceiver(noteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+      registerReceiver(closeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
     else
-      registerReceiver(noteReceiver, filter);
+      registerReceiver(closeReceiver, filter);
   }
 
   private int dp(float v)
@@ -127,40 +89,33 @@ public class FloatingWindowService extends Service
   {
     if (mRootView == null)
     {
-      try { buildFloatingWindow(); }
+      try { buildWindow(); }
       catch (Exception e)
       {
         e.printStackTrace();
-        Toast.makeText(this, "Could not open floating window", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "Could not open capture window", Toast.LENGTH_LONG).show();
         stopSelf();
         return START_NOT_STICKY;
       }
     }
-    else if (isMostlyOffscreen())
-    {
-      mParams.x = mPreOffscreenX;
-      mParams.y = mPreOffscreenY;
-      try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
-      updateCloseVisibility();
-    }
     return START_NOT_STICKY;
   }
 
-  private void buildFloatingWindow()
+  private void buildWindow()
   {
     DisplayMetrics dm = new DisplayMetrics();
     mWindowManager.getDefaultDisplay().getMetrics(dm);
-    mScreenWidth = dm.widthPixels;
-    mScreenHeight = dm.heightPixels;
+    int screenWidth = dm.widthPixels;
 
-    int initialW = Math.min(dp(INITIAL_WIDTH_DP), mScreenWidth - dp(16));
-    int initialH = Math.min(dp(INITIAL_HEIGHT_DP), mScreenHeight - dp(80));
-    final int minW = dp(MIN_WIDTH_DP);
-    final int minH = dp(MIN_HEIGHT_DP);
-    final int minVisible = dp(MIN_VISIBLE_DP);
+    int widthPx = Math.min(dp(INITIAL_WIDTH_DP), screenWidth - dp(32));
 
     FrameLayout rootLayout = new FrameLayout(this);
-    rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
+    GradientDrawable bg = new GradientDrawable();
+    bg.setColor(Color.parseColor(PANEL_BG_COLOR));
+    bg.setCornerRadius(dp(10));
+    rootLayout.setBackground(bg);
+    rootLayout.setClipToOutline(true);
+    rootLayout.setElevation(dp(12));
 
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
@@ -168,9 +123,12 @@ public class FloatingWindowService extends Service
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
     FrameLayout titleBar = new FrameLayout(this);
-    titleBar.setBackgroundColor(Color.parseColor(TITLE_BG_COLOR));
+    GradientDrawable titleBg = new GradientDrawable();
+    titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
+    titleBg.setCornerRadii(new float[]{ dp(10), dp(10), dp(10), dp(10), 0, 0, 0, 0 });
+    titleBar.setBackground(titleBg);
     titleBar.setLayoutParams(new LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, dp(24)));
+        LinearLayout.LayoutParams.MATCH_PARENT, dp(28)));
 
     View pill = new View(this);
     GradientDrawable pillShape = new GradientDrawable();
@@ -178,104 +136,107 @@ public class FloatingWindowService extends Service
     pillShape.setCornerRadius(dp(1));
     pill.setBackground(pillShape);
     titleBar.addView(pill, new FrameLayout.LayoutParams(
-        dp(24), dp(2), Gravity.CENTER));
+        dp(28), dp(2), Gravity.CENTER));
 
-    mCloseBtn = new TextView(this);
-    mCloseBtn.setText("×");
-    mCloseBtn.setTextSize(20);
-    mCloseBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
-    mCloseBtn.setGravity(Gravity.CENTER);
-    mCloseBtn.setIncludeFontPadding(false);          // ← removes the extra blank space
-    mCloseBtn.setLayoutParams(new FrameLayout.LayoutParams(
-        dp(32), FrameLayout.LayoutParams.MATCH_PARENT,
-        Gravity.END | Gravity.CENTER_VERTICAL));      // ← vertical centering, was implicit TOP
-    mCloseBtn.setOnClickListener(v -> dismiss());
-    titleBar.addView(mCloseBtn);
+    TextView closeBtn = new TextView(this);
+    closeBtn.setText("×");
+    closeBtn.setTextSize(20);
+    closeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
+    closeBtn.setGravity(Gravity.CENTER);
+    closeBtn.setIncludeFontPadding(false);
+    closeBtn.setLayoutParams(new FrameLayout.LayoutParams(
+        dp(36), FrameLayout.LayoutParams.MATCH_PARENT,
+        Gravity.END | Gravity.CENTER_VERTICAL));
+    closeBtn.setOnClickListener(v -> saveAndClose());
+    titleBar.addView(closeBtn);
 
-    mWebView = new BackAwareWebView(this);
-    mWebView.setLayoutParams(new LinearLayout.LayoutParams(
+    mEditText = new EditText(this);
+    mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
-    mWebView.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
-    mWebView.setVerticalScrollBarEnabled(false);
-    mWebView.setHorizontalScrollBarEnabled(false);
+    mEditText.setBackground(null);
+    mEditText.setHint("Quick note...");
+    mEditText.setHintTextColor(Color.parseColor(HINT_COLOR));
+    mEditText.setTextColor(Color.parseColor(TEXT_COLOR));
+    mEditText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+    mEditText.setInputType(InputType.TYPE_CLASS_TEXT
+        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+    mEditText.setGravity(Gravity.TOP | Gravity.START);
+    mEditText.setPadding(dp(14), dp(10), dp(14), dp(10));
+    mEditText.setMinLines(2);
+    mEditText.setMaxLines(8);
 
-    WebSettings ws = mWebView.getSettings();
-    ws.setJavaScriptEnabled(true);
-    ws.setDomStorageEnabled(true);
-    ws.setAllowFileAccess(true);
-    ws.setAllowContentAccess(true);
-    ws.setAllowFileAccessFromFileURLs(true);
-    ws.setAllowUniversalAccessFromFileURLs(true);
-
-    mWebView.setWebViewClient(new WebViewClient()
+    String draft = mPrefs.getString(KEY_DRAFT, "");
+    if (!draft.isEmpty())
     {
-      @Override
-      public void onPageFinished(WebView view, String url)
+      mEditText.setText(draft);
+      mEditText.setSelection(draft.length());
+    }
+
+    mEditText.addTextChangedListener(new TextWatcher()
+    {
+      @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+      @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+      @Override public void afterTextChanged(Editable s)
       {
-        mPageLoaded = true;
-        injectPendingNotes();
-        readSyncFileAndInject();
+        if (s.toString().trim().isEmpty())
+          mPrefs.edit().remove(KEY_DRAFT).apply();
       }
     });
 
-    mWebView.addJavascriptInterface(new FloatingWebAppInterface(), "Android");
-    mWebView.loadUrl("file:///android_asset/index.html");
-
     contentLayout.addView(titleBar);
-    contentLayout.addView(mWebView);
+    contentLayout.addView(mEditText);
     rootLayout.addView(contentLayout);
 
-    View resizeHandle = new View(this);
-    GradientDrawable resizeShape = new GradientDrawable();
-    resizeShape.setColor(Color.parseColor(RESIZE_HINT));
-    resizeShape.setCornerRadius(dp(4));
-    resizeHandle.setBackground(resizeShape);
-    FrameLayout.LayoutParams rhParams = new FrameLayout.LayoutParams(
-        dp(22), dp(22), Gravity.BOTTOM | Gravity.END);
-    rhParams.setMargins(0, 0, dp(4), dp(4));
-    resizeHandle.setLayoutParams(rhParams);
-    rootLayout.addView(resizeHandle);
-
-    // FLAG_LAYOUT_NO_LIMITS lets the window be positioned off-screen
-    // (left/right) past the system's default clamp.
-    // FLAG_NOT_TOUCH_MODAL lets taps outside the window reach the app
-    // underneath. No animation is used on the window at any point,
-    // because animating a WindowManager-hosted view's translation
-    // breaks touch dispatch (taps land below the visible UI).
+    // NOT_FOCUSABLE → BACK goes to Gallery
+    // ALT_FOCUSABLE_IM → keyboard still reaches the EditText
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-              | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+              | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+              | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
 
     mParams = new WindowManager.LayoutParams(
-        initialW, initialH,
+        widthPx,
+        dp(INITIAL_HEIGHT_DP),
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE,
         flags, PixelFormat.TRANSLUCENT);
 
-    mParams.gravity = Gravity.TOP | Gravity.START;
-    mParams.x = (mScreenWidth - initialW) / 2;
-    mParams.y = dp(80);
+    mParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+    mParams.y = dp(100);
     mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
 
-    mPreOffscreenX = mParams.x;
-    mPreOffscreenY = mParams.y;
-
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
+    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
     Intent opened = new Intent(MainActivity.ACTION_FLOATING_OPENED);
     opened.setPackage(getPackageName());
     sendBroadcast(opened);
 
-    // ── Drag-to-move + tap-to-restore ─────────────────────────────
+    mEditText.post(() ->
+    {
+      mEditText.requestFocus();
+      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+    });
+
+    mAutoSaveRunnable = new Runnable()
+    {
+      @Override
+      public void run()
+      {
+        saveDraft();
+        mHandler.postDelayed(this, AUTOSAVE_INTERVAL_MS);
+      }
+    };
+    mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
+
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
       private float startTouchX, startTouchY;
-      private boolean moved;
 
       @Override
       public boolean onTouch(View v, MotionEvent e)
@@ -287,78 +248,12 @@ public class FloatingWindowService extends Service
             startY = mParams.y;
             startTouchX = e.getRawX();
             startTouchY = e.getRawY();
-            moved = false;
-            return true;
-
-          case MotionEvent.ACTION_MOVE:
-            float dx = e.getRawX() - startTouchX;
-            float dy = e.getRawY() - startTouchY;
-            if (Math.abs(dx) > dp(3) || Math.abs(dy) > dp(3)) moved = true;
-            if (moved)
-            {
-              int newX = Math.max(-mParams.width + minVisible,
-                       Math.min(mScreenWidth - minVisible, startX + (int) dx));
-              int newY = Math.max(0,
-                       Math.min(mScreenHeight - dp(60), startY + (int) dy));
-              mParams.x = newX;
-              mParams.y = newY;
-              mWindowManager.updateViewLayout(mRootView, mParams);
-              updateCloseVisibility();
-            }
-            return true;
-
-          case MotionEvent.ACTION_UP:
-          case MotionEvent.ACTION_CANCEL:
-            if (!moved && isMostlyOffscreen())
-            {
-              mParams.x = mPreOffscreenX;
-              mParams.y = mPreOffscreenY;
-              try { mWindowManager.updateViewLayout(mRootView, mParams); }
-              catch (Exception ignored) {}
-              updateCloseVisibility();
-            }
-            else if (!isMostlyOffscreen())
-            {
-              mPreOffscreenX = mParams.x;
-              mPreOffscreenY = mParams.y;
-            }
-            return true;
-        }
-        return false;
-      }
-    });
-
-    // ── Drag-to-resize ────────────────────────────────────────────
-    resizeHandle.setOnTouchListener(new View.OnTouchListener()
-    {
-      private int startW, startH;
-      private float startTouchX, startTouchY;
-
-      @Override
-      public boolean onTouch(View v, MotionEvent e)
-      {
-        switch (e.getActionMasked())
-        {
-          case MotionEvent.ACTION_DOWN:
-            startW = mParams.width;
-            startH = mParams.height;
-            startTouchX = e.getRawX();
-            startTouchY = e.getRawY();
             return true;
           case MotionEvent.ACTION_MOVE:
-            int newW = startW + (int) (e.getRawX() - startTouchX);
-            int newH = startH + (int) (e.getRawY() - startTouchY);
-            newW = Math.max(minW, Math.min(mScreenWidth - mParams.x, newW));
-            newH = Math.max(minH, Math.min(mScreenHeight - mParams.y, newH));
-            if (newW != mParams.width || newH != mParams.height)
-            {
-              mParams.width = newW;
-              mParams.height = newH;
-              mWindowManager.updateViewLayout(mRootView, mParams);
-            }
-            return true;
-          case MotionEvent.ACTION_UP:
-          case MotionEvent.ACTION_CANCEL:
+            mParams.x = startX + (int) (e.getRawX() - startTouchX);
+            mParams.y = startY + (int) (e.getRawY() - startTouchY);
+            try { mWindowManager.updateViewLayout(mRootView, mParams); }
+            catch (Exception ignored) {}
             return true;
         }
         return false;
@@ -366,68 +261,45 @@ public class FloatingWindowService extends Service
     });
   }
 
-  private boolean isMostlyOffscreen()
+  private void saveDraft()
   {
-    if (mParams == null) return false;
-    int visLeft = Math.max(0, mParams.x);
-    int visRight = Math.min(mScreenWidth, mParams.x + mParams.width);
-    return (visRight - visLeft) < mParams.width / 2;
+    if (mEditText == null) return;
+    String text = mEditText.getText().toString();
+    if (text.trim().isEmpty()) mPrefs.edit().remove(KEY_DRAFT).apply();
+    else mPrefs.edit().putString(KEY_DRAFT, text).apply();
   }
 
-  private void updateCloseVisibility()
+  private void saveAndClose()
   {
-    if (mCloseBtn == null) return;
-    mCloseBtn.setVisibility(isMostlyOffscreen() ? View.INVISIBLE : View.VISIBLE);
-  }
-
-  // ── Back-aware WebView ──────────────────────────────────────────
-
-  private class BackAwareWebView extends WebView
-  {
-    BackAwareWebView(Context c) { super(c); }
-
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event)
+    if (mEditText != null)
     {
-      if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
-          && event.getAction() == KeyEvent.ACTION_UP)
+      String text = mEditText.getText().toString().trim();
+      if (!text.isEmpty())
       {
-        if (isMostlyOffscreen())
-        {
-          mParams.x = mPreOffscreenX;
-          mParams.y = mPreOffscreenY;
-          try { mWindowManager.updateViewLayout(mRootView, mParams); }
-          catch (Exception ignored) {}
-          updateCloseVisibility();
-        }
-        else if (canGoBack())
-        {
-          goBack();
-        }
-        else
-        {
-          post(() -> dismiss());
-        }
-        return true;
+        ProcessTextActivity.saveNoteToQueue(this, text);
+        Intent update = new Intent(MainActivity.ACTION_NOTE_ADDED);
+        update.setPackage(getPackageName());
+        sendBroadcast(update);
       }
-      return super.dispatchKeyEvent(event);
+      mPrefs.edit().remove(KEY_DRAFT).apply();
     }
+    dismiss();
   }
-
-  // ── Lifecycle ───────────────────────────────────────────────────
 
   private void dismiss()
   {
+    if (mAutoSaveRunnable != null)
+    {
+      mHandler.removeCallbacks(mAutoSaveRunnable);
+      mAutoSaveRunnable = null;
+    }
     try
     {
-      InputMethodManager imm =
-          (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-      if (imm != null && mWebView != null)
-        imm.hideSoftInputFromWindow(mWebView.getWindowToken(), 0);
+      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null && mEditText != null)
+        imm.hideSoftInputFromWindow(mEditText.getWindowToken(), 0);
     }
     catch (Exception ignored) {}
-
-    triggerCloseSync();
 
     if (mRootView != null && mWindowManager != null)
     {
@@ -435,219 +307,28 @@ public class FloatingWindowService extends Service
       mRootView = null;
     }
 
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
-
+    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
     stopSelf();
   }
 
   @Override
   public void onDestroy()
   {
-    triggerCloseSync();
-
+    if (mAutoSaveRunnable != null)
+    {
+      mHandler.removeCallbacks(mAutoSaveRunnable);
+      mAutoSaveRunnable = null;
+    }
     if (mRootView != null && mWindowManager != null)
     {
       try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
       mRootView = null;
     }
-
-    getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-      .edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
-
-    final WebView wv = mWebView;
-    mWebView = null;
-    mPageLoaded = false;
-    if (wv != null)
-    {
-      mHandler.postDelayed(() -> { try { wv.destroy(); } catch (Exception ignored) {} }, 1000);
-    }
-
-    try { unregisterReceiver(noteReceiver); } catch (Exception ignored) {}
-
+    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
+    try { unregisterReceiver(closeReceiver); } catch (Exception ignored) {}
     super.onDestroy();
   }
 
   @Override
   public IBinder onBind(Intent intent) { return null; }
-
-  // ── Data injection ─────────────────────────────────────────────
-
-  private void injectPendingNotes() { injectPendingNotes(0); }
-
-  private void injectPendingNotes(final int attempt)
-  {
-    if (mInjecting || !mPageLoaded || mWebView == null) return;
-
-    final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
-    final String jsonStr = prefs.getString("pending_notes_json", "[]");
-    if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
-
-    mInjecting = true;
-
-    String js = "(function(){"
-        + "if (!window.syncNotesArrayFromAndroid) return 'missing';"
-        + "try { window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + "); return 'ok'; }"
-        + "catch(e) { return 'error'; }"
-        + "})()";
-
-    mWebView.evaluateJavascript(js, value ->
-    {
-      mInjecting = false;
-      if ("\"ok\"".equals(value))
-      {
-        String current = prefs.getString("pending_notes_json", "[]");
-        if (current.equals(jsonStr))
-          prefs.edit().remove("pending_notes_json").apply();
-        else
-          injectPendingNotes(0);
-      }
-      else if (attempt < INJECT_RETRY_COUNT)
-      {
-        mHandler.postDelayed(() -> injectPendingNotes(attempt + 1), INJECT_RETRY_DELAY_MS);
-      }
-    });
-  }
-
-  private void readSyncFileAndInject()
-  {
-    if (!mPageLoaded || mWebView == null) return;
-
-    SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-    final String uriStr = prefs.getString(KEY_SYNC_URI, null);
-    if (uriStr == null || uriStr.isEmpty()) return;
-
-    new Thread(() ->
-    {
-      try
-      {
-        Uri uri = Uri.parse(uriStr);
-        InputStream is = getContentResolver().openInputStream(uri);
-        if (is == null) return;
-        BufferedReader r = new BufferedReader(new InputStreamReader(is));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = r.readLine()) != null) sb.append(line).append("\n");
-        r.close();
-
-        final String md = sb.toString();
-        mHandler.post(() ->
-        {
-          if (mPageLoaded && mWebView != null)
-          {
-            String js = "if(window.importMarkdownFromAndroid) window.importMarkdownFromAndroid("
-                + JSONObject.quote(md) + ");";
-            mWebView.evaluateJavascript(js, null);
-          }
-        });
-      }
-      catch (Exception ignored) {}
-    }).start();
-  }
-
-  private void triggerCloseSync()
-  {
-    if (mWebView != null && mPageLoaded)
-    {
-      mWebView.evaluateJavascript(
-        "if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
-      mWebView.evaluateJavascript(
-        "if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
-    }
-  }
-
-  // ── JS bridge ──────────────────────────────────────────────────
-
-  public class FloatingWebAppInterface
-  {
-    @JavascriptInterface
-    public void saveFileSync(String filePath, String content)
-    {
-      if (filePath == null || filePath.trim().isEmpty()) return;
-      try
-      {
-        Uri uri = Uri.parse(filePath);
-        OutputStream out = getContentResolver().openOutputStream(uri, "rwt");
-        if (out == null) out = getContentResolver().openOutputStream(uri);
-        if (out != null)
-        {
-          out.write(content.getBytes());
-          out.close();
-          Intent updateIntent = new Intent(MainActivity.ACTION_NOTE_ADDED);
-          updateIntent.setPackage(getPackageName());
-          sendBroadcast(updateIntent);
-        }
-      }
-      catch (Exception e) { e.printStackTrace(); }
-    }
-
-    @JavascriptInterface
-    public void triggerManualReadSync() { readSyncFileAndInject(); }
-
-    @JavascriptInterface
-    public void saveNote(final String noteText)
-    {
-      if (noteText == null || noteText.trim().isEmpty()) return;
-      ProcessTextActivity.saveNoteToQueue(FloatingWindowService.this, noteText.trim());
-      Intent u = new Intent(MainActivity.ACTION_NOTE_ADDED);
-      u.setPackage(getPackageName());
-      sendBroadcast(u);
-    }
-
-    @JavascriptInterface
-    public void closeOverlay() { dismiss(); }
-
-    @JavascriptInterface
-    public int getNavBarHeight()
-    {
-      int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-      return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
-    }
-
-    @JavascriptInterface
-    public void setInboxTabName(String tabName)
-    {
-      if (tabName == null || tabName.trim().isEmpty()) tabName = "Inbox";
-      getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-        .edit().putString("inbox_tab_name", tabName.trim()).apply();
-    }
-
-    @JavascriptInterface
-    public boolean isNotificationEnabled()
-    {
-      return getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
-        .getBoolean(KEY_NOTIFICATION_ENABLED, false);
-    }
-
-    @JavascriptInterface
-    public boolean isOverlayMode() { return true; }
-
-    @JavascriptInterface
-    public String getDynamicWallpaperTheme()
-    {
-      return DynamicTheme.getWallpaperTheme(FloatingWindowService.this);
-    }
-
-    @JavascriptInterface
-    public void setupSyncFile(String d, String c) { showToast("Open the full Karui app for this."); }
-    @JavascriptInterface
-    public void saveFile(String n, String d, String t) { showToast("Open the full Karui app for this."); }
-    @JavascriptInterface
-    public void importJsonFile() { showToast("Open the full Karui app for this."); }
-    @JavascriptInterface
-    public void importMarkdownFile() { showToast("Open the full Karui app for this."); }
-    @JavascriptInterface
-    public void toggleNotification(boolean e) { showToast("Open the full Karui app to change the status-bar toggle."); }
-    @JavascriptInterface
-    public void toggleScreenshots(boolean d) {}
-    @JavascriptInterface
-    public void updateCalendarEvents(String j) {}
-    @JavascriptInterface
-    public void setCalendarNotificationsEnabled(boolean e) {}
-  }
-
-  private void showToast(final String msg)
-  {
-    Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();
-  }
 }
