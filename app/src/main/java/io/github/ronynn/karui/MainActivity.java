@@ -1,8 +1,6 @@
 package io.github.ronynn.karui;
 
 import android.Manifest;
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -65,14 +63,14 @@ public class MainActivity extends Activity
   private static final String KEY_PENDING_IMPORT = "pending_import_json";
   private static final String KEY_OVERLAY_PROMPTED = "overlay_prompted";
 
-  private static final int WEBVIEW_BG_COLOR = 0xFF000000;
+  /** Gruvbox bg0 — used for window background and WebView loading bg. */
+  private static final int DARK_GREY_BG = 0xFF282828;
 
   // ═══════════════════════════════════════════════════════════════
   //  SECTION 2 — FIELDS
   // ═══════════════════════════════════════════════════════════════
 
   private WebView mWebView;
-  private View splashScreen;
 
   String pendingFileName;
   String pendingFileData;
@@ -112,16 +110,16 @@ public class MainActivity extends Activity
     boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
     boolean floatingTrigger = assistLaunch || tileLaunch;
 
-    // Floating-window fast path — open capture window, close ourselves.
-    // Note this does NOT touch any other floating window that might be open.
+    // Floating-window fast path — open capture window and stay alive in
+    // background. The activity is NOT finished, so reopening it doesn't
+    // cost a full cold start.
     if (floatingTrigger && canDrawOverlays())
     {
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
       try
       {
         startService(new Intent(this, FloatingWindowService.class));
-        finishAndRemoveTask();
-        overridePendingTransition(0, 0);
+        // Do NOT finish the activity. Stay paused behind the floating window.
         return;
       }
       catch (Exception e)
@@ -132,14 +130,24 @@ public class MainActivity extends Activity
       }
     }
 
-    // ── Normal launch: nothing else to coordinate ─────────────────
+    // ── Dark grey from the first frame ───────────────────────────
+    // Overrides the theme windowBackground (which is #000000 in
+    // styles.xml). Set BEFORE setContentView so the initial paint is
+    // gruvbox bg0, not black.
+    getWindow().setBackgroundDrawable(new ColorDrawable(DARK_GREY_BG));
+
     setContentView(R.layout.activity_main);
     SystemBarHelper.apply(this);
 
-    mWebView = findViewById(R.id.activity_main_webview);
-    splashScreen = findViewById(R.id.splash_screen);
+    // Hide splash immediately — not used. The layout still contains the
+    // view; we just GONE it. Remove from activity_main.xml later if you
+    // want to trim the layout too.
+    View splash = findViewById(R.id.splash_screen);
+    if (splash != null) splash.setVisibility(View.GONE);
 
-    mWebView.setBackgroundColor(WEBVIEW_BG_COLOR);
+    mWebView = findViewById(R.id.activity_main_webview);
+    mWebView.setVisibility(View.VISIBLE);          // was GONE in XML
+    mWebView.setBackgroundColor(DARK_GREY_BG);    // match window
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     mWebView.setVerticalScrollBarEnabled(false);
     mWebView.setHorizontalScrollBarEnabled(false);
@@ -177,19 +185,6 @@ public class MainActivity extends Activity
         readSyncFileAndInject();
         consumeImportQr();
         SystemBarHelper.apply(MainActivity.this);
-
-        splashScreen.animate()
-            .alpha(0f)
-            .setDuration(150)
-            .setListener(new AnimatorListenerAdapter()
-            {
-              @Override
-              public void onAnimationEnd(Animator animation)
-              {
-                splashScreen.setVisibility(View.GONE);
-              }
-            })
-            .start();
       }
     });
 
@@ -286,8 +281,7 @@ public class MainActivity extends Activity
       try
       {
         startService(new Intent(this, FloatingWindowService.class));
-        finishAndRemoveTask();
-        overridePendingTransition(0, 0);
+        // Do NOT finish. Stay paused behind the floating window.
       }
       catch (Exception e) { e.printStackTrace(); }
     }
