@@ -46,6 +46,8 @@ public class MainActivity extends Activity
 
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
   public static final String ACTION_OPEN_FLOATING = "io.github.ronynn.karui.ACTION_OPEN_FLOATING";
+  public static final String ACTION_CLOSE_FLOATING = "io.github.ronynn.karui.ACTION_CLOSE_FLOATING";
+  public static final String ACTION_FLOATING_OPENED = "io.github.ronynn.karui.ACTION_FLOATING_OPENED";
 
   static final int CREATE_FILE_REQUEST_CODE = 1;
   static final int IMPORT_FILE_REQUEST_CODE = 2;
@@ -88,6 +90,16 @@ public class MainActivity extends Activity
     @Override
     public void onReceive(Context context, Intent intent)
     {
+      if (intent == null) return;
+      String action = intent.getAction();
+
+      if (ACTION_FLOATING_OPENED.equals(action))
+      {
+        // Floating window attached. Close ourselves so only one Karui
+        // UI is on screen at a time.
+        finishAndRemoveTask();
+        return;
+      }
       if (isPageLoaded) injectPendingNotes();
     }
   };
@@ -128,17 +140,19 @@ public class MainActivity extends Activity
       }
     }
 
-    // ── Close any running floating window before opening full UI ──
-    // Prevents two Karuis coexisting, and lets the floating window's
-    // final export land before we read the sync file.
+    // ── Close any running floating window before showing full UI ──
     if (!floatingTrigger)
     {
       SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
       if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
       {
         mJustClosedFloating = true;
+        Intent closeIntent = new Intent(ACTION_CLOSE_FLOATING);
+        closeIntent.setPackage(getPackageName());
+        sendBroadcast(closeIntent);
+        // stopService as belt-and-suspenders in case the broadcast
+        // misses (rare, but OEM skins can be flaky).
         stopService(new Intent(this, FloatingWindowService.class));
-        qp.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
       }
     }
 
@@ -184,8 +198,6 @@ public class MainActivity extends Activity
       {
         isPageLoaded = true;
 
-        // If we just closed the floating window, delay the initial
-        // sync read so its async file export has time to finish.
         if (mJustClosedFloating)
         {
           mJustClosedFloating = false;
@@ -253,7 +265,9 @@ public class MainActivity extends Activity
 
     NotificationHelper.createChannel(this);
 
-    IntentFilter filter = new IntentFilter(ACTION_NOTE_ADDED);
+    IntentFilter filter = new IntentFilter();
+    filter.addAction(ACTION_NOTE_ADDED);
+    filter.addAction(ACTION_FLOATING_OPENED);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
       registerReceiver(noteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
     else
@@ -320,6 +334,21 @@ public class MainActivity extends Activity
         overridePendingTransition(0, 0);
       }
       catch (Exception e) { e.printStackTrace(); }
+    }
+    else
+    {
+      // We were brought back to foreground by some other path (e.g.,
+      // a launcher tap while the activity already existed). Close any
+      // floating window so only one Karui UI is visible.
+      SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
+      if (qp.getBoolean(KEY_OVERLAY_ACTIVE, false))
+      {
+        mJustClosedFloating = true;
+        Intent closeIntent = new Intent(ACTION_CLOSE_FLOATING);
+        closeIntent.setPackage(getPackageName());
+        sendBroadcast(closeIntent);
+        stopService(new Intent(this, FloatingWindowService.class));
+      }
     }
   }
 

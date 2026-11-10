@@ -124,11 +124,11 @@ export function createSettingsModule()
     ],
 
 
-    applyDynamicTheme()
+  applyDynamicTheme(silent)
 {
   if (!window.Android || !window.Android.getDynamicWallpaperTheme)
   {
-    this.showToast('Not available on this build')
+    if (!silent) this.showToast('Not available on this build')
     return
   }
 
@@ -141,7 +141,7 @@ export function createSettingsModule()
     const key = 'dynamic_wallpaper'
     const theme = {
       key,
-      name: 'WALLPAPER',
+      name: 'DYNAMIC',
       vars: {
         '--bg': data.bg,
         '--surface': data.surface,
@@ -156,11 +156,11 @@ export function createSettingsModule()
     this.customThemes = this.customThemes.filter(t => t.key !== key).concat(theme)
     localStorage.setItem('customThemes', JSON.stringify(this.customThemes))
     this.setTheme(key)
-    this.showToast('Wallpaper theme applied')
+    if (!silent) this.showToast('Dynamic theme applied')
   }
   catch (e)
   {
-    this.showToast('Could not read wallpaper')
+    if (!silent) this.showToast('Could not read wallpaper')
   }
 },
 

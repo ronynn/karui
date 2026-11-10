@@ -1,6 +1,5 @@
 package io.github.ronynn.karui;
 
-import android.animation.ValueAnimator;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -61,11 +60,8 @@ public class FloatingWindowService extends Service
   private static final int MIN_WIDTH_DP      = 220;
   private static final int MIN_HEIGHT_DP     = 200;
 
-  /** How many dp of the window remains visible when snapped to an edge. */
-  private static final int SNAP_VISIBLE_DP = 24;
-
-  /** Within this fraction of screen width of an edge = snap. */
-  private static final float SNAP_THRESHOLD_FRACTION = 0.25f;
+  /** Minimum visible strip when window is dragged mostly off-screen. */
+  private static final int MIN_VISIBLE_DP = 60;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
 
@@ -81,18 +77,27 @@ public class FloatingWindowService extends Service
   private boolean mPageLoaded = false;
   private boolean mInjecting = false;
 
-  // Edge-snap state
-  private boolean mSnapped = false;
-  private boolean mSnappedLeft = false;
-  private int mSnapPreX, mSnapPreY;
-  private ValueAnimator mSnapAnim;
+  // Last known "good" (in-screen) position. Restored when the user
+  // taps a window that has been dragged mostly off-screen.
+  private int mPreOffscreenX, mPreOffscreenY;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
   {
     @Override
     public void onReceive(Context context, Intent intent)
     {
-      if (mPageLoaded && mWebView != null) injectPendingNotes();
+      if (intent == null) return;
+      String action = intent.getAction();
+
+      if (MainActivity.ACTION_CLOSE_FLOATING.equals(action))
+      {
+        dismiss();
+        return;
+      }
+      if (MainActivity.ACTION_NOTE_ADDED.equals(action))
+      {
+        if (mPageLoaded && mWebView != null) injectPendingNotes();
+      }
     }
   };
 
@@ -102,7 +107,9 @@ public class FloatingWindowService extends Service
     super.onCreate();
     mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-    IntentFilter filter = new IntentFilter(MainActivity.ACTION_NOTE_ADDED);
+    IntentFilter filter = new IntentFilter();
+    filter.addAction(MainActivity.ACTION_NOTE_ADDED);
+    filter.addAction(MainActivity.ACTION_CLOSE_FLOATING);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
       registerReceiver(noteReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
     else
@@ -143,6 +150,7 @@ public class FloatingWindowService extends Service
     int initialH = Math.min(dp(INITIAL_HEIGHT_DP), mScreenHeight - dp(80));
     final int minW = dp(MIN_WIDTH_DP);
     final int minH = dp(MIN_HEIGHT_DP);
+    final int minVisible = dp(MIN_VISIBLE_DP);
 
     FrameLayout rootLayout = new FrameLayout(this);
     rootLayout.setBackgroundColor(Color.parseColor(PANEL_BG_COLOR));
@@ -150,8 +158,7 @@ public class FloatingWindowService extends Service
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
     FrameLayout titleBar = new FrameLayout(this);
     titleBar.setBackgroundColor(Color.parseColor(TITLE_BG_COLOR));
@@ -236,10 +243,18 @@ public class FloatingWindowService extends Service
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
 
+    mPreOffscreenX = mParams.x;
+    mPreOffscreenY = mParams.y;
+
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
       .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
-    // ── Drag-to-move + edge-snap on title bar ─────────────────────
+    // Tell MainActivity (if alive) to close itself now that we're up.
+    Intent opened = new Intent(MainActivity.ACTION_FLOATING_OPENED);
+    opened.setPackage(getPackageName());
+    sendBroadcast(opened);
+
+    // ── Drag-to-move + tap-to-restore ─────────────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
@@ -252,16 +267,15 @@ public class FloatingWindowService extends Service
         switch (e.getActionMasked())
         {
           case MotionEvent.ACTION_DOWN:
-            // If we're snapped, instantly restore to pre-snap position
-            // so any tap or drag brings the window back on screen.
-            if (mSnapped)
+            // If mostly off-screen, snap back to the last good position
+            // immediately. The subsequent drag (if any) starts from there.
+            if (isMostlyOffscreen())
             {
-              if (mSnapAnim != null) mSnapAnim.cancel();
-              mSnapped = false;
-              mParams.x = mSnapPreX;
-              mParams.y = mSnapPreY;
-              try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
-              if (mCloseBtn != null) mCloseBtn.setOnClickListener(v2 -> dismiss());
+              mParams.x = mPreOffscreenX;
+              mParams.y = mPreOffscreenY;
+              try { mWindowManager.updateViewLayout(mRootView, mParams); }
+              catch (Exception ignored) {}
+              updateCloseVisibility();
             }
             startX = mParams.x;
             startY = mParams.y;
@@ -276,26 +290,25 @@ public class FloatingWindowService extends Service
             if (Math.abs(dx) > dp(3) || Math.abs(dy) > dp(3)) moved = true;
             if (moved)
             {
-              int newX = Math.max(-mParams.width + dp(60),
-                       Math.min(mScreenWidth - dp(60), startX + (int) dx));
+              int newX = Math.max(-mParams.width + minVisible,
+                       Math.min(mScreenWidth - minVisible, startX + (int) dx));
               int newY = Math.max(0,
                        Math.min(mScreenHeight - dp(60), startY + (int) dy));
               mParams.x = newX;
               mParams.y = newY;
               mWindowManager.updateViewLayout(mRootView, mParams);
+              updateCloseVisibility();
             }
             return true;
 
           case MotionEvent.ACTION_UP:
           case MotionEvent.ACTION_CANCEL:
-            if (moved)
+            if (!isMostlyOffscreen())
             {
-              int snapThreshold = (int) (mScreenWidth * SNAP_THRESHOLD_FRACTION);
-              if (mParams.x < snapThreshold)
-                snapToEdge(true);
-              else if (mParams.x + mParams.width > mScreenWidth - snapThreshold)
-                snapToEdge(false);
+              mPreOffscreenX = mParams.x;
+              mPreOffscreenY = mParams.y;
             }
+            updateCloseVisibility();
             return true;
         }
         return false;
@@ -340,50 +353,23 @@ public class FloatingWindowService extends Service
     });
   }
 
-  // ── Edge-snap helpers ────────────────────────────────────────────
-
-  private void snapToEdge(boolean left)
+  private boolean isMostlyOffscreen()
   {
-    if (mSnapAnim != null) mSnapAnim.cancel();
-
-    mSnapPreX = mParams.x;
-    mSnapPreY = mParams.y;
-    mSnapped = true;
-    mSnappedLeft = left;
-
-    // While snapped, tapping the close button area should restore
-    // rather than close — otherwise the strip behaves like a trapdoor.
-    if (mCloseBtn != null) mCloseBtn.setOnClickListener(v -> unsnap());
-
-    final int visible = dp(SNAP_VISIBLE_DP);
-    final int targetX = left ? -mParams.width + visible : mScreenWidth - visible;
-
-    mSnapAnim = ValueAnimator.ofInt(mParams.x, targetX);
-    mSnapAnim.setDuration(200);
-    mSnapAnim.addUpdateListener(a ->
-    {
-      if (mRootView == null) return;
-      mParams.x = (int) a.getAnimatedValue();
-      try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
-    });
-    mSnapAnim.start();
+    if (mParams == null) return false;
+    int visLeft = Math.max(0, mParams.x);
+    int visRight = Math.min(mScreenWidth, mParams.x + mParams.width);
+    return (visRight - visLeft) < mParams.width / 2;
   }
 
-  private void unsnap()
+  private void updateCloseVisibility()
   {
-    if (!mSnapped) return;
-    if (mSnapAnim != null) mSnapAnim.cancel();
-    mSnapped = false;
-    mParams.x = mSnapPreX;
-    mParams.y = mSnapPreY;
-    if (mRootView != null)
-    {
-      try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
-    }
-    if (mCloseBtn != null) mCloseBtn.setOnClickListener(v -> dismiss());
+    if (mCloseBtn == null) return;
+    // Hide close button when mostly off-screen so a stray tap on the
+    // visible strip restores the window instead of closing it.
+    mCloseBtn.setVisibility(isMostlyOffscreen() ? View.INVISIBLE : View.VISIBLE);
   }
 
-  // ── Back-aware WebView ────────────────────────────────────────────
+  // ── Back-aware WebView ──────────────────────────────────────────
 
   private class BackAwareWebView extends WebView
   {
@@ -395,9 +381,13 @@ public class FloatingWindowService extends Service
       if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
           && event.getAction() == KeyEvent.ACTION_UP)
       {
-        if (mSnapped)
+        if (isMostlyOffscreen())
         {
-          unsnap();
+          mParams.x = mPreOffscreenX;
+          mParams.y = mPreOffscreenY;
+          try { mWindowManager.updateViewLayout(mRootView, mParams); }
+          catch (Exception ignored) {}
+          updateCloseVisibility();
         }
         else if (canGoBack())
         {
@@ -413,11 +403,10 @@ public class FloatingWindowService extends Service
     }
   }
 
-  // ── Lifecycle ────────────────────────────────────────────────────
+  // ── Lifecycle ───────────────────────────────────────────────────
 
   private void dismiss()
   {
-    if (mSnapAnim != null) mSnapAnim.cancel();
     try
     {
       InputMethodManager imm =
@@ -444,7 +433,6 @@ public class FloatingWindowService extends Service
   @Override
   public void onDestroy()
   {
-    if (mSnapAnim != null) { mSnapAnim.cancel(); mSnapAnim = null; }
     triggerCloseSync();
 
     if (mRootView != null && mWindowManager != null)
@@ -461,9 +449,7 @@ public class FloatingWindowService extends Service
     mPageLoaded = false;
     if (wv != null)
     {
-      mHandler.postDelayed(() -> {
-        try { wv.destroy(); } catch (Exception ignored) {}
-      }, 1000);
+      mHandler.postDelayed(() -> { try { wv.destroy(); } catch (Exception ignored) {} }, 1000);
     }
 
     try { unregisterReceiver(noteReceiver); } catch (Exception ignored) {}
@@ -474,7 +460,7 @@ public class FloatingWindowService extends Service
   @Override
   public IBinder onBind(Intent intent) { return null; }
 
-  // ── Data injection ────────────────────────────────────────────────
+  // ── Data injection ─────────────────────────────────────────────
 
   private void injectPendingNotes() { injectPendingNotes(0); }
 
@@ -559,7 +545,7 @@ public class FloatingWindowService extends Service
     }
   }
 
-  // ── JS bridge ─────────────────────────────────────────────────────
+  // ── JS bridge ──────────────────────────────────────────────────
 
   public class FloatingWebAppInterface
   {
@@ -599,18 +585,6 @@ public class FloatingWindowService extends Service
 
     @JavascriptInterface
     public void closeOverlay() { dismiss(); }
-
-    @JavascriptInterface
-    public void snapLeft() { snapToEdge(true); }
-
-    @JavascriptInterface
-    public void snapRight() { snapToEdge(false); }
-
-    @JavascriptInterface
-    public void unsnapWindow() { unsnap(); }
-
-    @JavascriptInterface
-    public boolean isSnapped() { return mSnapped; }
 
     @JavascriptInterface
     public int getNavBarHeight()

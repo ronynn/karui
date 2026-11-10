@@ -323,6 +323,15 @@ const appStore = reactive(mergeModules(
         window.Android.setCalendarNotificationsEnabled(true)
       }
 
+      // Re-fetch wallpaper colours if the user had DYNAMIC selected last
+// session. Silent so it doesn't nag on every launch.
+if (this.currentTheme === 'dynamic_wallpaper'
+    && window.Android
+    && typeof window.Android.getDynamicWallpaperTheme === 'function')
+{
+  setTimeout(() => this.applyDynamicTheme(true), 100)
+}
+
       if (this.calendarEnabled)
       {
         setTimeout(() =>
