@@ -71,6 +71,22 @@ export function createNotesModule()
     _unlockedTabs: {},
     modalIsPassword: false,
 
+    // Shared vibration helper. Native bridge is the primary path (uses the
+    // exact system haptic the long-press tab fires). Browser fallback uses
+    // a short double-tap pattern because a single 15ms pulse is usually
+    // filtered out by mobile Chrome/OS as noise.
+    _vibrate()
+    {
+      if (window.Android && typeof window.Android.haptic === 'function')
+      {
+        try { window.Android.haptic(); return; } catch (e) {}
+      }
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function')
+      {
+        try { navigator.vibrate([20, 30, 20]) } catch (e) {}
+      }
+    },
+
     get searchActive()
     {
       return SEARCH_ACTIVE_RE.test(this.noteInput || '')
@@ -362,8 +378,6 @@ export function createNotesModule()
 
     _measureNoteOverflow()
     {
-      // Skip while the full-screen editor is open — nothing to measure and
-      // it saves a full DOM scan per saveData cycle.
       if (this.editVisible) return
       const list = document.getElementById('notes-list')
       if (!list) return
@@ -710,7 +724,8 @@ export function createNotesModule()
         if (n.groupId) this.extendRecurrenceGroup(n)
       }
 
-      if (navigator.vibrate) navigator.vibrate(30)
+      // System haptic — matches the long-press tab feel.
+      this._vibrate()
 
       let txt = n.text.trim()
       if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
@@ -809,7 +824,7 @@ export function createNotesModule()
         }
         else
         {
-          if (navigator.vibrate) navigator.vibrate(15)
+          this._vibrate()
           this.showToast('Tap delete again to confirm')
         }
         this.lastTrashTap = now
@@ -837,7 +852,7 @@ export function createNotesModule()
       if (n)
       {
         navigator.clipboard.writeText(n.text)
-        if (navigator.vibrate) navigator.vibrate(15)
+        this._vibrate()
         this.showToast('Note copied')
       }
       this.closeAllMenus()
@@ -855,6 +870,83 @@ export function createNotesModule()
         return
       }
       this.startEdit(n)
+    },
+
+    // Serialise a tab's notes to markdown (`- [ ]` / `- [x]` lines).
+    _generateTabMarkdown(tab)
+    {
+      return this.notes
+        .filter(n => n.category === tab)
+        .map(n => `- [${n.completed ? 'x' : ' '}] ${(n.text || '').replace(/\r?\n/g, ' ')}`)
+        .join('\n')
+    },
+
+    // Parse markdown back into {text, completed} entries.
+    _parseTabMarkdown(md)
+    {
+      const out = []
+      const lines = (md || '').split(/\r?\n/)
+      for (const line of lines)
+      {
+        const m = line.trim().match(/^-\s*\[([ xX])\]\s*(.+)$/)
+        if (!m) continue
+        const text = m[2].trim()
+        if (!text) continue
+        out.push({ text, completed: m[1].toLowerCase() === 'x' })
+      }
+      return out
+    },
+
+    // Apply edited markdown back to a tab. Unchanged text keeps the existing
+    // note (preserves pinned/groupId/etc.), new text appends, removed text
+    // moves to the recycle bin.
+    applyTabMarkdown(tab, mdText)
+    {
+      const parsed = this._parseTabMarkdown(mdText)
+      const now = Date.now()
+      const existing = this.notes.filter(n => n.category === tab)
+      const matchedIds = new Set()
+
+      for (const p of parsed)
+      {
+        const match = existing.find(n => !matchedIds.has(n.id) && n.text === p.text)
+        if (match)
+        {
+          match.completed = p.completed
+          match.updatedAt = now
+          matchedIds.add(match.id)
+        }
+        else
+        {
+          const newNote = {
+            id: now + Math.floor(Math.random() * 100000),
+            text: p.text,
+            completed: p.completed,
+            category: tab,
+            pinned: false,
+            updatedAt: now,
+          }
+          this.notes.push(newNote)
+          matchedIds.add(newNote.id)
+        }
+      }
+
+      for (const n of existing)
+      {
+        if (!matchedIds.has(n.id))
+        {
+          const idx = this.notes.indexOf(n)
+          if (idx >= 0)
+          {
+            this.notes.splice(idx, 1)
+            n.updatedAt = now
+            this.recycleBin.push(n)
+          }
+        }
+      }
+
+      this._dirtyNotes = true
+      this.saveData()
     },
 
     openContextMenu(e, tab)
@@ -1037,9 +1129,9 @@ export function createNotesModule()
       this.closeAllMenus()
     },
 
-    // Merge imported notes with local store. Matches by id, falls back to (text, category).
-    // Updates only when incoming is strictly newer, or tied timestamps with real content change.
-    // Tied timestamp + identical content = no-op (not counted as an update).
+    // Merge imported notes with local store. Matches by id, falls back to
+    // (text, category). Updates only on strictly-newer timestamp, or tied
+    // timestamps with genuine content change.
     mergeNotes(imported)
     {
       if (!Array.isArray(imported)) return { added: 0, updated: 0, skipped: 0 }

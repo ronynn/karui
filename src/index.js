@@ -7,6 +7,7 @@ import { initCalendar, createCalendarModule } from './calendar.js'
 import { createNotesModule } from './notes.js'
 import { createSettingsModule, applyTheme, applyFont, applyUiScale } from './settings.js'
 import { createQrModule } from './qr.js'
+import { createPomodoroModule } from './pomodoro.js'
 
 // Lazy-load confetti so first paint doesn't wait on it.
 let _confettiPromise = null
@@ -136,6 +137,7 @@ const appStore = reactive(mergeModules(
   createNotesModule(),
   createQrModule(),
   createCalendarModule(),
+  createPomodoroModule(),
   {
     currentScreen: 'home',
     isScrolled: false,
@@ -143,25 +145,22 @@ const appStore = reactive(mergeModules(
     quoteText: '',
     quoteAuthor: '',
 
-    // Calendar display.
     weekStartsMonday: false,
-
-    // UI behaviour toggle.
     removeTransitions: false,
 
     // Full-screen note editor (autosave) state.
     editVisible: false,
     editNoteId: null,
     editDraftText: '',
+    editTabMode: false,
+    editTabName: null,
     _autosaveTimer: null,
     _vvListener: null,
     _editPushedState: false,
     _lastKbPad: null,
 
-    // Debounced side-effect timer (calendar render, sync file, Android bridge).
     _sideEffectTimer: null,
 
-    // Modal state (still used for rename/new tab/PIN/theme import).
     modalVisible: false,
     modalTitle: '',
     modalInput: '',
@@ -245,9 +244,7 @@ const appStore = reactive(mergeModules(
 
       window.addEventListener('click', e => this.handleGlobalClick(e), true)
 
-      // Whenever a text field gains focus, immediately un-hide the header
-      // and mark body as keyboard-open. The latter prevents the small-portrait
-      // header-padding rule from firing while typing.
+      // Un-hide header + flag keyboard-open whenever a text field is focused.
       window.addEventListener('focusin', (e) =>
       {
         const t = e.target
@@ -263,7 +260,6 @@ const appStore = reactive(mergeModules(
         const t = e.target
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
         {
-          // Delay so a quick focus→focus transfer doesn't flicker kb-open off.
           setTimeout(() =>
           {
             const ae = document.activeElement
@@ -291,8 +287,7 @@ const appStore = reactive(mergeModules(
         if (this.editVisible) this.finishEdit()
       })
 
-      // Flush deferred side effects before the tab goes to the background,
-      // so the sync file and Android bridge always receive the latest state.
+      // Flush deferred side effects before backgrounding.
       document.addEventListener('visibilitychange', () =>
       {
         if (document.hidden && this._sideEffectTimer)
@@ -323,15 +318,6 @@ const appStore = reactive(mergeModules(
         window.Android.setCalendarNotificationsEnabled(true)
       }
 
-      // Re-fetch wallpaper colours if the user had DYNAMIC selected last
-// session. Silent so it doesn't nag on every launch.
-if (this.currentTheme === 'dynamic_wallpaper'
-    && window.Android
-    && typeof window.Android.getDynamicWallpaperTheme === 'function')
-{
-  setTimeout(() => this.applyDynamicTheme(true), 100)
-}
-
       if (this.calendarEnabled)
       {
         setTimeout(() =>
@@ -339,6 +325,10 @@ if (this.currentTheme === 'dynamic_wallpaper'
           this.calendarRef = initCalendar(this)
         }, 50)
       }
+
+      // Resume an in-flight pomodoro + recover an unsaved tab edit.
+      this.resumePomodoroIfNeeded()
+      this._recoverTabEditDraft()
 
       // Defensive blur for old WebViews that auto-focus a clickable on load.
       requestAnimationFrame(() => requestAnimationFrame(() =>
@@ -385,21 +375,31 @@ if (this.currentTheme === 'dynamic_wallpaper'
       localStorage.setItem('calendarTabName', this.calendarTabName)
       localStorage.setItem('calendarNotificationsEnabled', this.calendarNotificationsEnabled)
 
-      // Calendar is directly visible to the user — re-render immediately,
-      // not deferred. Everything else (file I/O, Android bridge, measure)
-      // gets batched below.
       if (this.currentScreen === 'calendar' && this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
       {
         this.calendarRef.renderCalendar()
       }
 
       this._scheduleSideEffects()
+
+      // Re-evaluate scroll state after any state change. The removeTransitions
+      // toggle changes padding without firing a scroll event, leaving
+      // isScrolled stale — this catches it.
+      requestAnimationFrame(() =>
+      {
+        const vv = window.visualViewport
+        const kbOpen = vv ? (window.innerHeight - vv.height) > 100 : false
+        if (kbOpen) return
+        const screens = document.querySelectorAll('.screen')
+        const idx = this.currentScreenIdx
+        if (screens[idx])
+        {
+          const scrolled = screens[idx].scrollTop > 10
+          if (this.isScrolled !== scrolled) this.isScrolled = scrolled
+        }
+      })
     },
 
-    // Trailing-debounced expensive work. Typing in the editor previously
-    // fired a calendar render + sync-file write + Android bridge call on
-    // every 400 ms saveData — that's file and IPC I/O on every keystroke
-    // batch. Now it runs once, 1 s after the last change.
     _scheduleSideEffects()
     {
       clearTimeout(this._sideEffectTimer)
@@ -483,8 +483,6 @@ if (this.currentTheme === 'dynamic_wallpaper'
       const screens = document.querySelectorAll('.screen')
       const idx = this.currentScreenIdx
       if (screens[idx]) this.isScrolled = screens[idx].scrollTop > 10
-      // Only re-render the calendar on entry — otherwise it's skipped
-      // in saveData while hidden.
       if (name === 'calendar' && this.calendarRef && typeof this.calendarRef.renderCalendar === 'function')
       {
         this.calendarRef.renderCalendar()
@@ -498,12 +496,17 @@ if (this.currentTheme === 'dynamic_wallpaper'
         const scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
         {
-          const ae = document.activeElement
-          const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')
-          if (typing)
+          // Only suppress header-hide when the keyboard is actually up
+          // (detected via visualViewport), NOT when an input merely retains
+          // focus. The old activeElement check left isScrolled stuck at
+          // false after toggling remove-transitions, because padding changes
+          // never fire a scroll event.
+          const vv = window.visualViewport
+          const kbOpen = vv
+            ? (window.innerHeight - vv.height) > 100
+            : document.body.classList.contains('kb-open')
+          if (kbOpen)
           {
-            // While any text field is focused, the entire header must stay
-            // visible — no title fade, no landscape slide-up. Force-show.
             if (this.isScrolled) this.isScrolled = false
           }
           else
@@ -550,12 +553,15 @@ if (this.currentTheme === 'dynamic_wallpaper'
       if (inp) inp.focus()
     },
 
-    // Open the full-screen editor. Keyboard only pops when keepKeyboard is on.
+    // Open the full-screen single-note editor. Keyboard only pops when
+    // keepKeyboard is on.
     startEdit(note)
     {
       if (!note) return
       this.editNoteId = note.id
       this.editDraftText = note.text
+      this.editTabMode = false
+      this.editTabName = null
       this.editVisible = true
       this._editPushedState = false
       this._updateKeyboardPadding()
@@ -578,9 +584,75 @@ if (this.currentTheme === 'dynamic_wallpaper'
       }
     },
 
+    // Open the full-screen editor with the whole tab as markdown.
+    editTabAsMarkdown()
+    {
+      const tab = this.contextTab
+      if (!tab) return
+      if (this.isTabLocked(tab))
+      {
+        this.showToast('Unlock tab first')
+        this.closeAllMenus()
+        return
+      }
+      this.closeAllMenus()
+      this.editTabName = tab
+      this.editTabMode = true
+      this.editNoteId = null
+      this.editDraftText = this._generateTabMarkdown(tab)
+      this.editVisible = true
+      this._editPushedState = false
+      this._updateKeyboardPadding()
+      this._bindViewportListener()
+      if (!history.state || !history.state.karuiEdit)
+      {
+        history.pushState({ karuiEdit: true }, '')
+        this._editPushedState = true
+      }
+      if (this.keepKeyboard)
+      {
+        nextTick(() =>
+        {
+          const el = document.getElementById('edit-textarea')
+          if (el) el.focus()
+        })
+      }
+    },
+
+    // Recover a tab-edit that was open when the app was killed. Persists
+    // to localStorage on every keystroke (autosave), so nothing is lost.
+    _recoverTabEditDraft()
+    {
+      let draft = null
+      try { draft = JSON.parse(localStorage.getItem('tabEditDraft') || 'null') } catch (e) {}
+      if (!draft || !draft.tab || typeof draft.text !== 'string') return
+      if (!this.noteCategories.includes(draft.tab))
+      {
+        localStorage.removeItem('tabEditDraft')
+        return
+      }
+      this.applyTabMarkdown(draft.tab, draft.text)
+      localStorage.removeItem('tabEditDraft')
+      this.showToast('Recovered unsaved tab edits')
+    },
+
     // Debounced autosave. Store updates immediately; localStorage follows in 400ms.
     autosaveEdit()
     {
+      // Tab-mode: persist draft to localStorage (crash recovery only).
+      // Actual merge happens in finishEdit.
+      if (this.editTabMode)
+      {
+        try
+        {
+          localStorage.setItem('tabEditDraft', JSON.stringify({
+            tab: this.editTabName,
+            text: this.editDraftText,
+          }))
+        }
+        catch (e) {}
+        return
+      }
       if (this.editNoteId == null) return
       const n = this.notes.find(x => x.id === this.editNoteId)
       if (!n) return
@@ -591,7 +663,7 @@ if (this.currentTheme === 'dynamic_wallpaper'
     },
 
     // Compute keyboard height from visualViewport and publish it as --kb-pad.
-    // Skips the write if the value hasn't changed to avoid extra style recalcs.
+    // Skips the write if the value hasn't changed to avoid style recalcs.
     _updateKeyboardPadding()
     {
       if (!this.editVisible) return
@@ -631,21 +703,32 @@ if (this.currentTheme === 'dynamic_wallpaper'
     finishEdit()
     {
       if (!this.editVisible) return
+      const wasTabMode = this.editTabMode
+      const tabName = this.editTabName
+      const draft = this.editDraftText
       const id = this.editNoteId
       const shouldPopHistory = this._editPushedState
         && history.state
         && history.state.karuiEdit
       this._editPushedState = false
+      this.editTabMode = false
+      this.editTabName = null
       this.editVisible = false
       this.editNoteId = null
       clearTimeout(this._autosaveTimer)
       this._unbindViewportListener()
-      if (id != null)
+      try { localStorage.removeItem('tabEditDraft') } catch (e) {}
+
+      if (wasTabMode && tabName)
+      {
+        this.applyTabMarkdown(tabName, draft)
+      }
+      else if (id != null)
       {
         const n = this.notes.find(x => x.id === id)
         if (n)
         {
-          n.text = this.editDraftText
+          n.text = draft
           n.updatedAt = Date.now()
         }
         this.saveData()

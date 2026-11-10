@@ -21,7 +21,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
@@ -64,10 +63,6 @@ public class FloatingWindowService extends Service
   /** Minimum on-screen strip when window is dragged mostly off-screen. */
   private static final int MIN_VISIBLE_DP = 48;
 
-  /** Pull-up distance for the opening animation. */
-  private static final int OPEN_SLIDE_DP = 80;
-  private static final long OPEN_SLIDE_MS = 260L;
-
   private final Handler mHandler = new Handler(Looper.getMainLooper());
 
   private WindowManager mWindowManager;
@@ -82,8 +77,8 @@ public class FloatingWindowService extends Service
   private boolean mPageLoaded = false;
   private boolean mInjecting = false;
 
-  // Last known "good" (in-screen) position. Restored when the user
-  // taps a window that has been dragged mostly off-screen.
+  // Last known in-screen position. Restored when the user taps a
+  // window that has been dragged mostly off-screen.
   private int mPreOffscreenX, mPreOffscreenY;
 
   private final BroadcastReceiver noteReceiver = new BroadcastReceiver()
@@ -143,8 +138,6 @@ public class FloatingWindowService extends Service
     }
     else if (isMostlyOffscreen())
     {
-      // Warm start while the window is off-screen — bring it back into
-      // view so the user actually sees it when they tap the tile again.
       mParams.x = mPreOffscreenX;
       mParams.y = mPreOffscreenY;
       try { mWindowManager.updateViewLayout(mRootView, mParams); } catch (Exception ignored) {}
@@ -241,14 +234,12 @@ public class FloatingWindowService extends Service
     resizeHandle.setLayoutParams(rhParams);
     rootLayout.addView(resizeHandle);
 
-    // FLAG_LAYOUT_NO_LIMITS lets the window be positioned outside the
-    // screen bounds. Without it, MIUI/POCO's WindowManager clamps the
-    // window to stay fully on-screen — that was the "can't go under
-    // the screen on left/right" behaviour. Because our window sits
-    // near the top and never overlaps the navbar, this flag doesn't
-    // cause the resize stutter we saw with the old bottom-anchored
-    // overlay. FLAG_NOT_TOUCH_MODAL lets taps outside the window
-    // reach the app underneath.
+    // FLAG_LAYOUT_NO_LIMITS lets the window be positioned off-screen
+    // (left/right) past the system's default clamp.
+    // FLAG_NOT_TOUCH_MODAL lets taps outside the window reach the app
+    // underneath. No animation is used on the window at any point,
+    // because animating a WindowManager-hosted view's translation
+    // breaks touch dispatch (taps land below the visible UI).
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
               | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
@@ -260,46 +251,22 @@ public class FloatingWindowService extends Service
         flags, PixelFormat.TRANSLUCENT);
 
     mParams.gravity = Gravity.TOP | Gravity.START;
-
-    int targetX = (mScreenWidth - initialW) / 2;
-    int targetY = dp(80);
-    // Start below the final Y so we can slide up. The slide happens
-    // inside the safe area, so nothing crosses the navbar.
-    mParams.x = targetX;
-    mParams.y = targetY + dp(OPEN_SLIDE_DP);
+    mParams.x = (mScreenWidth - initialW) / 2;
+    mParams.y = dp(80);
     mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
 
-    mPreOffscreenX = targetX;
-    mPreOffscreenY = targetY;
+    mPreOffscreenX = mParams.x;
+    mPreOffscreenY = mParams.y;
 
     getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE)
       .edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
 
-    // Tell MainActivity (if alive) to close itself now that we're up.
     Intent opened = new Intent(MainActivity.ACTION_FLOATING_OPENED);
     opened.setPackage(getPackageName());
     sendBroadcast(opened);
-
-    // ── Pull-up opening animation ─────────────────────────────────
-    mRootView.setAlpha(0.9f);
-    mRootView.animate()
-        .y(targetY)
-        .alpha(1f)
-        .setDuration(OPEN_SLIDE_MS)
-        .setInterpolator(new DecelerateInterpolator())
-        .withEndAction(() ->
-        {
-          if (mParams != null && mRootView != null)
-          {
-            mParams.y = targetY;
-            try { mWindowManager.updateViewLayout(mRootView, mParams); }
-            catch (Exception ignored) {}
-          }
-        })
-        .start();
 
     // ── Drag-to-move + tap-to-restore ─────────────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
@@ -319,8 +286,6 @@ public class FloatingWindowService extends Service
             startTouchX = e.getRawX();
             startTouchY = e.getRawY();
             moved = false;
-            // Do NOT auto-restore here. The user may want to push the
-            // window further off-screen with another drag.
             return true;
 
           case MotionEvent.ACTION_MOVE:
@@ -344,7 +309,6 @@ public class FloatingWindowService extends Service
           case MotionEvent.ACTION_CANCEL:
             if (!moved && isMostlyOffscreen())
             {
-              // Tap on the visible strip → restore.
               mParams.x = mPreOffscreenX;
               mParams.y = mPreOffscreenY;
               try { mWindowManager.updateViewLayout(mRootView, mParams); }

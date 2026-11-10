@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.view.HapticFeedbackConstants;
 import android.webkit.JavascriptInterface;
 import android.widget.Toast;
 
@@ -148,6 +149,21 @@ public class WebAppInterface
     a.startActivityForResult(intent, MainActivity.IMPORT_FILE_REQUEST_CODE);
   }
 
+  // ── Haptics ─────────────────────────────────────────────────────
+
+  // Uses the exact same system haptic pathway as long-press feedback.
+  // Respects the user's global haptics setting — if they disabled haptics
+  // in the OS, this no-ops silently (correct behaviour).
+  @JavascriptInterface
+  public void haptic()
+  {
+    MainActivity a = act();
+    if (a == null) return;
+    a.runOnUiThread(() ->
+      a.getWindow().getDecorView()
+       .performHapticFeedback(HapticFeedbackConstants.LONG_PRESS));
+  }
+
   // ── Notifications ───────────────────────────────────────────────
 
   @JavascriptInterface
@@ -249,12 +265,61 @@ public class WebAppInterface
   }
 
   @JavascriptInterface
-public String getDynamicWallpaperTheme()
-{
-  MainActivity a = act();
-  if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
-  return DynamicTheme.getWallpaperTheme(a);
-}
+  public String getDynamicWallpaperTheme()
+  {
+    MainActivity a = act();
+    if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
+    return DynamicTheme.getWallpaperTheme(a);
+  }
+
+  // ── Pomodoro ────────────────────────────────────────────────────
+
+  @JavascriptInterface
+  public void schedulePomodoro(long endTimeMs)
+  {
+    MainActivity a = act();
+    if (a == null) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+          != PackageManager.PERMISSION_GRANTED)
+    {
+      // No notification permission → silently skip; JS toast handles UX.
+      return;
+    }
+    CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
+  }
+
+  @JavascriptInterface
+  public void cancelPomodoro()
+  {
+    MainActivity a = act();
+    if (a == null) return;
+    CalendarNotificationReceiver.cancelPomodoro(a);
+  }
+
+  @JavascriptInterface
+  public void notifyPomodoroDone()
+  {
+    MainActivity a = act();
+    if (a == null) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+          != PackageManager.PERMISSION_GRANTED)
+    {
+      return;
+    }
+    CalendarNotificationReceiver.notifyPomodoroDone(a);
+  }
+
+  @JavascriptInterface
+  public boolean isPomodoroRunning()
+  {
+    MainActivity a = act();
+    if (a == null) return false;
+    return CalendarNotificationReceiver.isPomodoroRunning(a);
+  }
 
   // ── Calendar bridge ─────────────────────────────────────────────
 

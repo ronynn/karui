@@ -1,5 +1,6 @@
 package io.github.ronynn.karui;
 
+import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -24,29 +25,46 @@ import java.util.Locale;
 
 public class CalendarNotificationReceiver extends BroadcastReceiver
 {
-  public static final String CHANNEL_ID          = "calendar_events_channel";
-  public static final int    NOTIFICATION_ID     = 100;
+  // ── Calendar ─────────────────────────────────────────────────────
+  public static final String CHANNEL_ID             = "calendar_events_channel";
+  public static final int    NOTIFICATION_ID        = 100;
   public static final int    EVENT_NOTIFICATION_BASE = 1000;
-  public static final String PREFS               = "calendar_prefs";
-  public static final String KEY_EVENTS_JSON     = "events_json";
-  public static final String KEY_ENABLED         = "calendar_notifications_enabled";
-  public static final String KEY_LAST_NOTIFIED   = "last_notified_date";
-  public static final String KEY_SCHEDULED_IDS   = "scheduled_event_ids";
-  public static final int    ALARM_REQUEST_ID    = 200;
-
-  public static final String EXTRA_EVENT_ID      = "event_id";
-
-  public static final String ACTION_REFRESH = "io.github.ronynn.karui.REFRESH_CALENDAR";
+  public static final String PREFS                  = "calendar_prefs";
+  public static final String KEY_EVENTS_JSON        = "events_json";
+  public static final String KEY_ENABLED            = "calendar_notifications_enabled";
+  public static final String KEY_LAST_NOTIFIED      = "last_notified_date";
+  public static final String KEY_SCHEDULED_IDS      = "scheduled_event_ids";
+  public static final int    ALARM_REQUEST_ID       = 200;
+  public static final String EXTRA_EVENT_ID         = "event_id";
+  public static final String ACTION_REFRESH         = "io.github.ronynn.karui.REFRESH_CALENDAR";
 
   private static final long REMINDER_LEAD_MS = 5 * 60 * 1000L;
+
+  // ── Pomodoro ─────────────────────────────────────────────────────
+  // Countdown notification uses setUsesChronometer + setChronometerCountDown
+  // so the OS ticks the display every second — no JS or service loop needed.
+  public static final String ACTION_POMODORO_DONE   = "io.github.ronynn.karui.POMODORO_DONE";
+  public static final String ACTION_POMODORO_CANCEL = "io.github.ronynn.karui.POMODORO_CANCEL";
+  public static final int    POMODORO_NOTIFICATION_ID = 999;
+  public static final int    POMODORO_ALARM_ID        = 500;
+  public static final int    POMODORO_STOP_REQ_ID     = 501;
+  public static final String PREFS_POMODORO         = "pomodoro_prefs";
+  public static final String KEY_POMODORO_END       = "pomodoro_end";
+  public static final String KEY_POMODORO_RUNNING   = "pomodoro_running";
 
   @Override
   public void onReceive(Context context, Intent intent)
   {
+    String action = intent != null ? intent.getAction() : null;
+
+    // Pomodoro routes take precedence — they don't gate on calendar prefs.
+    if (ACTION_POMODORO_DONE.equals(action))   { handlePomodoroDone(context);   return; }
+    if (ACTION_POMODORO_CANCEL.equals(action)) { handlePomodoroCancel(context); return; }
+
+    // Calendar path (unchanged from before).
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     if (!prefs.getBoolean(KEY_ENABLED, false)) return;
 
-    String action = intent != null ? intent.getAction() : null;
     boolean isRefresh = ACTION_REFRESH.equals(action);
     int eventId = intent != null ? intent.getIntExtra(EXTRA_EVENT_ID, -1) : -1;
 
@@ -67,9 +85,171 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     }
   }
 
-  // ------------------------------------------------------------------
-  //  Daily summary — UNTIMED events only
-  // ------------------------------------------------------------------
+  // ══════════════════════════════════════════════════════════════════
+  //  POMODORO
+  // ══════════════════════════════════════════════════════════════════
+
+  /** Called from WebAppInterface when the user starts a timer in-app. */
+  public static void schedulePomodoro(Context context, long endTimeMs)
+  {
+    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
+    p.edit()
+      .putLong(KEY_POMODORO_END, endTimeMs)
+      .putBoolean(KEY_POMODORO_RUNNING, true)
+      .apply();
+
+    showPomodoroCountdown(context, endTimeMs);
+
+    AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+    if (am == null) return;
+    Intent i = new Intent(context, CalendarNotificationReceiver.class);
+    i.setAction(ACTION_POMODORO_DONE);
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+    PendingIntent pi = PendingIntent.getBroadcast(context, POMODORO_ALARM_ID, i, flags);
+    setExactCompat(am, endTimeMs, pi);
+  }
+
+  /** Called when the user taps Stop in-app or in the notification action. */
+  public static void cancelPomodoro(Context context)
+  {
+    cancelPomodoroAlarm(context);
+
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm != null) nm.cancel(POMODORO_NOTIFICATION_ID);
+
+    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
+    p.edit()
+      .putBoolean(KEY_POMODORO_RUNNING, false)
+      .remove(KEY_POMODORO_END)
+      .apply();
+  }
+
+  /** Called when the JS timer hits zero while the app is foregrounded. */
+  public static void notifyPomodoroDone(Context context)
+  {
+    handlePomodoroDone(context);
+  }
+
+  /** JS asks "is a pomodoro still live?" when resuming the app. */
+  public static boolean isPomodoroRunning(Context context)
+  {
+    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
+    if (!p.getBoolean(KEY_POMODORO_RUNNING, false)) return false;
+    return p.getLong(KEY_POMODORO_END, 0) > System.currentTimeMillis();
+  }
+
+  private static void handlePomodoroCancel(Context context)
+  {
+    cancelPomodoro(context);
+  }
+
+  private static void handlePomodoroDone(Context context)
+  {
+    cancelPomodoroAlarm(context);
+
+    SharedPreferences p = context.getSharedPreferences(PREFS_POMODORO, Context.MODE_PRIVATE);
+    p.edit()
+      .putBoolean(KEY_POMODORO_RUNNING, false)
+      .remove(KEY_POMODORO_END)
+      .apply();
+
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm == null) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+    {
+      NotificationChannel ch = nm.getNotificationChannel(CHANNEL_ID);
+      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
+    }
+
+    // Replaces the countdown notification (same ID).
+    Notification.Builder b = buildBaseBuilder(context);
+    b.setContentTitle("Pomodoro complete")
+     .setContentText("Time is up — tap to open Karui")
+     .setContentIntent(openAppIntent(context))
+     .setAutoCancel(true)
+     .setOngoing(false)
+     .setOnlyAlertOnce(false);
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
+    {
+      b.setPriority(Notification.PRIORITY_HIGH);
+      b.setDefaults(Notification.DEFAULT_ALL);
+    }
+
+    nm.notify(POMODORO_NOTIFICATION_ID, b.build());
+  }
+
+  private static void showPomodoroCountdown(Context context, long endTimeMs)
+  {
+    NotificationManager nm =
+        (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm == null) return;
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+    {
+      NotificationChannel ch = nm.getNotificationChannel(CHANNEL_ID);
+      if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) return;
+    }
+
+    Notification.Builder b = buildBaseBuilder(context);
+    b.setContentTitle("Pomodoro")
+     .setContentText("Focus in progress")
+     .setWhen(endTimeMs)
+     .setUsesChronometer(true)
+     .setOngoing(true)
+     .setOnlyAlertOnce(true)
+     .setContentIntent(openAppIntent(context))
+     .setCategory(Notification.CATEGORY_PROGRESS);
+
+    // API 24+ shows a live countdown; older shows the target time.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+    {
+      b.setChronometerCountDown(true);
+    }
+
+    // Stop action.
+    Intent stopIntent = new Intent(context, CalendarNotificationReceiver.class);
+    stopIntent.setAction(ACTION_POMODORO_CANCEL);
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+    PendingIntent stopPi = PendingIntent.getBroadcast(context, POMODORO_STOP_REQ_ID, stopIntent, flags);
+
+    Notification.Action.Builder ab;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+    {
+      ab = new Notification.Action.Builder(
+          Icon.createWithResource(context, R.drawable.ic_note), "Stop", stopPi);
+    }
+    else
+    {
+      ab = new Notification.Action.Builder(0, "Stop", stopPi);
+    }
+    b.addAction(ab.build());
+
+    nm.notify(POMODORO_NOTIFICATION_ID, b.build());
+  }
+
+  private static void cancelPomodoroAlarm(Context context)
+  {
+    AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+    if (am == null) return;
+    Intent i = new Intent(context, CalendarNotificationReceiver.class);
+    i.setAction(ACTION_POMODORO_DONE);
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+    PendingIntent pi = PendingIntent.getBroadcast(context, POMODORO_ALARM_ID, i, flags);
+    am.cancel(pi);
+    pi.cancel();
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  CALENDAR (unchanged)
+  // ══════════════════════════════════════════════════════════════════
+
   private void showTodaysEvents(Context context, SharedPreferences prefs, boolean silent)
   {
     NotificationManager manager =
@@ -100,7 +280,7 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         if (o.optBoolean("completed", false)) continue;
 
         String time = o.optString("time", "");
-        if (!time.isEmpty()) continue;   // timed events have their own alarm
+        if (!time.isEmpty()) continue;
 
         String text = o.optString("text", "").trim();
         if (text.isEmpty()) continue;
@@ -166,9 +346,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     }
   }
 
-  // ------------------------------------------------------------------
-  //  Per-event time reminder — persists until the event is marked done
-  // ------------------------------------------------------------------
   private static void showEventNotification(Context context, int eventId)
   {
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -262,9 +439,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
     return PendingIntent.getActivity(context, 0, openApp, piFlags);
   }
 
-  // ------------------------------------------------------------------
-  //  Scheduling
-  // ------------------------------------------------------------------
   public static void scheduleNext(Context context)
   {
     AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -361,8 +535,6 @@ public class CalendarNotificationReceiver extends BroadcastReceiver
         target.set(Calendar.SECOND, 0);
         target.set(Calendar.MILLISECOND, 0);
 
-        // Past-due: fire right now so the reminder is visible, and keep it
-        // there until the user marks the event done.
         if (target.getTimeInMillis() <= now)
         {
           showEventNotification(context, o.optInt("id", 0));

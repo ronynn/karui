@@ -92,6 +92,20 @@
           <span class="box-title" id="calendar-title" style="cursor: pointer;">Box 7: Calendar</span>
           <div id="calendar-container"></div>
         </div>
+        <div class="box">
+          <span class="box-title">Box 8: Pomodoro</span>
+          <div style="text-align: center; padding: 12px 0;">
+            <div style="font-size: calc(52px * var(--ui-scale)); font-family: monospace; font-weight: bold; color: var(--accent); letter-spacing: 3px; line-height: 1;">
+              {{ pomodoroDisplay }}
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
+              <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(25)">25m</button>
+              <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(5)">5m</button>
+              <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(15)">15m</button>
+              <button v-if="pomodoroRunning" style="flex:1;" @click="stopPomodoro">Stop</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="screen" id="settings-screen" @scroll="handleScroll">
@@ -102,9 +116,9 @@
             <button v-for="t in themes" :key="t.key" class="theme-btn" :class="{ active: currentTheme === t.key }" @click="setTheme(t.key)">
               {{ t.label }}
             </button>
-            <button class="theme-btn"
+            <button class="theme-btn"          :class="{ active: currentTheme === 'dynamic_wallpaper' }" 
               @click="applyDynamicTheme()"
-              title="Pick a theme from your wallpaper">
+              title="Pick colors from your wallpaper">
               DYNAMIC
             </button>
             <button v-for="ct in customThemes" :key="ct.key" class="theme-btn" :class="{ active: currentTheme === ct.key }" @click="setTheme(ct.key)">
@@ -213,6 +227,7 @@
                 <span class="slider"></span>
               </label>
             </div>
+
             <div class="toggle-container">
               <span>Remove transitions</span>
               <label class="switch">
@@ -347,6 +362,7 @@
         <button @click="deleteTabClick">Delete</button>
         <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
         <button v-if="mergeableCount > 0" @click="mergeTabNotes">Merge</button>
+        <button @click="editTabAsMarkdown">TextView</button>
         <button @click="showTabQr">Show QR</button>
         <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>
 
