@@ -881,101 +881,141 @@ export function createNotesModule()
     // can silently fail if the reactive proxy doesn't see the removal), we
     // construct a fresh array: `otherTabs + keptNotes`. Anything not in
     // `keptNotes` for this tab is guaranteed to be gone.
-    applyTabMarkdown(tab, mdText)
+applyTabMarkdown(tab, mdText)
+{
+  const parsed = this._parseTabMarkdown(mdText)
+  const now = Date.now()
+  const existing = this.notes.filter(n => n.category === tab)
+
+  // Maps keyed by String(id) — protects against any note whose id ended up
+  // as a string (older imports, JSON round-trips, etc.).
+  const existingById = new Map()
+  const existingByText = new Map()
+  for (const n of existing)
+  {
+    existingById.set(String(n.id), n)
+    const key = (n.text || '').trim()
+    if (!existingByText.has(key)) existingByText.set(key, [])
+    existingByText.get(key).push(n)
+  }
+
+  const keptNotes = []
+  const usedIds = new Set()
+  let idSeed = 0
+
+  const mintId = () =>
+  {
+    let id = now + (++idSeed)
+    while (usedIds.has(String(id)) || this.notes.some(n => String(n.id) === String(id)))
+      id = now + (++idSeed)
+    return id
+  }
+
+  for (const p of parsed)
+  {
+    // 1) ID match
+    if (p.id !== null)
     {
-      const parsed = this._parseTabMarkdown(mdText)
-      const now = Date.now()
-      const existing = this.notes.filter(n => n.category === tab)
-      const existingById = new Map(existing.map(n => [n.id, n]))
-      const existingByText = new Map()
-      for (const n of existing)
+      const idKey = String(p.id)
+      const match = existingById.get(idKey)
+      if (match && !usedIds.has(idKey))
       {
-        const key = (n.text || '').trim()
-        if (!existingByText.has(key)) existingByText.set(key, [])
-        existingByText.get(key).push(n)
+        match.text = p.text
+        match.completed = p.completed
+        match.updatedAt = now
+        keptNotes.push(match)
+        usedIds.add(idKey)
+        continue
       }
+    }
 
-      const keepIds = new Set()
-      const keptNotes = []
-      let idSeed = 0
-
-      const mintId = () =>
+    // 2) Text match against existing (bucket shrinks as matches are used)
+    const bucket = existingByText.get(p.text)
+    if (bucket)
+    {
+      let found = null
+      for (let i = 0; i < bucket.length; i++)
       {
-        let id = now + (++idSeed)
-        while (this.notes.some(n => n.id === id) || keepIds.has(id)) id = now + (++idSeed)
-        return id
-      }
-
-      for (const p of parsed)
-      {
-        if (p.id !== null && !isNaN(p.id))
+        const candidate = bucket[i]
+        if (!usedIds.has(String(candidate.id)))
         {
-          const match = existingById.get(p.id)
-          if (match && !keepIds.has(match.id))
-          {
-            match.text = p.text
-            match.completed = p.completed
-            match.updatedAt = now
-            keepIds.add(match.id)
-            keptNotes.push(match)
-            continue
-          }
-          let newId = p.id
-          if (this.notes.some(n => n.id === newId) || keepIds.has(newId)) newId = mintId()
-          keptNotes.push({
-            id: newId, text: p.text, completed: p.completed,
-            category: tab, pinned: false, updatedAt: now
-          })
-          keepIds.add(newId)
-          continue
+          found = candidate
+          bucket.splice(i, 1)
+          break
         }
-
-        const bucket = existingByText.get(p.text)
-        const textMatch = bucket && bucket.length > 0 ? bucket.shift() : null
-        if (textMatch && !keepIds.has(textMatch.id))
-        {
-          textMatch.completed = p.completed
-          textMatch.updatedAt = now
-          keepIds.add(textMatch.id)
-          keptNotes.push(textMatch)
-          continue
-        }
-
-        const newId = mintId()
-        keptNotes.push({
-          id: newId, text: p.text, completed: p.completed,
-          category: tab, pinned: false, updatedAt: now
-        })
-        keepIds.add(newId)
       }
-
-      const doomed = existing.filter(n => !keepIds.has(n.id))
-      for (const n of doomed)
+      if (found)
       {
-        n.updatedAt = now
-        this.recycleBin.push(n)
+        found.completed = p.completed
+        found.updatedAt = now
+        keptNotes.push(found)
+        usedIds.add(String(found.id))
+        continue
       }
+    }
 
-      const otherTabs = this.notes.filter(n => n.category !== tab)
-      this.notes = otherTabs.concat(keptNotes)
+    // 3) New note
+    const newId = mintId()
+    keptNotes.push({
+      id: newId, text: p.text, completed: p.completed,
+      category: tab, pinned: false, updatedAt: now
+    })
+    usedIds.add(String(newId))
+  }
 
-      if (typeof console !== 'undefined')
-      {
-        console.log('[applyTabMarkdown]', {
-          tab,
-          parsed: parsed.length,
-          existing: existing.length,
-          kept: keptNotes.length,
-          doomed: doomed.length,
-          doomedIds: doomed.map(n => n.id),
-          finalNoteCount: this.notes.length,
-          finalRecycleCount: this.recycleBin.length
-        })
-      }
+  // Delete unmatched
+  const doomed = []
+  for (const n of existing)
+  {
+    if (!usedIds.has(String(n.id)))
+    {
+      n.updatedAt = now
+      doomed.push(n)
+      this.recycleBin.push(n)
+    }
+  }
 
-      this._dirtyNotes = true
-      this.saveData()
-    },
+  // Rebuild the notes array
+  const otherTabs = this.notes.filter(n => n.category !== tab)
+  this.notes = otherTabs.concat(keptNotes)
+
+  // Diagnostic — check Console in chrome://inspect to debug
+  if (typeof console !== 'undefined')
+  {
+    console.log('[applyTabMarkdown]', {
+      tab,
+      draftLength: (mdText || '').length,
+      parsedCount: parsed.length,
+      parsedIds: parsed.map(p => p.id),
+      existingCount: existing.length,
+      keptCount: keptNotes.length,
+      doomedCount: doomed.length,
+      doomedIds: doomed.map(n => n.id),
+      finalNotesInTab: this.notes.filter(n => n.category === tab).length,
+      finalRecycleCount: this.recycleBin.length,
+    })
+  }
+
+  this._dirtyNotes = true
+  this.saveData()
+},
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
     openContextMenu(e, tab)
     {

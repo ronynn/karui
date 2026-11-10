@@ -401,8 +401,6 @@ const appStore = reactive(mergeModules(
       }, 400)
     },
 
-    // Synchronous flush. Call after any discrete action (tab edit save,
-    // note edit save) so the sync file never lags behind user intent.
     _flushSideEffectsNow()
     {
       if (this._sideEffectTimer)
@@ -575,6 +573,7 @@ const appStore = reactive(mergeModules(
           el.focus()
           const len = el.value.length
           try { el.selectionStart = el.selectionEnd = len } catch (_) {}
+          requestAnimationFrame(() => this._scrollEditorToCursor())
         })
       }
     },
@@ -608,7 +607,9 @@ const appStore = reactive(mergeModules(
         nextTick(() =>
         {
           const el = document.getElementById('edit-textarea')
-          if (el) el.focus()
+          if (!el) return
+          el.focus()
+          requestAnimationFrame(() => this._scrollEditorToCursor())
         })
       }
     },
@@ -630,6 +631,12 @@ const appStore = reactive(mergeModules(
 
     autosaveEdit()
     {
+      // Re-anchor the cursor after any content change so it never ends up
+      // below the visible area.
+      if (this.editTabMode || this.editNoteId != null)
+      {
+        requestAnimationFrame(() => this._scrollEditorToCursor())
+      }
       if (this.editTabMode)
       {
         try
@@ -662,6 +669,42 @@ const appStore = reactive(mergeModules(
       {
         this._lastKbPad = padStr
         document.documentElement.style.setProperty('--kb-pad', padStr)
+        // Layout shifted — re-scroll after it settles.
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          this._scrollEditorToCursor()
+        ))
+      }
+    },
+
+    // Force the textarea to scroll so the cursor line is well above the
+    // keyboard / bottom edge. Browsers usually handle this, but with a
+    // heavy padding-bottom the natural scroll can stop short of the safe
+    // zone. Called on every input and on keyboard-height changes.
+    _scrollEditorToCursor()
+    {
+      const el = document.getElementById('edit-textarea')
+      if (!el) return
+      const pos = el.selectionStart
+      if (pos === null || pos === undefined) return
+
+      // Estimate cursor Y within the scrollable content.
+      const before = el.value.slice(0, pos)
+      const lineCount = before.split('\n').length
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24
+      const cursorY = lineCount * lineHeight
+
+      const viewH = el.clientHeight
+      const topSafe = 2 * lineHeight
+      const bottomSafe = viewH - 4 * lineHeight
+      const relativeY = cursorY - el.scrollTop
+
+      if (relativeY < topSafe)
+      {
+        el.scrollTop = Math.max(0, cursorY - topSafe)
+      }
+      else if (relativeY > bottomSafe)
+      {
+        el.scrollTop = cursorY - bottomSafe
       }
     },
 
@@ -689,6 +732,13 @@ const appStore = reactive(mergeModules(
     finishEdit()
     {
       if (!this.editVisible) return
+
+      // Read the textarea directly. v-model + @input order isn't guaranteed
+      // in petite-vue, so this catches any case where editDraftText is one
+      // edit behind what the user actually typed.
+      const el = document.getElementById('edit-textarea')
+      if (el && typeof el.value === 'string') this.editDraftText = el.value
+
       const wasTabMode = this.editTabMode
       const tabName = this.editTabName
       const draft = this.editDraftText
