@@ -22,8 +22,6 @@ import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.annotation.Nullable;
-
 import java.util.Locale;
 
 public class PomodoroFloatingService extends Service
@@ -60,7 +58,6 @@ public class PomodoroFloatingService extends Service
     }
   };
 
-  @Nullable
   @Override
   public IBinder onBind(Intent intent) { return null; }
 
@@ -87,9 +84,10 @@ public class PomodoroFloatingService extends Service
     // No overlay permission → fall back to notification countdown, bail.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this))
     {
-      CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs);
-      // Still schedule the alarm for done.
-      CalendarNotificationReceiver.schedulePomodoroAlarm(this, endTimeMs);
+      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
+      catch (Throwable ignored) {}
+      try { CalendarNotificationReceiver.schedulePomodoroAlarm(this, endTimeMs); }
+      catch (Throwable ignored) {}
       stopSelf();
       return START_NOT_STICKY;
     }
@@ -106,8 +104,6 @@ public class PomodoroFloatingService extends Service
     removeOverlay();
     super.onDestroy();
   }
-
-  // ── Foreground (survives backgrounding) ──────────────────────────
 
   private void ensureForeground()
   {
@@ -146,21 +142,26 @@ public class PomodoroFloatingService extends Service
       {
         startForeground(FG_NOTIFICATION_ID, b.build());
       }
+      android.util.Log.i("KaruiPomodoro", "startForeground OK");
     }
-    catch (Exception ignored)
+    catch (Throwable t)
     {
-      // Some OEMs refuse foreground without notification permission.
-      // Service still runs while app is open — better than crashing.
+      android.util.Log.e("KaruiPomodoro",
+          "startForeground FAILED: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
+      catch (Throwable ignored) {}
     }
   }
-
-  // ── Overlay window ──────────────────────────────────────────────
 
   private void ensureOverlay()
   {
     if (timerView != null) return;
     wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-    if (wm == null) { stopSelf(); return; }
+    if (wm == null)
+    {
+      android.util.Log.e("KaruiPomodoro", "WindowManager null");
+      return;
+    }
 
     timerView = buildTimerView();
 
@@ -182,8 +183,19 @@ public class PomodoroFloatingService extends Service
 
     setupDrag(timerView);
 
-    try { wm.addView(timerView, lp); }
-    catch (Exception e) { stopSelf(); }
+    try
+    {
+      wm.addView(timerView, lp);
+      android.util.Log.i("KaruiPomodoro", "addView OK");
+    }
+    catch (Throwable t)
+    {
+      android.util.Log.e("KaruiPomodoro",
+          "addView FAILED: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+      timerView = null;
+      try { CalendarNotificationReceiver.showPomodoroCountdownPublic(this, endTimeMs); }
+      catch (Throwable ignored) {}
+    }
   }
 
   private View buildTimerView()
@@ -197,7 +209,7 @@ public class PomodoroFloatingService extends Service
     root.setPadding(padH, padV, padH, padV);
 
     GradientDrawable bg = new GradientDrawable();
-    bg.setColor(0xCC1D1D1D);                    // ~80% opaque dark
+    bg.setColor(0xCC1D1D1D);
     bg.setCornerRadius(dp(8));
     bg.setStroke(dp(1), 0xFF8B8B8B);
     root.setBackground(bg);
@@ -263,8 +275,6 @@ public class PomodoroFloatingService extends Service
     });
   }
 
-  // ── Timer loop ──────────────────────────────────────────────────
-
   private void startTicking()
   {
     handler.removeCallbacksAndMessages(null);
@@ -285,12 +295,9 @@ public class PomodoroFloatingService extends Service
   {
     if (finished) return;
     finished = true;
-    // Post done notification, cancel alarm (idempotent — safe to run twice).
     CalendarNotificationReceiver.notifyPomodoroDone(this);
     stopSelf();
   }
-
-  // ── Teardown ────────────────────────────────────────────────────
 
   private void stopEverything(boolean fromUser)
   {

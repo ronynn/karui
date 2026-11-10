@@ -245,9 +245,6 @@ public class WebAppInterface
 
   // ── Pomodoro ────────────────────────────────────────────────────
 
-  /** Start a pomodoro. Shows the small floating timer if overlay permission
-   *  is granted, otherwise falls back to the notification countdown.
-   *  A completion notification fires in both cases at `endTimeMs`. */
   @JavascriptInterface
   public void startPomodoroTimer(long endTimeMs)
   {
@@ -271,7 +268,6 @@ public class WebAppInterface
       }
       catch (Exception e)
       {
-        // Fall back to notification countdown if FGS start is rejected.
         CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
       }
     }
@@ -280,7 +276,6 @@ public class WebAppInterface
       CalendarNotificationReceiver.schedulePomodoro(a, endTimeMs);
     }
 
-    // Completion alarm — fires "Pomodoro complete" notification at endTimeMs.
     CalendarNotificationReceiver.schedulePomodoroAlarm(a, endTimeMs);
   }
 
@@ -299,7 +294,7 @@ public class WebAppInterface
     CalendarNotificationReceiver.cancelPomodoro(a);
   }
 
-  // Legacy methods — kept so older JS still works.
+  // Legacy aliases — kept so older JS still works.
   @JavascriptInterface
   public void schedulePomodoro(long endTimeMs) { startPomodoroTimer(endTimeMs); }
 
@@ -320,6 +315,41 @@ public class WebAppInterface
     MainActivity a = act();
     if (a == null) return false;
     return CalendarNotificationReceiver.isPomodoroRunning(a);
+  }
+
+  // Quick diagnostic for the JS console:
+  //   JSON.parse(window.Android.diagnosePomodoro())
+  @JavascriptInterface
+  public String diagnosePomodoro()
+  {
+    MainActivity a = act();
+    if (a == null) return "{\"error\":\"no_activity\"}";
+
+    boolean overlay = (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
+      || Settings.canDrawOverlays(a);
+
+    boolean notif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+      || a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+         == PackageManager.PERMISSION_GRANTED;
+
+    NotificationManager nm = (NotificationManager) a.getSystemService(Context.NOTIFICATION_SERVICE);
+    String channel = "none";
+    if (nm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+    {
+      NotificationChannel ch = nm.getNotificationChannel(
+          CalendarNotificationReceiver.POMODORO_CHANNEL_ID);
+      channel = ch == null ? "missing" : ("importance=" + ch.getImportance());
+    }
+
+    AlarmManager am = (AlarmManager) a.getSystemService(Context.ALARM_SERVICE);
+    boolean exactAlarm = true;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && am != null)
+      exactAlarm = am.canScheduleExactAlarms();
+
+    return "{\"overlay\":" + overlay
+         + ",\"notif\":" + notif
+         + ",\"channel\":\"" + channel + "\""
+         + ",\"exactAlarm\":" + exactAlarm + "}";
   }
 
   // ── Calendar bridge ─────────────────────────────────────────────
@@ -393,7 +423,7 @@ public class WebAppInterface
         {
           a.requestPermissions(
             new String[]{Manifest.permission.POST_NOTIFICATIONS},
-            MainActivity.NOTIFICATION_REQUEST_CODE);
+            MainActivity.NOTIFICATION_PERMISSION_REQUEST);
         }
         if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
         {
