@@ -5,29 +5,26 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.provider.Settings;
 import android.util.Size;
 import android.view.Gravity;
 import android.view.Surface;
@@ -40,7 +37,9 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.zxing.BarcodeFormat;
 import com.google.zxing.BinaryBitmap;
+import com.google.zxing.DecodeHintType;
 import com.google.zxing.LuminanceSource;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.PlanarYUVLuminanceSource;
@@ -138,18 +137,14 @@ public class ScannerActivity extends Activity
     root.addView(overlay, new FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    // Scan frame
+    // Scan frame — plain rounded-rectangle stroke, no external drawable
     View frame = new View(this);
     GradientDrawable border = new GradientDrawable();
+    border.setShape(GradientDrawable.RECTANGLE);
     border.setColor(Color.TRANSPARENT);
-    border.setStroke(2, 0xFFFABD2F);
+    border.setStroke(2, 0xFFFABD2F);  // 2px gold stroke
     border.setCornerRadius(dp(14));
     frame.setBackground(border);
-
-    
-    
-    
-    
     FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(dp(260), dp(260), Gravity.CENTER);
     overlay.addView(frame, fp);
 
@@ -195,6 +190,7 @@ public class ScannerActivity extends Activity
     closeBtn.setTextSize(20);
     closeBtn.setBackgroundColor(0xCC3C3836);
     closeBtn.setTextColor(0xFFEBDBB2);
+    closeBtn.setPadding(0, 0, 0, 0);
     FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(dp(48), dp(48));
     cp.gravity = Gravity.TOP | Gravity.END;
     cp.rightMargin = dp(16);
@@ -246,14 +242,17 @@ public class ScannerActivity extends Activity
     return (int) (v * getResources().getDisplayMetrics().density);
   }
 
-  // ── Camera2 pipeline ─────────────────────────────────────────────
-
   private void startBackgroundThread()
   {
     mBackgroundThread = new HandlerThread("CameraBackground");
     mBackgroundThread.start();
     mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
+
+    // QR-only decoding — skips trying to detect other barcode formats.
     mReader = new MultiFormatReader();
+    mReader.setHints(Collections.singletonMap(
+        DecodeHintType.POSSIBLE_FORMATS,
+        Collections.singletonList(BarcodeFormat.QR_CODE)));
   }
 
   private void openCamera()
@@ -275,16 +274,23 @@ public class ScannerActivity extends Activity
             Size[] sizes = map.getOutputSizes(ImageFormat.YUV_420_888);
             if (sizes != null && sizes.length > 0)
             {
-              Arrays.sort(sizes, (a, b) -> Long.compare((long) b.getWidth() * b.getHeight(),
-                                                       (long) a.getWidth() * a.getHeight()));
-              mPreviewSize = sizes[0]; // largest available
+              Arrays.sort(sizes, (a, b) -> Long.compare(
+                  (long) b.getWidth() * b.getHeight(),
+                  (long) a.getWidth() * a.getHeight()));
+              mPreviewSize = sizes[0];
             }
           }
           break;
         }
       }
-      if (mCameraId == null) { Toast.makeText(this, "No back camera", Toast.LENGTH_LONG).show(); finish(); return; }
-      if (mPreviewSize == null) { mPreviewSize = new Size(1280, 720); }
+      if (mCameraId == null)
+      {
+        Toast.makeText(this, "No back camera", Toast.LENGTH_LONG).show();
+        finish();
+        return;
+      }
+      if (mPreviewSize == null) mPreviewSize = new Size(1280, 720);
+      if (!mFlashAvailable) mTorchBtn.setVisibility(View.GONE);
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
           && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
@@ -293,7 +299,7 @@ public class ScannerActivity extends Activity
       }
       manager.openCamera(mCameraId, mCameraStateCallback, mBackgroundHandler);
     }
-    catch (Exception e)
+    catch (CameraAccessException e)
     {
       Toast.makeText(this, "Camera error: " + e.getMessage(), Toast.LENGTH_LONG).show();
       finish();
@@ -307,8 +313,17 @@ public class ScannerActivity extends Activity
       mCameraDevice = camera;
       createCameraSession();
     }
-    @Override public void onDisconnected(CameraDevice camera) { camera.close(); mCameraDevice = null; }
-    @Override public void onError(CameraDevice camera, int error) { camera.close(); mCameraDevice = null; finish(); }
+    @Override public void onDisconnected(CameraDevice camera)
+    {
+      camera.close();
+      mCameraDevice = null;
+    }
+    @Override public void onError(CameraDevice camera, int error)
+    {
+      camera.close();
+      mCameraDevice = null;
+      finish();
+    }
   };
 
   private void createCameraSession()
@@ -355,11 +370,20 @@ public class ScannerActivity extends Activity
 
   private void processImage(ImageReader reader)
   {
-    if (!mScanning) { reader.acquireLatestImage().close(); return; }
-    if (!mProcessingFrame.compareAndSet(false, true)) { reader.acquireLatestImage().close(); return; }
-
     Image image = reader.acquireLatestImage();
-    if (image == null) { mProcessingFrame.set(false); return; }
+    if (image == null) return;
+
+    if (!mScanning)
+    {
+      image.close();
+      return;
+    }
+
+    if (!mProcessingFrame.compareAndSet(false, true))
+    {
+      image.close();
+      return;
+    }
 
     try
     {
@@ -401,7 +425,7 @@ public class ScannerActivity extends Activity
 
   private void toggleTorch()
   {
-    if (!mFlashAvailable || mCameraDevice == null) return;
+    if (!mFlashAvailable || mCameraDevice == null || mPreviewRequestBuilder == null) return;
     try
     {
       mTorchOn = !mTorchOn;
@@ -409,14 +433,11 @@ public class ScannerActivity extends Activity
           mTorchOn ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
       if (mCaptureSession != null)
         mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), null, mBackgroundHandler);
-      mTorchBtn.setText(mTorchOn ? "T" : "T");
       mTorchBtn.setBackgroundColor(mTorchOn ? 0xFFFABD2F : 0xCC3C3836);
       mTorchBtn.setTextColor(mTorchOn ? 0xFF282828 : 0xFFEBDBB2);
     }
     catch (CameraAccessException ignored) {}
   }
-
-  // ── Scan result handling ─────────────────────────────────────────
 
   private void handleScan(String text)
   {
@@ -441,7 +462,11 @@ public class ScannerActivity extends Activity
       {
         mStatusView.setText("⚠ " + o.optString("message"));
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-          if (mScanning) { mStatusView.setText(""); mHintView.setText("Point at a Karui QR code"); }
+          if (mScanning)
+          {
+            mStatusView.setText("");
+            mHintView.setText("Point at a Karui QR code");
+          }
         }, 1800);
       }
     }
@@ -459,14 +484,23 @@ public class ScannerActivity extends Activity
       if (parts.length < 5) return jsonError("Malformed chunk");
       String id = parts[1];
       int seq, total;
-      try { seq = Integer.parseInt(parts[2]); total = Integer.parseInt(parts[3]); }
+      try
+      {
+        seq = Integer.parseInt(parts[2]);
+        total = Integer.parseInt(parts[3]);
+      }
       catch (NumberFormatException e) { return jsonError("Malformed chunk"); }
       String data = parts[4];
 
       if (mBatchId != null && !mBatchId.equals(id))
         return jsonError("Mixing QR batches — tap SCAN AGAIN");
 
-      if (mBatchId == null) { mBatchId = id; mBatchTotal = total; mChunks.clear(); }
+      if (mBatchId == null)
+      {
+        mBatchId = id;
+        mBatchTotal = total;
+        mChunks.clear();
+      }
       mChunks.put(seq, data);
 
       if (mChunks.size() == mBatchTotal)
@@ -514,17 +548,27 @@ public class ScannerActivity extends Activity
 
   private String jsonReady(String summary)
   {
-    try { JSONObject o = new JSONObject(); o.put("type", "ready"); o.put("summary", summary); return o.toString(); }
+    try
+    {
+      JSONObject o = new JSONObject();
+      o.put("type", "ready");
+      o.put("summary", summary);
+      return o.toString();
+    }
     catch (Exception e) { return "{\"type\":\"ready\",\"summary\":\"Ready\"}"; }
   }
 
   private String jsonError(String msg)
   {
-    try { JSONObject o = new JSONObject(); o.put("type", "error"); o.put("message", msg); return o.toString(); }
+    try
+    {
+      JSONObject o = new JSONObject();
+      o.put("type", "error");
+      o.put("message", msg);
+      return o.toString();
+    }
     catch (Exception e) { return "{\"type\":\"error\",\"message\":\"Error\"}"; }
   }
-
-  // ── Save / Copy / Rescan ─────────────────────────────────────────
 
   private void onSave()
   {
@@ -539,15 +583,21 @@ public class ScannerActivity extends Activity
       Toast.makeText(this, "Saved to Karui", Toast.LENGTH_SHORT).show();
       finish();
     }
-    catch (Exception e) { Toast.makeText(this, "Save failed", Toast.LENGTH_SHORT).show(); }
+    catch (Exception e)
+    {
+      Toast.makeText(this, "Save failed", Toast.LENGTH_SHORT).show();
+    }
   }
 
   private void onCopy()
   {
     if (mReadyPayload == null) return;
     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-    cm.setPrimaryClip(ClipData.newPlainText("Karui scan", mReadyPayload));
-    Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+    if (cm != null)
+    {
+      cm.setPrimaryClip(ClipData.newPlainText("Karui scan", mReadyPayload));
+      Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show();
+    }
   }
 
   private void onRescan()
@@ -575,6 +625,7 @@ public class ScannerActivity extends Activity
     {
       mBackgroundThread.quitSafely();
       try { mBackgroundThread.join(); } catch (InterruptedException ignored) {}
+      mBackgroundThread = null;
     }
   }
 }
