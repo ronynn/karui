@@ -43,6 +43,7 @@ public class FloatingWindowService extends Service
   private static final String TEXT_COLOR       = "#EBDBB2";
   private static final String HINT_COLOR       = "#928374";
   private static final String RESIZE_COLOR     = "#504945";
+  private static final String BUTTON_COLOR     = "#EBDBB2";
 
   private static final long AUTOSAVE_INTERVAL_MS = 800L;
   private static final int INITIAL_WIDTH_DP  = 340;
@@ -50,12 +51,16 @@ public class FloatingWindowService extends Service
   private static final int MIN_WIDTH_DP      = 200;
   private static final int MIN_HEIGHT_DP     = 120;
   private static final int MIN_VISIBLE_DP    = 48;
+  private static final int COLLAPSED_WIDTH_DP  = 140;
+  private static final int COLLAPSED_HEIGHT_DP = 28;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
   private WindowManager mWindowManager;
   private View mRootView;
   private WindowManager.LayoutParams mParams;
   private EditText mEditText;
+  private TextView mMinimizeBtn;
+  private View mResizeHandle;
   private SharedPreferences mPrefs;
   private Runnable mAutoSaveRunnable;
 
@@ -63,6 +68,11 @@ public class FloatingWindowService extends Service
   private int mScreenHeight;
   private int mPreOffscreenX, mPreOffscreenY;
   private boolean mMostlyOffscreen = false;
+  private boolean mCollapsed = false;
+
+  // Remembered expanded size for collapse/expand
+  private int mExpandedWidth;
+  private int mExpandedHeight;
 
   private final BroadcastReceiver closeReceiver = new BroadcastReceiver()
   {
@@ -117,8 +127,6 @@ public class FloatingWindowService extends Service
 
   private void buildWindow()
   {
-    // getRealMetrics gives the true display bounds (including cutout area).
-    // Drag limits use these so the window can be dragged fully off-screen.
     DisplayMetrics realMetrics = new DisplayMetrics();
     mWindowManager.getDefaultDisplay().getRealMetrics(realMetrics);
     mScreenWidth = realMetrics.widthPixels;
@@ -129,6 +137,10 @@ public class FloatingWindowService extends Service
     final int minH = dp(MIN_HEIGHT_DP);
 
     int initialW = Math.min(dp(INITIAL_WIDTH_DP), mScreenWidth - dp(32));
+    int initialH = dp(INITIAL_HEIGHT_DP);
+
+    mExpandedWidth = initialW;
+    mExpandedHeight = initialH;
 
     FrameLayout rootLayout = new FrameLayout(this);
     GradientDrawable bg = new GradientDrawable();
@@ -144,6 +156,7 @@ public class FloatingWindowService extends Service
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+    // ── Title bar ────────────────────────────────────────────────
     FrameLayout titleBar = new FrameLayout(this);
     GradientDrawable titleBg = new GradientDrawable();
     titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
@@ -152,6 +165,20 @@ public class FloatingWindowService extends Service
     titleBar.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, dp(28)));
 
+    // Minimize button (left)
+    mMinimizeBtn = new TextView(this);
+    mMinimizeBtn.setText("−");
+    mMinimizeBtn.setTextSize(18);
+    mMinimizeBtn.setTextColor(Color.parseColor(BUTTON_COLOR));
+    mMinimizeBtn.setGravity(Gravity.CENTER);
+    mMinimizeBtn.setIncludeFontPadding(false);
+    mMinimizeBtn.setLayoutParams(new FrameLayout.LayoutParams(
+        dp(36), FrameLayout.LayoutParams.MATCH_PARENT,
+        Gravity.START | Gravity.CENTER_VERTICAL));
+    mMinimizeBtn.setOnClickListener(v -> toggleCollapse());
+    titleBar.addView(mMinimizeBtn);
+
+    // Pill (center)
     View pill = new View(this);
     GradientDrawable pillShape = new GradientDrawable();
     pillShape.setColor(Color.parseColor(PILL_COLOR));
@@ -160,6 +187,7 @@ public class FloatingWindowService extends Service
     titleBar.addView(pill, new FrameLayout.LayoutParams(
         dp(28), dp(2), Gravity.CENTER));
 
+    // Close button (right)
     TextView closeBtn = new TextView(this);
     closeBtn.setText("×");
     closeBtn.setTextSize(20);
@@ -172,6 +200,7 @@ public class FloatingWindowService extends Service
     closeBtn.setOnClickListener(v -> saveAndClose());
     titleBar.addView(closeBtn);
 
+    // ── EditText ─────────────────────────────────────────────────
     mEditText = new EditText(this);
     mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -210,27 +239,24 @@ public class FloatingWindowService extends Service
     contentLayout.addView(mEditText);
     rootLayout.addView(contentLayout);
 
-    View resizeHandle = new View(this);
+    // Resize handle
+    mResizeHandle = new View(this);
     GradientDrawable resizeShape = new GradientDrawable();
     resizeShape.setColor(Color.parseColor(RESIZE_COLOR));
     resizeShape.setCornerRadius(dp(3));
-    resizeHandle.setBackground(resizeShape);
+    mResizeHandle.setBackground(resizeShape);
     FrameLayout.LayoutParams rhParams = new FrameLayout.LayoutParams(
         dp(20), dp(20), Gravity.BOTTOM | Gravity.END);
     rhParams.setMargins(0, 0, dp(4), dp(4));
-    resizeHandle.setLayoutParams(rhParams);
-    rootLayout.addView(resizeHandle);
+    mResizeHandle.setLayoutParams(rhParams);
+    rootLayout.addView(mResizeHandle);
 
-    // FLAG_LAYOUT_NO_LIMITS is REQUIRED to allow the window to be positioned
-    // outside the display bounds. Without it, the WindowManager (especially
-    // on MIUI/POCO) clamps the window to keep it fully on-screen — that was
-    // the "can't drag off-screen" bug.
+    // Window flags
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
               | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
     mParams = new WindowManager.LayoutParams(
-        initialW,
-        dp(INITIAL_HEIGHT_DP),
+        initialW, initialH,
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE,
@@ -252,21 +278,14 @@ public class FloatingWindowService extends Service
     {
       if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP)
       {
-        saveAndClose();
+        if (mCollapsed) { expandWindow(); }
+        else { saveAndClose(); }
         return true;
       }
       return false;
     });
 
-    mEditText.postDelayed(() ->
-    {
-      if (mEditText == null) return;
-      mEditText.requestFocus();
-      mRootView.requestFocus();
-      InputMethodManager imm =
-          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
-    }, 150);
+    mEditText.postDelayed(() -> focusAndShowKeyboard(), 150);
 
     mAutoSaveRunnable = new Runnable()
     {
@@ -278,6 +297,7 @@ public class FloatingWindowService extends Service
     };
     mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
 
+    // ── Title bar drag + tap-to-expand ───────────────────────────
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
@@ -321,13 +341,19 @@ public class FloatingWindowService extends Service
               mPreOffscreenX = mParams.x;
               mPreOffscreenY = mParams.y;
             }
+            else if (!moved && mCollapsed)
+            {
+              // Tap on collapsed strip → expand.
+              expandWindow();
+            }
             return true;
         }
         return false;
       }
     });
 
-    resizeHandle.setOnTouchListener(new View.OnTouchListener()
+    // ── Resize handle ────────────────────────────────────────────
+    mResizeHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int startW, startH;
       private float startTouchX, startTouchY;
@@ -362,6 +388,87 @@ public class FloatingWindowService extends Service
     });
   }
 
+  // ── Collapse / expand ──────────────────────────────────────────
+
+  private void toggleCollapse()
+  {
+    if (mCollapsed) expandWindow();
+    else collapseWindow();
+  }
+
+  private void collapseWindow()
+  {
+    if (mCollapsed || mParams == null) return;
+
+    // Save current size
+    mExpandedWidth = mParams.width;
+    mExpandedHeight = mParams.height;
+
+    // Switch flags to NOT_FOCUSABLE — releases keyboard and input focus,
+    // letting the underlying app resume normal keyboard use.
+    mParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+    mParams.flags &= ~WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+
+    mParams.width = dp(COLLAPSED_WIDTH_DP);
+    mParams.height = dp(COLLAPSED_HEIGHT_DP);
+
+    if (mEditText != null) mEditText.setVisibility(View.GONE);
+    if (mResizeHandle != null) mResizeHandle.setVisibility(View.GONE);
+    if (mMinimizeBtn != null) mMinimizeBtn.setText("+");
+
+    // Hide keyboard before losing focus
+    try
+    {
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null && mEditText != null)
+        imm.hideSoftInputFromWindow(mEditText.getWindowToken(), 0);
+    }
+    catch (Exception ignored) {}
+
+    mCollapsed = true;
+
+    try { mWindowManager.updateViewLayout(mRootView, mParams); }
+    catch (Exception ignored) {}
+  }
+
+  private void expandWindow()
+  {
+    if (!mCollapsed || mParams == null) return;
+
+    // Restore focusable flags
+    mParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+
+    mParams.width = mExpandedWidth;
+    mParams.height = mExpandedHeight;
+
+    if (mEditText != null) mEditText.setVisibility(View.VISIBLE);
+    if (mResizeHandle != null) mResizeHandle.setVisibility(View.VISIBLE);
+    if (mMinimizeBtn != null) mMinimizeBtn.setText("−");
+
+    mCollapsed = false;
+
+    try { mWindowManager.updateViewLayout(mRootView, mParams); }
+    catch (Exception ignored) {}
+
+    // Delay a frame so layout settles before requesting focus
+    mHandler.postDelayed(() -> focusAndShowKeyboard(), 80);
+  }
+
+  private void focusAndShowKeyboard()
+  {
+    if (mEditText == null || mCollapsed) return;
+    mEditText.requestFocus();
+    if (mRootView != null) mRootView.requestFocus();
+    try
+    {
+      InputMethodManager imm =
+          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+    }
+    catch (Exception ignored) {}
+  }
+
   private void updateOffscreenState()
   {
     int visLeft = Math.max(0, mParams.x);
@@ -377,13 +484,7 @@ public class FloatingWindowService extends Service
     try { mWindowManager.updateViewLayout(mRootView, mParams); }
     catch (Exception ignored) {}
     mMostlyOffscreen = false;
-    if (mEditText != null)
-    {
-      mEditText.requestFocus();
-      InputMethodManager imm =
-          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
-    }
+    focusAndShowKeyboard();
   }
 
   private void saveDraft()

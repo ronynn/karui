@@ -66,7 +66,6 @@ public class MainActivity extends Activity
   private static final String KEY_THEME_BG = "theme_bg_color";
   private static final String KEY_THEME_LIGHT = "theme_light";
 
-  /** Fallback background — gruvbox bg0. Used until JS reports the real theme bg. */
   private static final int DEFAULT_BG = 0xFF282828;
 
   // ═══════════════════════════════════════════════════════════════
@@ -113,10 +112,6 @@ public class MainActivity extends Activity
     boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
     boolean floatingTrigger = assistLaunch || tileLaunch;
 
-    // ── Floating-window fast path ─────────────────────────────────
-    // The activity exists only long enough to start the service.
-    // After that, finish it so the transparent (i.e. black) window
-    // doesn't linger behind the floating panel.
     if (floatingTrigger && canDrawOverlays())
     {
       getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -132,11 +127,9 @@ public class MainActivity extends Activity
         Toast.makeText(this,
             "Could not open capture window: " + e.getMessage(),
             Toast.LENGTH_LONG).show();
-        // Fall through — show the full UI rather than an empty window.
       }
     }
 
-    // ── Normal launch — theme-matched background ──────────────────
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     int themeBg = readThemeBg(prefs);
     boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
@@ -291,10 +284,6 @@ public class MainActivity extends Activity
       try
       {
         startService(new Intent(this, FloatingWindowService.class));
-        // Move to back rather than finishing — preserves any in-progress
-        // Karui state (open notes, scroll position, etc.) but removes
-        // the full-screen window from view so the floating panel sits
-        // over whatever the user was actually doing.
         moveTaskToBack(true);
       }
       catch (Exception e) { e.printStackTrace(); }
@@ -551,7 +540,6 @@ public class MainActivity extends Activity
   //  SECTION 5 — THEME HELPERS
   // ═══════════════════════════════════════════════════════════════
 
-  /** Reads the cached theme background. Falls back to gruvbox bg0. */
   private int readThemeBg(SharedPreferences prefs)
   {
     String hex = prefs.getString(KEY_THEME_BG, null);
@@ -892,13 +880,6 @@ public class MainActivity extends Activity
       return id > 0 ? mActivity.getResources().getDimensionPixelSize(id) : 0;
     }
 
-    /**
-     * JS calls this whenever the theme is applied. Two side effects:
-     *  1. Persist the background colour so the next launch starts with
-     *     the correct window bg (no "grey → darker → content" flicker).
-     *  2. Persist whether the theme is light so we can pick bar icon
-     *     colour (dark icons on light theme, light icons on dark theme).
-     */
     @JavascriptInterface
     public void setThemeBackgroundColor(String hex)
     {
@@ -915,6 +896,17 @@ public class MainActivity extends Activity
         .edit().putBoolean(KEY_THEME_LIGHT, light).apply();
       mActivity.runOnUiThread(() ->
         SystemBarHelper.apply(mActivity, light));
+    }
+
+    /**
+     * Reads the current wallpaper and returns a derived JSON theme.
+     * Called from settings.js's "DYNAMIC" button and by the silent
+     * re-apply logic on app start.
+     */
+    @JavascriptInterface
+    public String getDynamicWallpaperTheme()
+    {
+      return DynamicTheme.getWallpaperTheme(mActivity);
     }
 
     @JavascriptInterface
