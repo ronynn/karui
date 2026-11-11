@@ -14,7 +14,6 @@ public class KaruiTileService extends TileService
   {
     super.onClick();
 
-    // If overlay permission is missing, redirect to settings.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this))
     {
       Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -24,22 +23,16 @@ public class KaruiTileService extends TileService
       return;
     }
 
-    // Start the overlay service directly — no activity switch, no flash.
-    // TileService is a foreground component, so startService() is allowed
-    // even on Android 12+ background-start restrictions.
-    try
-    {
-      startService(new Intent(this, FloatingWindowService.class));
-      return;
-    }
-    catch (Exception ignored) { /* fall through to activity fallback */ }
-
-    // Fallback: launch MainActivity which will start the service.
-    // This path is rare — only used if startService() is blocked.
-    Intent fallback = new Intent(this, MainActivity.class);
-    fallback.setAction(MainActivity.ACTION_OPEN_FLOATING);
-    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    launchIntent(fallback);
+    // startActivityAndCollapse is the ONLY way to make the shade collapse.
+    // The target Activity is MainActivity with ACTION_OPEN_FLOATING — it
+    // starts the service and finishes immediately (transparent window,
+    // no transition), so the user only sees the shade collapse.
+    Intent intent = new Intent(this, MainActivity.class);
+    intent.setAction(MainActivity.ACTION_OPEN_FLOATING);
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+    launchIntent(intent);
   }
 
   private void launchIntent(Intent intent)

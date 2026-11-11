@@ -448,6 +448,12 @@ export const gameRegistry = {
     mod.startSnakeGame()
     return true
   },
+  2048: async () =>
+  {
+    const mod = await import('./2048.js')
+    mod.start2048Game()
+    return true
+  },
   ASEPRITE: async () =>
   {
     const mod = await import('./pixel.js')

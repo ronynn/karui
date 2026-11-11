@@ -22,6 +22,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
@@ -43,7 +44,6 @@ public class FloatingWindowService extends Service
   private static final String TEXT_COLOR       = "#EBDBB2";
   private static final String HINT_COLOR       = "#928374";
   private static final String RESIZE_COLOR     = "#504945";
-  private static final String BUTTON_COLOR     = "#EBDBB2";
 
   private static final long AUTOSAVE_INTERVAL_MS = 800L;
   private static final int INITIAL_WIDTH_DP  = 340;
@@ -53,6 +53,13 @@ public class FloatingWindowService extends Service
   private static final int MIN_VISIBLE_DP    = 48;
   private static final int COLLAPSED_WIDTH_DP  = 140;
   private static final int COLLAPSED_HEIGHT_DP = 28;
+
+  /**
+   * InputManager refuses IME for windows whose obscuring alpha exceeds
+   * getMaximumObscuringOpacityForTouch() (~0.8). Keep this strictly
+   * below 0.8 so the keyboard can appear over the overlay.
+   */
+  private static final float WINDOW_ALPHA = 0.78f;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
   private WindowManager mWindowManager;
@@ -69,10 +76,7 @@ public class FloatingWindowService extends Service
   private int mPreOffscreenX, mPreOffscreenY;
   private boolean mMostlyOffscreen = false;
   private boolean mCollapsed = false;
-
-  // Remembered expanded size for collapse/expand
-  private int mExpandedWidth;
-  private int mExpandedHeight;
+  private int mExpandedWidth, mExpandedHeight;
 
   private final BroadcastReceiver closeReceiver = new BroadcastReceiver()
   {
@@ -148,15 +152,17 @@ public class FloatingWindowService extends Service
     bg.setCornerRadius(dp(10));
     rootLayout.setBackground(bg);
     rootLayout.setClipToOutline(true);
-    rootLayout.setFocusableInTouchMode(true);
+    // Focusable by default — required so EditText can receive keys.
+    // When collapsed we toggle FLAG_NOT_FOCUSABLE to release focus.
     rootLayout.setFocusable(true);
+    rootLayout.setFocusableInTouchMode(true);
 
     LinearLayout contentLayout = new LinearLayout(this);
     contentLayout.setOrientation(LinearLayout.VERTICAL);
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-    // ── Title bar ────────────────────────────────────────────────
+    // Title bar
     FrameLayout titleBar = new FrameLayout(this);
     GradientDrawable titleBg = new GradientDrawable();
     titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
@@ -165,11 +171,10 @@ public class FloatingWindowService extends Service
     titleBar.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, dp(28)));
 
-    // Minimize button (left)
     mMinimizeBtn = new TextView(this);
     mMinimizeBtn.setText("−");
     mMinimizeBtn.setTextSize(18);
-    mMinimizeBtn.setTextColor(Color.parseColor(BUTTON_COLOR));
+    mMinimizeBtn.setTextColor(Color.parseColor(CLOSE_COLOR));
     mMinimizeBtn.setGravity(Gravity.CENTER);
     mMinimizeBtn.setIncludeFontPadding(false);
     mMinimizeBtn.setLayoutParams(new FrameLayout.LayoutParams(
@@ -178,7 +183,6 @@ public class FloatingWindowService extends Service
     mMinimizeBtn.setOnClickListener(v -> toggleCollapse());
     titleBar.addView(mMinimizeBtn);
 
-    // Pill (center)
     View pill = new View(this);
     GradientDrawable pillShape = new GradientDrawable();
     pillShape.setColor(Color.parseColor(PILL_COLOR));
@@ -187,7 +191,6 @@ public class FloatingWindowService extends Service
     titleBar.addView(pill, new FrameLayout.LayoutParams(
         dp(28), dp(2), Gravity.CENTER));
 
-    // Close button (right)
     TextView closeBtn = new TextView(this);
     closeBtn.setText("×");
     closeBtn.setTextSize(20);
@@ -200,7 +203,7 @@ public class FloatingWindowService extends Service
     closeBtn.setOnClickListener(v -> saveAndClose());
     titleBar.addView(closeBtn);
 
-    // ── EditText ─────────────────────────────────────────────────
+    // EditText
     mEditText = new EditText(this);
     mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -216,6 +219,8 @@ public class FloatingWindowService extends Service
     mEditText.setPadding(dp(14), dp(10), dp(14), dp(24));
     mEditText.setMinLines(2);
     mEditText.setMaxLines(8);
+    mEditText.setFocusable(true);
+    mEditText.setFocusableInTouchMode(true);
 
     String draft = mPrefs.getString(KEY_DRAFT, "");
     if (!draft.isEmpty())
@@ -251,7 +256,7 @@ public class FloatingWindowService extends Service
     mResizeHandle.setLayoutParams(rhParams);
     rootLayout.addView(mResizeHandle);
 
-    // Window flags
+    // Window flags — focusable (no FLAG_NOT_FOCUSABLE) so EditText works.
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
               | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
@@ -264,7 +269,10 @@ public class FloatingWindowService extends Service
 
     mParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
     mParams.y = dp(100);
-    mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+    mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                          | WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE;
+    // Critical for IME: alpha must be ≤ 0.8
+    mParams.alpha = WINDOW_ALPHA;
 
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
@@ -278,14 +286,23 @@ public class FloatingWindowService extends Service
     {
       if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP)
       {
-        if (mCollapsed) { expandWindow(); }
-        else { saveAndClose(); }
+        if (mCollapsed) expandWindow();
+        else saveAndClose();
         return true;
       }
       return false;
     });
 
-    mEditText.postDelayed(() -> focusAndShowKeyboard(), 150);
+    // Show keyboard AFTER layout — onGlobalLayout is the reliable hook
+    mRootView.getViewTreeObserver().addOnGlobalLayoutListener(
+        new ViewTreeObserver.OnGlobalLayoutListener()
+        {
+          @Override public void onGlobalLayout()
+          {
+            mRootView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+            mHandler.postDelayed(() -> focusAndShowKeyboard(), 150);
+          }
+        });
 
     mAutoSaveRunnable = new Runnable()
     {
@@ -297,23 +314,20 @@ public class FloatingWindowService extends Service
     };
     mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
 
-    // ── Title bar drag + tap-to-expand ───────────────────────────
+    // Drag + tap-to-expand
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
       private float startTouchX, startTouchY;
       private boolean moved;
 
-      @Override
-      public boolean onTouch(View v, MotionEvent e)
+      @Override public boolean onTouch(View v, MotionEvent e)
       {
         switch (e.getActionMasked())
         {
           case MotionEvent.ACTION_DOWN:
-            startX = mParams.x;
-            startY = mParams.y;
-            startTouchX = e.getRawX();
-            startTouchY = e.getRawY();
+            startX = mParams.x; startY = mParams.y;
+            startTouchX = e.getRawX(); startTouchY = e.getRawY();
             moved = false;
             return true;
 
@@ -327,8 +341,7 @@ public class FloatingWindowService extends Service
                        Math.min(mScreenWidth - minVisible, startX + (int) dx));
               int newY = Math.max(0,
                        Math.min(mScreenHeight - dp(60), startY + (int) dy));
-              mParams.x = newX;
-              mParams.y = newY;
+              mParams.x = newX; mParams.y = newY;
               mWindowManager.updateViewLayout(mRootView, mParams);
               updateOffscreenState();
             }
@@ -337,39 +350,28 @@ public class FloatingWindowService extends Service
           case MotionEvent.ACTION_UP:
           case MotionEvent.ACTION_CANCEL:
             if (moved && !mMostlyOffscreen)
-            {
-              mPreOffscreenX = mParams.x;
-              mPreOffscreenY = mParams.y;
-            }
-            else if (!moved && mCollapsed)
-            {
-              // Tap on collapsed strip → expand.
-              expandWindow();
-            }
+            { mPreOffscreenX = mParams.x; mPreOffscreenY = mParams.y; }
+            else if (!moved && mCollapsed) expandWindow();
             return true;
         }
         return false;
       }
     });
 
-    // ── Resize handle ────────────────────────────────────────────
+    // Resize handle
     mResizeHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int startW, startH;
       private float startTouchX, startTouchY;
 
-      @Override
-      public boolean onTouch(View v, MotionEvent e)
+      @Override public boolean onTouch(View v, MotionEvent e)
       {
         switch (e.getActionMasked())
         {
           case MotionEvent.ACTION_DOWN:
-            startW = mParams.width;
-            startH = mParams.height;
-            startTouchX = e.getRawX();
-            startTouchY = e.getRawY();
+            startW = mParams.width; startH = mParams.height;
+            startTouchX = e.getRawX(); startTouchY = e.getRawY();
             return true;
-
           case MotionEvent.ACTION_MOVE:
             int newW = startW + (int) (e.getRawX() - startTouchX);
             int newH = startH + (int) (e.getRawY() - startTouchY);
@@ -377,8 +379,7 @@ public class FloatingWindowService extends Service
             newH = Math.max(minH, Math.min(mScreenHeight - mParams.y, newH));
             if (newW != mParams.width || newH != mParams.height)
             {
-              mParams.width = newW;
-              mParams.height = newH;
+              mParams.width = newW; mParams.height = newH;
               mWindowManager.updateViewLayout(mRootView, mParams);
             }
             return true;
@@ -388,27 +389,20 @@ public class FloatingWindowService extends Service
     });
   }
 
-  // ── Collapse / expand ──────────────────────────────────────────
-
   private void toggleCollapse()
   {
-    if (mCollapsed) expandWindow();
-    else collapseWindow();
+    if (mCollapsed) expandWindow(); else collapseWindow();
   }
 
   private void collapseWindow()
   {
     if (mCollapsed || mParams == null) return;
-
-    // Save current size
     mExpandedWidth = mParams.width;
     mExpandedHeight = mParams.height;
 
-    // Switch flags to NOT_FOCUSABLE — releases keyboard and input focus,
-    // letting the underlying app resume normal keyboard use.
+    // Release focus → other apps can use the keyboard again.
     mParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
     mParams.flags &= ~WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
-
     mParams.width = dp(COLLAPSED_WIDTH_DP);
     mParams.height = dp(COLLAPSED_HEIGHT_DP);
 
@@ -416,18 +410,8 @@ public class FloatingWindowService extends Service
     if (mResizeHandle != null) mResizeHandle.setVisibility(View.GONE);
     if (mMinimizeBtn != null) mMinimizeBtn.setText("+");
 
-    // Hide keyboard before losing focus
-    try
-    {
-      InputMethodManager imm =
-          (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null && mEditText != null)
-        imm.hideSoftInputFromWindow(mEditText.getWindowToken(), 0);
-    }
-    catch (Exception ignored) {}
-
+    hideKeyboard();
     mCollapsed = true;
-
     try { mWindowManager.updateViewLayout(mRootView, mParams); }
     catch (Exception ignored) {}
   }
@@ -435,10 +419,7 @@ public class FloatingWindowService extends Service
   private void expandWindow()
   {
     if (!mCollapsed || mParams == null) return;
-
-    // Restore focusable flags
     mParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-
     mParams.width = mExpandedWidth;
     mParams.height = mExpandedHeight;
 
@@ -447,24 +428,47 @@ public class FloatingWindowService extends Service
     if (mMinimizeBtn != null) mMinimizeBtn.setText("−");
 
     mCollapsed = false;
-
     try { mWindowManager.updateViewLayout(mRootView, mParams); }
     catch (Exception ignored) {}
 
-    // Delay a frame so layout settles before requesting focus
-    mHandler.postDelayed(() -> focusAndShowKeyboard(), 80);
+    mHandler.postDelayed(() -> focusAndShowKeyboard(), 100);
   }
 
+  /**
+   * Reliable keyboard-show sequence for TYPE_APPLICATION_OVERLAY:
+   *   1. requestFocus on both root and EditText
+   *   2. showSoftInput with SHOW_IMPLICIT
+   *   3. toggleSoftInput as fallback (some ROMs ignore step 2)
+   */
   private void focusAndShowKeyboard()
   {
     if (mEditText == null || mCollapsed) return;
-    mEditText.requestFocus();
-    if (mRootView != null) mRootView.requestFocus();
     try
     {
+      mRootView.requestFocus();
+      mEditText.requestFocus();
+
       InputMethodManager imm =
           (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null) imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+      if (imm == null) return;
+
+      boolean shown = imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
+      if (!shown)
+      {
+        // Fallback for OEMs that reject showSoftInput on overlays.
+        imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0);
+      }
+    }
+    catch (Exception ignored) {}
+  }
+
+  private void hideKeyboard()
+  {
+    try
+    {
+      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+      if (imm != null && mEditText != null)
+        imm.hideSoftInputFromWindow(mEditText.getWindowToken(), 0);
     }
     catch (Exception ignored) {}
   }
@@ -515,24 +519,13 @@ public class FloatingWindowService extends Service
   private void dismiss()
   {
     if (mAutoSaveRunnable != null)
-    {
-      mHandler.removeCallbacks(mAutoSaveRunnable);
-      mAutoSaveRunnable = null;
-    }
-    try
-    {
-      InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-      if (imm != null && mEditText != null)
-        imm.hideSoftInputFromWindow(mEditText.getWindowToken(), 0);
-    }
-    catch (Exception ignored) {}
-
+    { mHandler.removeCallbacks(mAutoSaveRunnable); mAutoSaveRunnable = null; }
+    hideKeyboard();
     if (mRootView != null && mWindowManager != null)
     {
       try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
       mRootView = null;
     }
-
     mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
     stopSelf();
   }
@@ -541,10 +534,7 @@ public class FloatingWindowService extends Service
   public void onDestroy()
   {
     if (mAutoSaveRunnable != null)
-    {
-      mHandler.removeCallbacks(mAutoSaveRunnable);
-      mAutoSaveRunnable = null;
-    }
+    { mHandler.removeCallbacks(mAutoSaveRunnable); mAutoSaveRunnable = null; }
     if (mRootView != null && mWindowManager != null)
     {
       try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
