@@ -686,7 +686,7 @@ function move(dir)
     {
       s2.gameOver = true
       s2.goTitle.textContent = 'GAME OVER'
-      s2.goSub.textContent = 'Tap reset to try again'
+      s2.goSub.textContent = 'Try again later!'
       s2.goEl.style.display = 'flex'
       playGameSound('gameover')
       if (navigator.vibrate) navigator.vibrate(200)

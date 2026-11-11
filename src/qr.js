@@ -2,7 +2,7 @@ import { nextTick } from './petite-vue.es.js'
 
 const QR_CDN = './qrcode.min.js'
 const ECC = 'M'
-const MAX_CHUNK_BYTES = 1500
+const MAX_CHUNK_BYTES = 600
 const PREFIX = 'KARUI1'
 
 // Signature used to diff notes around a merge. Deliberately excludes

@@ -39,34 +39,49 @@
   #status.saved { color: #B8BB26; }
   #status.error { color: #FB4934; }
 
+  /* ── Floating round buttons — raised look, press-in feedback ─── */
   #close, #torch {
     position: fixed; top: 56px; width: 48px; height: 48px;
-    border-radius: 24px; border: 1px solid rgba(235,219,178,0.2);
+    border-radius: 24px; border: none;
     color: #EBDBB2; font-size: 22px; cursor: pointer; z-index: 20;
     display: flex; align-items: center; justify-content: center;
     padding: 0; line-height: 1;
-    background: #3C3836;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-    transition: transform 80ms ease, box-shadow 80ms ease, background 80ms ease;
+    background: linear-gradient(180deg, #4a4542 0%, #3C3836 100%);
+    /* The outer shadow makes it look lifted; the inset light line
+       gives the top edge a highlight like a physical button. */
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+    transition: transform 60ms ease, box-shadow 60ms ease, background 60ms ease;
     -webkit-tap-highlight-color: transparent;
   }
   #close { right: 16px; }
   #torch { left: 16px; font-size: 18px; font-weight: 700;
            font-family: ui-monospace, monospace; }
+
+  /* Pressed state: moves down 2px, shadow shrinks, gradient darkens */
   #close:active, #torch:active {
-    transform: scale(0.92);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.6);
-    background: #504945;
+    transform: translateY(2px) scale(0.97);
+    box-shadow:
+      0 1px 3px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(0,0,0,0.2);
+    background: linear-gradient(180deg, #3C3836 0%, #2d2a28 100%);
   }
   #torch.on {
-    background: #FABD2F; color: #282828; border-color: transparent;
-    box-shadow: 0 2px 8px rgba(250,189,47,0.4);
+    background: linear-gradient(180deg, #ffcd4d 0%, #FABD2F 100%);
+    color: #282828;
+    box-shadow:
+      0 3px 10px rgba(250,189,47,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.3);
   }
   #torch.on:active {
-    background: #D79921;
-    box-shadow: 0 1px 3px rgba(250,189,47,0.5);
+    background: linear-gradient(180deg, #FABD2F 0%, #D79921 100%);
+    box-shadow:
+      0 1px 3px rgba(250,189,47,0.6),
+      inset 0 1px 0 rgba(0,0,0,0.2);
   }
 
+  /* ── Preview box ─────────────────────────────────────────────── */
   #preview {
     position: fixed; left: 16px; right: 16px; bottom: 120px; max-height: 120px;
     overflow-y: auto; background: rgba(40,40,40,0.95);
@@ -81,6 +96,7 @@
   }
   #preview-label.visible { display: block; }
 
+  /* ── Bottom action buttons — rectangular, raised, press-in ───── */
   #controls {
     position: fixed; left: 0; right: 0; bottom: 0;
     padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px) + 40px);
@@ -90,26 +106,41 @@
   }
   #controls.visible { display: flex; }
   #controls button {
-    background: #3C3836; color: #EBDBB2; border: none;
-    padding: 12px 20px; border-radius: 10px;
-    font-size: 14px; font-weight: 600; letter-spacing: .5px;
-    cursor: pointer; min-width: 90px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    transition: transform 80ms ease, box-shadow 80ms ease, background 80ms ease;
+    background: linear-gradient(180deg, #4a4542 0%, #3C3836 100%);
+    color: #EBDBB2;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    cursor: pointer;
+    min-width: 90px;
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.07);
+    transition: transform 60ms ease, box-shadow 60ms ease, background 60ms ease;
     -webkit-tap-highlight-color: transparent;
   }
   #controls button:active {
-    transform: scale(0.95);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    background: #504945;
+    transform: translateY(2px) scale(0.97);
+    box-shadow:
+      0 1px 3px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(0,0,0,0.15);
+    background: linear-gradient(180deg, #3C3836 0%, #2d2a28 100%);
   }
   #btn-save {
-    background: #FABD2F; color: #282828;
-    box-shadow: 0 2px 8px rgba(250,189,47,0.35);
+    background: linear-gradient(180deg, #ffcd4d 0%, #FABD2F 100%);
+    color: #282828;
+    box-shadow:
+      0 3px 10px rgba(250,189,47,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.3);
   }
   #btn-save:active {
-    background: #D79921;
-    box-shadow: 0 1px 3px rgba(250,189,47,0.4);
+    background: linear-gradient(180deg, #FABD2F 0%, #D79921 100%);
+    box-shadow:
+      0 1px 3px rgba(250,189,47,0.55),
+      inset 0 1px 0 rgba(0,0,0,0.2);
   }
 
   #loading {
@@ -123,8 +154,8 @@
 </head>
 <body>
 
-<button id="close" onclick="closeApp()">×</button>
-<button id="torch" onclick="toggleTorch()" title="Torch">T</button>
+<button id="close" title="Close">×</button>
+<button id="torch" title="Torch">T</button>
 
 <video id="v" autoplay playsinline webkit-playsinline disableremoteplayback muted></video>
 <canvas id="c" style="display:none"></canvas>
@@ -142,15 +173,12 @@
 <div id="preview"></div>
 
 <div id="controls">
-  <button id="btn-save" onclick="save()">SAVE</button>
-  <button id="btn-copy" onclick="copy()">COPY</button>
-  <button id="btn-rescan" onclick="rescan()">SCAN AGAIN</button>
+  <button id="btn-save">SAVE</button>
+  <button id="btn-copy">COPY</button>
+  <button id="btn-rescan">SCAN AGAIN</button>
 </div>
 
 <script type="module">
-  // cam2qr ships its decode function under varying export names across
-  // CDN builds. The test page checks all three; do the same here so
-  // any CDN variant works without further edits.
   import * as qrModule from './qr-decode.js';
   const decode = qrModule.decode || qrModule.default || qrModule.decodeQR;
 
@@ -168,6 +196,7 @@
   const btnCopy   = document.getElementById('btn-copy');
   const btnRescan = document.getElementById('btn-rescan');
   const torchBtn  = document.getElementById('torch');
+  const closeBtn  = document.getElementById('close');
 
   let scanning = true;
   let lastScanData = '';
@@ -175,6 +204,16 @@
   let stream = null;
   let torchOn = false;
   let currentPayload = null;
+
+  // ── Bind every button here — NOT inline onclick ─────────────────
+  // Inside <script type="module">, functions are module-scoped and
+  // cannot be found by inline onclick="...". addEventListener has
+  // direct access to the closure and everything works.
+  btnSave.addEventListener('click', () => save());
+  btnCopy.addEventListener('click', () => copy());
+  btnRescan.addEventListener('click', () => rescan());
+  torchBtn.addEventListener('click', () => toggleTorch());
+  closeBtn.addEventListener('click', () => closeApp());
 
   function setUI(state, message)
   {
@@ -249,12 +288,9 @@
 
   async function start()
   {
-    // Verify decoder actually loaded
     if (typeof decode !== 'function') {
       loadingEl.textContent =
-        'QR decoder not loaded.\n\n' +
-        'qr-decode.js must export a "decode" function (got: '
-        + Object.keys(qrModule).join(', ') + ')';
+        'QR decoder not loaded.\n\nExports: ' + Object.keys(qrModule).join(', ');
       setUI('error', 'Decoder missing');
       return;
     }
@@ -267,7 +303,7 @@
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
 
       video.srcObject = stream;
@@ -308,12 +344,12 @@
         ctx.drawImage(video, 0, 0, w, h);
         const imageData = ctx.getImageData(0, 0, w, h);
 
-        // Decode may throw on blank / unfocused / noisy frames. That's
-        // normal — the first frame after play() is often all black.
-        // Swallow per-frame errors so the scanner keeps running.
+        // ── tryHarder: cam2qr will retry with rotation, inversion,
+        //    and multiple binarization thresholds. Slower per frame
+        //    but necessary for dense / high-version QR codes. ─────
         let result = null;
         try {
-          result = decode(imageData);
+          result = decode(imageData, { tryHarder: true });
         } catch (decodeErr) {
           // expected on undecodable frames
         }
@@ -330,8 +366,6 @@
           }
         }
       } catch (outerErr) {
-        // Canvas / getImageData failure — rare WebView glitch. Log and
-        // keep scanning; don't kill the loop.
         console.warn('Scanner frame error:', outerErr);
       }
     }
@@ -359,21 +393,32 @@
   function save()
   {
     if (!currentPayload) return;
-    const r = JSON.parse(Android.save());
-    if (r.ok) { setUI('ready', 'Saved — closing…'); setTimeout(() => { try { Android.close(); } catch (e) {} }, 600); }
-    else setUI('error', r.message || 'Save failed');
+    try {
+      const r = JSON.parse(Android.save());
+      if (r.ok) {
+        setUI('ready', 'Saved — closing…');
+        setTimeout(() => { try { Android.close(); } catch (e) {} }, 600);
+      } else {
+        setUI('error', r.message || 'Save failed');
+      }
+    } catch (e) { setUI('error', 'Bridge error'); }
   }
 
   function copy()
   {
     if (!currentPayload) return;
-    const r = JSON.parse(Android.copy());
-    if (r.ok) { statusEl.textContent = '✓ Copied to clipboard'; statusEl.className = 'saved'; }
+    try {
+      const r = JSON.parse(Android.copy());
+      if (r.ok) {
+        statusEl.textContent = '✓ Copied to clipboard';
+        statusEl.className = 'saved';
+      }
+    } catch (e) { setUI('error', 'Bridge error'); }
   }
 
   function rescan()
   {
-    Android.rescan();
+    try { Android.rescan(); } catch (e) {}
     lastScanData = '';
     scanning = true;
     clearPreview();
