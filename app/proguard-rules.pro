@@ -15,3 +15,13 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# ZXing — keep only QR code paths
+-keep class com.google.zxing.qrcode.** { *; }
+-keep class com.google.zxing.common.** { *; }
+-keep class com.google.zxing.BinaryBitmap { *; }
+-keep class com.google.zxing.LuminanceSource { *; }
+-keep class com.google.zxing.Result { *; }
+-keep class com.google.zxing.ResultPoint { *; }
+-keep class com.google.zxing.PlanarYUVLuminanceSource { *; }
+-dontwarn com.google.zxing.**

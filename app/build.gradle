@@ -45,4 +45,5 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.google.zxing:core:3.5.3'
 }
