@@ -102,7 +102,20 @@
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(25)">25m</button>
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(5)">5m</button>
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(15)">15m</button>
+              <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(50)">50m</button>
               <button v-if="pomodoroRunning" style="flex:1;" @click="stopPomodoro">Stop</button>
+            </div>
+            <div class="pomodoro-graph" v-if="pomodoroGraphData.length">
+              <div v-for="d in pomodoroGraphData" :key="d.date" class="pomodoro-graph-bar-wrap"
+                :title="d.label + ' ' + d.dayNum + ': ' + d.minutes + 'm (' + d.count + ')'">
+                <div class="pomodoro-graph-bar"
+                  :class="{ empty: d.minutes === 0, today: d.isToday }"
+                  :style="{ height: Math.max(2, (d.minutes / pomodoroGraphMax) * 100) + '%' }"></div>
+                <div class="pomodoro-graph-label">{{ d.label[0] }}</div>
+              </div>
+            </div>
+            <div class="pomodoro-graph-legend" v-if="pomodoroHistoryCount > 0">
+              {{ pomodoroHistoryTotal }}m · {{ pomodoroHistoryCount }} sessions · last 14 days
             </div>
           </div>
         </div>

@@ -6,6 +6,8 @@ const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})([ap])?(?=\s|$)/
 const SEARCH_PREFIX_RE = /^%s(?:\s|$)/
 const SEARCH_ACTIVE_RE = /^%s\s/
+const CELEBRATION_COOLDOWN_MS = 4000
+const MAX_CONFETTI_FAILURES = 2
 
 export function parseReminderTime(text)
 {
@@ -56,6 +58,10 @@ export function createNotesModule()
     activeNoteMenuId: null,
     lastTrashTap: 0,
 
+    // Celebration safety state
+    _lastCelebrationAt: 0,
+    _confettiFailures: 0,
+
     _displayedCache: [],
     _cacheKey: '',
     _dirtyNotes: true,
@@ -73,7 +79,7 @@ export function createNotesModule()
     {
       if (window.Android && typeof window.Android.haptic === 'function')
       {
-        try { window.Android.haptic(); return; } catch (e) {}
+        try { window.Android.haptic(); return } catch (e) {}
       }
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function')
       {
@@ -425,13 +431,6 @@ export function createNotesModule()
       })
       obs.observe(list, { childList: true, subtree: true, characterData: true })
       this._noteOverflowObserver = obs
-
-      const fontReady = (document.fonts && document.fonts.ready)
-        ? document.fonts.ready
-        : Promise.resolve()
-      fontReady.then(() => requestAnimationFrame(() => requestAnimationFrame(() =>
-        this._measureNoteOverflow()
-      )))
     },
 
     parseRecurrence(text)
@@ -683,30 +682,90 @@ export function createNotesModule()
       this.saveData()
     },
 
+    // Rate-limited, safety-wrapped confetti. Disables celebration mode
+    // automatically after repeated failures — this is our primary defence
+    // against the Android WebView white-screen-on-completion bug.
+    _celebrateOnce()
+    {
+      if (!this.celebrationMode) return
+      if (this._confettiFailures >= MAX_CONFETTI_FAILURES) return
+      if (typeof window.confetti !== 'function') return
+
+      const now = Date.now()
+      if (this._lastCelebrationAt && now - this._lastCelebrationAt < CELEBRATION_COOLDOWN_MS) return
+      this._lastCelebrationAt = now
+
+      try
+      {
+        window.confetti({
+          particleCount: 40,
+          spread: 55,
+          origin: { y: 0.7 },
+          disableForReducedMotion: true
+        })
+      }
+      catch (e)
+      {
+        this._confettiFailures++
+        if (this._confettiFailures >= MAX_CONFETTI_FAILURES)
+        {
+          this.celebrationMode = false
+          try { this.showToast('Celebration disabled (render error)') } catch (_) {}
+        }
+      }
+    },
+
+    _openExternalUrl(url)
+    {
+      try
+      {
+        const a = document.createElement('a')
+        a.href = url
+        a.rel = 'noopener noreferrer'
+        a.target = '_blank'
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+      catch (e)
+      {
+        try { window.open(url, '_blank', 'noopener') } catch (_) {}
+      }
+    },
+
     toggleNote(n, e)
     {
-      const wasCompleted = n.completed
-      n.completed = !n.completed
-      n.updatedAt = Date.now()
-
-      if (n.completed && !wasCompleted)
+      try
       {
-        playSound('scratch', this.uiSounds)
-        if (this.celebrationMode && typeof confetti === 'function')
+        const wasCompleted = n.completed
+        n.completed = !n.completed
+        n.updatedAt = Date.now()
+
+        if (n.completed && !wasCompleted)
         {
-          confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } })
+          try { playSound('scratch', this.uiSounds) } catch (_) {}
+          this._celebrateOnce()
+          if (n.groupId) this.extendRecurrenceGroup(n)
         }
-        if (n.groupId) this.extendRecurrenceGroup(n)
+
+        try { this._vibrate() } catch (_) {}
+
+        // Safer than window.location.href — WebViews that fail to load the
+        // URL can go blank; an anchor click defers to the platform.
+        const txt = n.text.trim()
+        if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
+        {
+          this._openExternalUrl(txt.startsWith('http') ? txt : 'https://' + txt)
+        }
+
+        this.saveData()
       }
-
-      this._vibrate()
-
-      let txt = n.text.trim()
-      if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
+      catch (err)
       {
-        window.location.href = txt.startsWith('http') ? txt : 'https://' + txt
+        try { console.error('toggleNote failed:', err) } catch (_) {}
+        try { this.showToast('Something went wrong') } catch (_) {}
       }
-      this.saveData()
     },
 
     executeTrash(id)
@@ -877,145 +936,98 @@ export function createNotesModule()
       return out
     },
 
-    // Rebuild-based merge. Instead of filtering `this.notes` in place (which
-    // can silently fail if the reactive proxy doesn't see the removal), we
-    // construct a fresh array: `otherTabs + keptNotes`. Anything not in
-    // `keptNotes` for this tab is guaranteed to be gone.
-applyTabMarkdown(tab, mdText)
-{
-  const parsed = this._parseTabMarkdown(mdText)
-  const now = Date.now()
-  const existing = this.notes.filter(n => n.category === tab)
-
-  // Maps keyed by String(id) — protects against any note whose id ended up
-  // as a string (older imports, JSON round-trips, etc.).
-  const existingById = new Map()
-  const existingByText = new Map()
-  for (const n of existing)
-  {
-    existingById.set(String(n.id), n)
-    const key = (n.text || '').trim()
-    if (!existingByText.has(key)) existingByText.set(key, [])
-    existingByText.get(key).push(n)
-  }
-
-  const keptNotes = []
-  const usedIds = new Set()
-  let idSeed = 0
-
-  const mintId = () =>
-  {
-    let id = now + (++idSeed)
-    while (usedIds.has(String(id)) || this.notes.some(n => String(n.id) === String(id)))
-      id = now + (++idSeed)
-    return id
-  }
-
-  for (const p of parsed)
-  {
-    // 1) ID match
-    if (p.id !== null)
+    applyTabMarkdown(tab, mdText)
     {
-      const idKey = String(p.id)
-      const match = existingById.get(idKey)
-      if (match && !usedIds.has(idKey))
+      const parsed = this._parseTabMarkdown(mdText)
+      const now = Date.now()
+      const existing = this.notes.filter(n => n.category === tab)
+
+      const existingById = new Map()
+      const existingByText = new Map()
+      for (const n of existing)
       {
-        match.text = p.text
-        match.completed = p.completed
-        match.updatedAt = now
-        keptNotes.push(match)
-        usedIds.add(idKey)
-        continue
+        existingById.set(String(n.id), n)
+        const key = (n.text || '').trim()
+        if (!existingByText.has(key)) existingByText.set(key, [])
+        existingByText.get(key).push(n)
       }
-    }
 
-    // 2) Text match against existing (bucket shrinks as matches are used)
-    const bucket = existingByText.get(p.text)
-    if (bucket)
-    {
-      let found = null
-      for (let i = 0; i < bucket.length; i++)
+      const keptNotes = []
+      const usedIds = new Set()
+      let idSeed = 0
+
+      const mintId = () =>
       {
-        const candidate = bucket[i]
-        if (!usedIds.has(String(candidate.id)))
+        let id = now + (++idSeed)
+        while (usedIds.has(String(id)) || this.notes.some(n => String(n.id) === String(id)))
+          id = now + (++idSeed)
+        return id
+      }
+
+      for (const p of parsed)
+      {
+        if (p.id !== null)
         {
-          found = candidate
-          bucket.splice(i, 1)
-          break
+          const idKey = String(p.id)
+          const match = existingById.get(idKey)
+          if (match && !usedIds.has(idKey))
+          {
+            match.text = p.text
+            match.completed = p.completed
+            match.updatedAt = now
+            keptNotes.push(match)
+            usedIds.add(idKey)
+            continue
+          }
+        }
+
+        const bucket = existingByText.get(p.text)
+        if (bucket)
+        {
+          let found = null
+          for (let i = 0; i < bucket.length; i++)
+          {
+            const candidate = bucket[i]
+            if (!usedIds.has(String(candidate.id)))
+            {
+              found = candidate
+              bucket.splice(i, 1)
+              break
+            }
+          }
+          if (found)
+          {
+            found.completed = p.completed
+            found.updatedAt = now
+            keptNotes.push(found)
+            usedIds.add(String(found.id))
+            continue
+          }
+        }
+
+        const newId = mintId()
+        keptNotes.push({
+          id: newId, text: p.text, completed: p.completed,
+          category: tab, pinned: false, updatedAt: now
+        })
+        usedIds.add(String(newId))
+      }
+
+      for (const n of existing)
+      {
+        if (!usedIds.has(String(n.id)))
+        {
+          n.updatedAt = now
+          this.recycleBin.push(n)
         }
       }
-      if (found)
-      {
-        found.completed = p.completed
-        found.updatedAt = now
-        keptNotes.push(found)
-        usedIds.add(String(found.id))
-        continue
-      }
-    }
 
-    // 3) New note
-    const newId = mintId()
-    keptNotes.push({
-      id: newId, text: p.text, completed: p.completed,
-      category: tab, pinned: false, updatedAt: now
-    })
-    usedIds.add(String(newId))
-  }
+      const otherTabs = this.notes.filter(n => n.category !== tab)
+      this.notes = otherTabs.concat(keptNotes)
 
-  // Delete unmatched
-  const doomed = []
-  for (const n of existing)
-  {
-    if (!usedIds.has(String(n.id)))
-    {
-      n.updatedAt = now
-      doomed.push(n)
-      this.recycleBin.push(n)
-    }
-  }
-
-  // Rebuild the notes array
-  const otherTabs = this.notes.filter(n => n.category !== tab)
-  this.notes = otherTabs.concat(keptNotes)
-
-  // Diagnostic — check Console in chrome://inspect to debug
-  if (typeof console !== 'undefined')
-  {
-    console.log('[applyTabMarkdown]', {
-      tab,
-      draftLength: (mdText || '').length,
-      parsedCount: parsed.length,
-      parsedIds: parsed.map(p => p.id),
-      existingCount: existing.length,
-      keptCount: keptNotes.length,
-      doomedCount: doomed.length,
-      doomedIds: doomed.map(n => n.id),
-      finalNotesInTab: this.notes.filter(n => n.category === tab).length,
-      finalRecycleCount: this.recycleBin.length,
-    })
-  }
-
-  this._dirtyNotes = true
-  this.saveData()
-},
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
+      this._dirtyNotes = true
+      this.saveData()
+    },
 
     openContextMenu(e, tab)
     {

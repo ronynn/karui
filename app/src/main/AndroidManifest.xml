@@ -163,13 +163,6 @@
     android:exported="true"
     android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
-<!-- Ghost activity for tile -->
-<activity
-    android:name=".GhostActivity"
-    android:theme="@android:style/Theme.Translucent.NoTitleBar"
-    android:excludeFromRecents="true"
-    android:taskAffinity=""
-    android:exported="false" />
 
     
   </application>

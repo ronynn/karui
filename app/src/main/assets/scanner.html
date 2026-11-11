@@ -14,22 +14,28 @@ video.playing{display:block}
 #hint{position:absolute;bottom:calc(50% - 35vmin - 30px);width:100%;text-align:center;color:#EBDBB2;font-size:13px;opacity:.85;text-shadow:0 2px 8px #000}
 #status.saved{color:#B8BB26}
 #status.error{color:#FB4934}
+
+/* Round icon buttons - no press animation */
 #close,#torch{position:fixed;top:56px;width:48px;height:48px;border-radius:24px;border:none;color:#EBDBB2;font-size:22px;cursor:pointer;z-index:20;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;background:#3C3836}
 #close{right:16px}
 #torch{left:16px;font-size:18px;font-weight:700;font-family:ui-monospace,monospace}
 #close:active,#torch:active{background:#504945}
 #torch.on{background:#FABD2F;color:#282828}
 #torch.on:active{background:#D79921}
-#preview{position:fixed;left:16px;right:16px;bottom:120px;max-height:120px;overflow-y:auto;background:rgba(40,40,40,0.95);border:1px solid #504945;border-radius:10px;padding:12px;font-size:13px;line-height:1.4;color:#EBDBB2;z-index:8;display:none;-webkit-user-select:text;user-select:text;word-break:break-all;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+
+#preview{position:fixed;left:16px;right:16px;bottom:120px;max-height:120px;overflow-y:auto;background:rgba(40,40,40,0.95);border:1px solid #504945;padding:12px;font-size:13px;line-height:1.4;color:#EBDBB2;z-index:8;display:none;-webkit-user-select:text;user-select:text;word-break:break-all;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 #preview.visible{display:block}
 #preview-label{position:fixed;left:16px;right:16px;bottom:244px;font-size:11px;letter-spacing:.5px;color:#928374;z-index:8;display:none}
 #preview-label.visible{display:block}
+
+/* Square buttons - no radius, no animation, instant bg change on press */
 #controls{position:fixed;left:0;right:0;bottom:0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px) + 40px);display:none;justify-content:center;gap:10px;flex-wrap:wrap;background:linear-gradient(to top,rgba(0,0,0,0.9),transparent);z-index:10}
 #controls.visible{display:flex}
-#controls button{background:#3C3836;color:#EBDBB2;border:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:.5px;cursor:pointer;min-width:90px}
+#controls button{background:#3C3836;color:#EBDBB2;border:none;padding:14px 22px;font-size:14px;font-weight:600;letter-spacing:.5px;cursor:pointer;min-width:90px}
 #controls button:active{background:#504945}
 #btn-save{background:#FABD2F;color:#282828}
 #btn-save:active{background:#D79921}
+
 #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#EBDBB2;font-size:14px;background:#000;z-index:5;text-align:center;padding:20px;white-space:pre-line}
 #loading.hidden{display:none}
 </style>
@@ -72,6 +78,8 @@ const previewEl=$('preview'), previewLabel=$('preview-label');
 const btnSave=$('btn-save'), btnCopy=$('btn-copy'), btnRescan=$('btn-rescan');
 const torchBtn=$('torch'), closeBtn=$('close');
 
+const HAS_ANDROID = typeof Android !== 'undefined' && Android && typeof Android.onScan === 'function';
+
 let scanning=true, lastScanData='', lastScanTime=0, stream=null, torchOn=false, currentPayload=null;
 
 btnSave.addEventListener('click', () => save());
@@ -102,17 +110,56 @@ function setUI(state, msg) {
 function showPreview(text){currentPayload=text;previewEl.textContent=text;previewEl.classList.add('visible');previewLabel.classList.add('visible');}
 function clearPreview(){currentPayload=null;previewEl.textContent='';previewEl.classList.remove('visible');previewLabel.classList.remove('visible');}
 
+function bridgeOnScan(text){
+  if (HAS_ANDROID) {
+    try { return JSON.parse(Android.onScan(text)); }
+    catch (e) { return { type: 'error', message: 'Bridge error' }; }
+  }
+  const preview = text.length > 60 ? text.slice(0, 60) + '…' : text;
+  return { type: 'ready', summary: preview };
+}
+
+function bridgeSave(){
+  if (HAS_ANDROID) {
+    try { return JSON.parse(Android.save()); }
+    catch (e) { return { ok: false, message: 'Bridge error' }; }
+  }
+  if (currentPayload && navigator.clipboard) navigator.clipboard.writeText(currentPayload).catch(()=>{});
+  return { ok: true };
+}
+
+function bridgeCopy(){
+  if (HAS_ANDROID) {
+    try { return JSON.parse(Android.copy()); }
+    catch (e) { return { ok: false }; }
+  }
+  if (currentPayload && navigator.clipboard) navigator.clipboard.writeText(currentPayload).catch(()=>{});
+  return { ok: true };
+}
+
+function bridgeRescan(){ if (HAS_ANDROID) { try { Android.rescan(); } catch (e) {} } }
+function bridgeClose(){ if (HAS_ANDROID) { try { Android.close(); } catch (e) {} } else stopStream(); }
+
 async function toggleTorch(){
-  if(!stream)return;
-  try{
-    const track=stream.getVideoTracks()[0];
-    if(!track)return;
-    const caps=track.getCapabilities();
-    if(!caps.torch){torchBtn.style.display='none';return;}
-    torchOn=!torchOn;
-    await track.applyConstraints({advanced:[{torch:torchOn}]});
-    torchBtn.classList.toggle('on',torchOn);
-  }catch(e){torchBtn.style.display='none';}
+  if (!stream) return;
+  const track = stream.getVideoTracks()[0];
+  if (!track) return;
+  const caps = track.getCapabilities();
+  if (!caps.torch) { torchBtn.style.display = 'none'; return; }
+
+  // Optimistic UI — flip visual state immediately. The physical LED takes
+  // ~200 ms to warm up; there's nothing to optimize on the hardware side,
+  // but the button feels instant this way.
+  torchOn = !torchOn;
+  torchBtn.classList.toggle('on', torchOn);
+
+  try {
+    await track.applyConstraints({advanced: [{torch: torchOn}]});
+  } catch (e) {
+    // Revert if the constraint failed
+    torchOn = !torchOn;
+    torchBtn.classList.toggle('on', torchOn);
+  }
 }
 
 function stopStream(){if(stream){try{stream.getTracks().forEach(t=>t.stop());}catch(e){}stream=null;}}
@@ -123,7 +170,7 @@ async function start(){
     setUI('error','Decoder missing');return;
   }
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    loadingEl.textContent='Camera not supported in this WebView.';
+    loadingEl.textContent='Camera not supported.';
     setUI('error','No camera support');return;
   }
   try{
@@ -172,8 +219,7 @@ function tick(){
 }
 
 function handleScan(text){
-  let result;
-  try{result=JSON.parse(Android.onScan(text));}catch(e){setUI('error','Bridge error');return;}
+  const result=bridgeOnScan(text);
   if(result.type==='chunk')setUI('partial','Scanned '+result.received+'/'+result.total);
   else if(result.type==='ready'){scanning=false;setUI('ready',result.summary);showPreview(text);}
   else if(result.type==='error'){
@@ -184,27 +230,19 @@ function handleScan(text){
 
 function save(){
   if(!currentPayload)return;
-  try{
-    const r=JSON.parse(Android.save());
-    if(r.ok){setUI('ready','Saved — closing…');setTimeout(()=>{try{Android.close();}catch(e){}},600);}
-    else setUI('error',r.message||'Save failed');
-  }catch(e){setUI('error','Bridge error');}
+  const r=bridgeSave();
+  if(r.ok){setUI('ready','Saved — closing…');setTimeout(()=>bridgeClose(),600);}
+  else setUI('error',r.message||'Save failed');
 }
 
 function copy(){
   if(!currentPayload)return;
-  try{
-    const r=JSON.parse(Android.copy());
-    if(r.ok){statusEl.textContent='✓ Copied to clipboard';statusEl.className='saved';}
-  }catch(e){setUI('error','Bridge error');}
+  const r=bridgeCopy();
+  if(r.ok){statusEl.textContent='✓ Copied';statusEl.className='saved';}
 }
 
-function rescan(){
-  try{Android.rescan();}catch(e){}
-  lastScanData='';scanning=true;clearPreview();setUI('scanning','');
-}
-
-function closeApp(){stopStream();try{Android.close();}catch(e){}}
+function rescan(){bridgeRescan();lastScanData='';scanning=true;clearPreview();setUI('scanning','');}
+function closeApp(){stopStream();bridgeClose();}
 
 window.addEventListener('pagehide',stopStream);
 window.addEventListener('beforeunload',stopStream);

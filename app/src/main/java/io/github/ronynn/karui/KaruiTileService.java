@@ -14,6 +14,7 @@ public class KaruiTileService extends TileService
   {
     super.onClick();
 
+    // Overlay permission missing → send user to settings
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this))
     {
       Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -23,13 +24,10 @@ public class KaruiTileService extends TileService
       return;
     }
 
-    // startService() directly — no Activity, so the currently running app
-    // is NOT paused. Trade-off: the notification shade stays open. Swipe
-    // it down manually. That's better than pausing a video.
-    //
-    // TileService runs in a foreground context (the shade is open and
-    // the user is interacting with it), so startService() is allowed
-    // even on Android 12+ background-start restrictions.
+    // Primary path: start the overlay service directly.
+    // TileService runs in a foreground context (user is interacting with
+    // the shade), so startService() is permitted even on Android 12+.
+    // No Activity launches, so the currently running app is NOT paused.
     try
     {
       startService(new Intent(this, FloatingWindowService.class));
@@ -37,9 +35,12 @@ public class KaruiTileService extends TileService
     }
     catch (Exception ignored) { /* fall through */ }
 
-    // Fallback — should rarely run. Uses the translucent GhostActivity
-    // to satisfy startActivityAndCollapse() if startService() is blocked.
-    Intent fallback = new Intent(this, GhostActivity.class);
+    // Fallback for the rare case where startService() is blocked by a
+    // background-start restriction. MainActivity handles ACTION_OPEN_FLOATING
+    // by starting the service and finishing itself with a transparent
+    // background — no visible flash on the user's screen.
+    Intent fallback = new Intent(this, MainActivity.class);
+    fallback.setAction(MainActivity.ACTION_OPEN_FLOATING);
     fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     launchIntent(fallback);
   }

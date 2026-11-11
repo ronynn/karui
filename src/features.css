@@ -118,3 +118,56 @@ body.no-fab #edit-textarea {
   background: transparent;
   touch-action: manipulation;
 }
+
+
+
+
+
+
+
+
+/* ---- Pomodoro history graph ---- */
+.pomodoro-graph {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 72px;
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  position: relative;
+}
+.pomodoro-graph-bar-wrap {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.pomodoro-graph-bar {
+  width: 100%;
+  background: var(--accent);
+  border: 1px solid var(--border);
+  min-height: 2px;
+  transition: height 0.25s ease-out;
+}
+.pomodoro-graph-bar.empty { background: var(--surface); opacity: 0.5; }
+.pomodoro-graph-bar.today { box-shadow: 0 0 0 1px var(--accent); }
+.pomodoro-graph-label {
+  font-size: 9px;
+  color: var(--gray);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.pomodoro-graph-legend {
+  font-size: 11px;
+  color: var(--gray);
+  text-align: center;
+  margin-top: 6px;
+}
+body.no-transitions .pomodoro-graph-bar { transition: none !important; }
