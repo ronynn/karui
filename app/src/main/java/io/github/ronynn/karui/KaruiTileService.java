@@ -23,12 +23,25 @@ public class KaruiTileService extends TileService
       return;
     }
 
-    // GhostActivity is a translucent shell that starts the service and
-    // finishes immediately. This is required because startActivityAndCollapse
-    // needs an Activity intent to dismiss the notification shade.
-    Intent intent = new Intent(this, GhostActivity.class);
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-    launchIntent(intent);
+    // startService() directly — no Activity, so the currently running app
+    // is NOT paused. Trade-off: the notification shade stays open. Swipe
+    // it down manually. That's better than pausing a video.
+    //
+    // TileService runs in a foreground context (the shade is open and
+    // the user is interacting with it), so startService() is allowed
+    // even on Android 12+ background-start restrictions.
+    try
+    {
+      startService(new Intent(this, FloatingWindowService.class));
+      return;
+    }
+    catch (Exception ignored) { /* fall through */ }
+
+    // Fallback — should rarely run. Uses the translucent GhostActivity
+    // to satisfy startActivityAndCollapse() if startService() is blocked.
+    Intent fallback = new Intent(this, GhostActivity.class);
+    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    launchIntent(fallback);
   }
 
   private void launchIntent(Intent intent)

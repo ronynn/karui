@@ -119,6 +119,10 @@ public class MainActivity extends Activity
       }
     }
 
+    // ── Seamless startup ────────────────────────────────────────
+    // Window bg, splash bg, and WebView bg are ALL painted the same
+    // theme colour. No flash between them — only the splash TEXT
+    // fades out to reveal the loaded WebView.
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     int themeBg = readThemeBg(prefs);
     boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
@@ -128,7 +132,12 @@ public class MainActivity extends Activity
     SystemBarHelper.apply(this, lightBars);
 
     mSplash = findViewById(R.id.splash_screen);
-    if (mSplash != null) mSplash.setVisibility(View.VISIBLE);
+    if (mSplash != null)
+    {
+      // Override the #000000 in the XML with the actual theme bg.
+      mSplash.setBackgroundColor(themeBg);
+      mSplash.setVisibility(View.VISIBLE);
+    }
 
     mWebView = findViewById(R.id.activity_main_webview);
     mWebView.setVisibility(View.INVISIBLE);
@@ -170,7 +179,8 @@ public class MainActivity extends Activity
         readSyncFileAndInject();
         consumeImportQr();
 
-        // Cross-fade: show WebView, fade splash out in 120ms.
+        // WebView becomes visible at the same colour as the splash.
+        // Fade splash text out in 120ms — feels like the text dissolving.
         mWebView.setVisibility(View.VISIBLE);
         if (mSplash != null)
         {
