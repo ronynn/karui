@@ -4,152 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
-  html, body {
-    margin: 0; padding: 0; width: 100%; height: 100%;
-    background: #000; overflow: hidden; position: fixed;
-    touch-action: none; overscroll-behavior: none;
-    -webkit-user-select: none; user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    font-family: system-ui, sans-serif; color: #EBDBB2;
-  }
-  video {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    object-fit: cover; pointer-events: none; display: none; background: #000;
-  }
-  video.playing { display: block; }
-  #overlay {
-    position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; pointer-events: none;
-  }
-  #frame {
-    width: 70vmin; height: 70vmin; border: 2px solid #FABD2F;
-    border-radius: 14px; opacity: 0; transition: opacity .3s;
-  }
-  #frame.visible { opacity: 1; }
-  #status {
-    position: absolute; top: calc(50% - 35vmin - 44px); width: 100%;
-    text-align: center; color: #FABD2F; font-size: 18px; font-weight: 600;
-    text-shadow: 0 2px 8px #000;
-  }
-  #hint {
-    position: absolute; bottom: calc(50% - 35vmin - 30px); width: 100%;
-    text-align: center; color: #EBDBB2; font-size: 13px; opacity: .85;
-    text-shadow: 0 2px 8px #000;
-  }
-  #status.saved { color: #B8BB26; }
-  #status.error { color: #FB4934; }
-
-  /* ── Floating round buttons — raised look, press-in feedback ─── */
-  #close, #torch {
-    position: fixed; top: 56px; width: 48px; height: 48px;
-    border-radius: 24px; border: none;
-    color: #EBDBB2; font-size: 22px; cursor: pointer; z-index: 20;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0; line-height: 1;
-    background: linear-gradient(180deg, #4a4542 0%, #3C3836 100%);
-    /* The outer shadow makes it look lifted; the inset light line
-       gives the top edge a highlight like a physical button. */
-    box-shadow:
-      0 3px 8px rgba(0,0,0,0.55),
-      inset 0 1px 0 rgba(255,255,255,0.08);
-    transition: transform 60ms ease, box-shadow 60ms ease, background 60ms ease;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #close { right: 16px; }
-  #torch { left: 16px; font-size: 18px; font-weight: 700;
-           font-family: ui-monospace, monospace; }
-
-  /* Pressed state: moves down 2px, shadow shrinks, gradient darkens */
-  #close:active, #torch:active {
-    transform: translateY(2px) scale(0.97);
-    box-shadow:
-      0 1px 3px rgba(0,0,0,0.7),
-      inset 0 1px 0 rgba(0,0,0,0.2);
-    background: linear-gradient(180deg, #3C3836 0%, #2d2a28 100%);
-  }
-  #torch.on {
-    background: linear-gradient(180deg, #ffcd4d 0%, #FABD2F 100%);
-    color: #282828;
-    box-shadow:
-      0 3px 10px rgba(250,189,47,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.3);
-  }
-  #torch.on:active {
-    background: linear-gradient(180deg, #FABD2F 0%, #D79921 100%);
-    box-shadow:
-      0 1px 3px rgba(250,189,47,0.6),
-      inset 0 1px 0 rgba(0,0,0,0.2);
-  }
-
-  /* ── Preview box ─────────────────────────────────────────────── */
-  #preview {
-    position: fixed; left: 16px; right: 16px; bottom: 120px; max-height: 120px;
-    overflow-y: auto; background: rgba(40,40,40,0.95);
-    border: 1px solid #504945; border-radius: 10px; padding: 12px;
-    font-size: 13px; line-height: 1.4; color: #EBDBB2; z-index: 8;
-    display: none; -webkit-user-select: text; user-select: text; word-break: break-all;
-  }
-  #preview.visible { display: block; }
-  #preview-label {
-    position: fixed; left: 16px; right: 16px; bottom: 244px;
-    font-size: 11px; letter-spacing: .5px; color: #928374; z-index: 8; display: none;
-  }
-  #preview-label.visible { display: block; }
-
-  /* ── Bottom action buttons — rectangular, raised, press-in ───── */
-  #controls {
-    position: fixed; left: 0; right: 0; bottom: 0;
-    padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px) + 40px);
-    display: none; justify-content: center; gap: 10px; flex-wrap: wrap;
-    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-    z-index: 10;
-  }
-  #controls.visible { display: flex; }
-  #controls button {
-    background: linear-gradient(180deg, #4a4542 0%, #3C3836 100%);
-    color: #EBDBB2;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: .5px;
-    cursor: pointer;
-    min-width: 90px;
-    box-shadow:
-      0 3px 8px rgba(0,0,0,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.07);
-    transition: transform 60ms ease, box-shadow 60ms ease, background 60ms ease;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #controls button:active {
-    transform: translateY(2px) scale(0.97);
-    box-shadow:
-      0 1px 3px rgba(0,0,0,0.6),
-      inset 0 1px 0 rgba(0,0,0,0.15);
-    background: linear-gradient(180deg, #3C3836 0%, #2d2a28 100%);
-  }
-  #btn-save {
-    background: linear-gradient(180deg, #ffcd4d 0%, #FABD2F 100%);
-    color: #282828;
-    box-shadow:
-      0 3px 10px rgba(250,189,47,0.4),
-      inset 0 1px 0 rgba(255,255,255,0.3);
-  }
-  #btn-save:active {
-    background: linear-gradient(180deg, #FABD2F 0%, #D79921 100%);
-    box-shadow:
-      0 1px 3px rgba(250,189,47,0.55),
-      inset 0 1px 0 rgba(0,0,0,0.2);
-  }
-
-  #loading {
-    position: fixed; inset: 0; display: flex; align-items: center;
-    justify-content: center; color: #EBDBB2; font-size: 14px;
-    background: #000; z-index: 5; text-align: center; padding: 20px;
-    white-space: pre-line;
-  }
-  #loading.hidden { display: none; }
+html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden;position:fixed;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-family:system-ui,sans-serif;color:#EBDBB2}
+video{position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;pointer-events:none;display:none;background:#000}
+video.playing{display:block}
+#overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+#frame{width:70vmin;height:70vmin;border:2px solid #FABD2F;border-radius:14px;opacity:0;transition:opacity .2s}
+#frame.visible{opacity:1}
+#status{position:absolute;top:calc(50% - 35vmin - 44px);width:100%;text-align:center;color:#FABD2F;font-size:18px;font-weight:600;text-shadow:0 2px 8px #000}
+#hint{position:absolute;bottom:calc(50% - 35vmin - 30px);width:100%;text-align:center;color:#EBDBB2;font-size:13px;opacity:.85;text-shadow:0 2px 8px #000}
+#status.saved{color:#B8BB26}
+#status.error{color:#FB4934}
+#close,#torch{position:fixed;top:56px;width:48px;height:48px;border-radius:24px;border:none;color:#EBDBB2;font-size:22px;cursor:pointer;z-index:20;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;background:#3C3836}
+#close{right:16px}
+#torch{left:16px;font-size:18px;font-weight:700;font-family:ui-monospace,monospace}
+#close:active,#torch:active{background:#504945}
+#torch.on{background:#FABD2F;color:#282828}
+#torch.on:active{background:#D79921}
+#preview{position:fixed;left:16px;right:16px;bottom:120px;max-height:120px;overflow-y:auto;background:rgba(40,40,40,0.95);border:1px solid #504945;border-radius:10px;padding:12px;font-size:13px;line-height:1.4;color:#EBDBB2;z-index:8;display:none;-webkit-user-select:text;user-select:text;word-break:break-all;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#preview.visible{display:block}
+#preview-label{position:fixed;left:16px;right:16px;bottom:244px;font-size:11px;letter-spacing:.5px;color:#928374;z-index:8;display:none}
+#preview-label.visible{display:block}
+#controls{position:fixed;left:0;right:0;bottom:0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px) + 40px);display:none;justify-content:center;gap:10px;flex-wrap:wrap;background:linear-gradient(to top,rgba(0,0,0,0.9),transparent);z-index:10}
+#controls.visible{display:flex}
+#controls button{background:#3C3836;color:#EBDBB2;border:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:.5px;cursor:pointer;min-width:90px}
+#controls button:active{background:#504945}
+#btn-save{background:#FABD2F;color:#282828}
+#btn-save:active{background:#D79921}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#EBDBB2;font-size:14px;background:#000;z-index:5;text-align:center;padding:20px;white-space:pre-line}
+#loading.hidden{display:none}
 </style>
 </head>
 <body>
@@ -179,262 +61,155 @@
 </div>
 
 <script type="module">
-  import * as qrModule from './qr-decode.js';
-  const decode = qrModule.decode || qrModule.default || qrModule.decodeQR;
+import * as qrModule from './qr-decode.js';
+const decode = qrModule.decode || qrModule.default || qrModule.decodeQR;
 
-  const video     = document.getElementById('v');
-  const canvas    = document.getElementById('c');
-  const ctx       = canvas.getContext('2d', { willReadFrequently: true });
-  const statusEl  = document.getElementById('status');
-  const hintEl    = document.getElementById('hint');
-  const frameEl   = document.getElementById('frame');
-  const controls  = document.getElementById('controls');
-  const loadingEl = document.getElementById('loading');
-  const previewEl = document.getElementById('preview');
-  const previewLabel = document.getElementById('preview-label');
-  const btnSave   = document.getElementById('btn-save');
-  const btnCopy   = document.getElementById('btn-copy');
-  const btnRescan = document.getElementById('btn-rescan');
-  const torchBtn  = document.getElementById('torch');
-  const closeBtn  = document.getElementById('close');
+const $ = id => document.getElementById(id);
+const video=$('v'), canvas=$('c'), ctx=canvas.getContext('2d',{willReadFrequently:true});
+const statusEl=$('status'), hintEl=$('hint'), frameEl=$('frame');
+const controls=$('controls'), loadingEl=$('loading');
+const previewEl=$('preview'), previewLabel=$('preview-label');
+const btnSave=$('btn-save'), btnCopy=$('btn-copy'), btnRescan=$('btn-rescan');
+const torchBtn=$('torch'), closeBtn=$('close');
 
-  let scanning = true;
-  let lastScanData = '';
-  let lastScanTime = 0;
-  let stream = null;
-  let torchOn = false;
-  let currentPayload = null;
+let scanning=true, lastScanData='', lastScanTime=0, stream=null, torchOn=false, currentPayload=null;
 
-  // ── Bind every button here — NOT inline onclick ─────────────────
-  // Inside <script type="module">, functions are module-scoped and
-  // cannot be found by inline onclick="...". addEventListener has
-  // direct access to the closure and everything works.
-  btnSave.addEventListener('click', () => save());
-  btnCopy.addEventListener('click', () => copy());
-  btnRescan.addEventListener('click', () => rescan());
-  torchBtn.addEventListener('click', () => toggleTorch());
-  closeBtn.addEventListener('click', () => closeApp());
+btnSave.addEventListener('click', () => save());
+btnCopy.addEventListener('click', () => copy());
+btnRescan.addEventListener('click', () => rescan());
+torchBtn.addEventListener('click', () => toggleTorch());
+closeBtn.addEventListener('click', () => closeApp());
 
-  function setUI(state, message)
-  {
-    statusEl.className = '';
-    controls.classList.remove('visible');
-    previewEl.classList.remove('visible');
-    previewLabel.classList.remove('visible');
-    btnSave.style.display = 'none';
-    btnCopy.style.display = 'none';
-    btnRescan.style.display = 'none';
+function setUI(state, msg) {
+  statusEl.className='';
+  controls.classList.remove('visible');
+  previewEl.classList.remove('visible');
+  previewLabel.classList.remove('visible');
+  btnSave.style.display=btnCopy.style.display=btnRescan.style.display='none';
 
-    if (state === 'scanning') {
-      statusEl.textContent = '';
-      hintEl.textContent = 'Point at a Karui QR code';
-      frameEl.classList.add('visible');
-    } else if (state === 'partial') {
-      statusEl.textContent = message;
-      hintEl.textContent = 'Point at the next QR code';
-      frameEl.classList.add('visible');
-    } else if (state === 'ready') {
-      statusEl.className = 'saved';
-      statusEl.textContent = '✓ ' + message;
-      hintEl.textContent = 'Review below, then save or copy';
-      controls.classList.add('visible');
-      btnSave.style.display = 'inline-block';
-      btnCopy.style.display = 'inline-block';
-      btnRescan.style.display = 'inline-block';
-      frameEl.classList.remove('visible');
-    } else if (state === 'error') {
-      statusEl.className = 'error';
-      statusEl.textContent = '⚠ ' + message;
-      hintEl.textContent = '';
-      frameEl.classList.remove('visible');
-    }
+  if(state==='scanning'){statusEl.textContent='';hintEl.textContent='Point at a Karui QR code';frameEl.classList.add('visible');}
+  else if(state==='partial'){statusEl.textContent=msg;hintEl.textContent='Point at the next QR code';frameEl.classList.add('visible');}
+  else if(state==='ready'){
+    statusEl.className='saved';statusEl.textContent='✓ '+msg;
+    hintEl.textContent='Review below, then save or copy';
+    controls.classList.add('visible');
+    btnSave.style.display=btnCopy.style.display=btnRescan.style.display='inline-block';
+    frameEl.classList.remove('visible');
   }
+  else if(state==='error'){statusEl.className='error';statusEl.textContent='⚠ '+msg;hintEl.textContent='';frameEl.classList.remove('visible');}
+}
 
-  function showPreview(text) {
-    currentPayload = text;
-    previewEl.textContent = text;
-    previewEl.classList.add('visible');
-    previewLabel.classList.add('visible');
+function showPreview(text){currentPayload=text;previewEl.textContent=text;previewEl.classList.add('visible');previewLabel.classList.add('visible');}
+function clearPreview(){currentPayload=null;previewEl.textContent='';previewEl.classList.remove('visible');previewLabel.classList.remove('visible');}
+
+async function toggleTorch(){
+  if(!stream)return;
+  try{
+    const track=stream.getVideoTracks()[0];
+    if(!track)return;
+    const caps=track.getCapabilities();
+    if(!caps.torch){torchBtn.style.display='none';return;}
+    torchOn=!torchOn;
+    await track.applyConstraints({advanced:[{torch:torchOn}]});
+    torchBtn.classList.toggle('on',torchOn);
+  }catch(e){torchBtn.style.display='none';}
+}
+
+function stopStream(){if(stream){try{stream.getTracks().forEach(t=>t.stop());}catch(e){}stream=null;}}
+
+async function start(){
+  if(typeof decode!=='function'){
+    loadingEl.textContent='QR decoder not loaded.\nExports: '+Object.keys(qrModule).join(', ');
+    setUI('error','Decoder missing');return;
   }
-
-  function clearPreview() {
-    currentPayload = null;
-    previewEl.textContent = '';
-    previewEl.classList.remove('visible');
-    previewLabel.classList.remove('visible');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    loadingEl.textContent='Camera not supported in this WebView.';
+    setUI('error','No camera support');return;
   }
-
-  async function toggleTorch()
-  {
-    if (!stream) return;
-    try {
-      const track = stream.getVideoTracks()[0];
-      if (!track) return;
-      const caps = track.getCapabilities();
-      if (!caps.torch) { torchBtn.style.display = 'none'; return; }
-      torchOn = !torchOn;
-      await track.applyConstraints({ advanced: [{ torch: torchOn }] });
-      torchBtn.classList.toggle('on', torchOn);
-    } catch (e) { torchBtn.style.display = 'none'; }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+    video.srcObject=stream;
+    video.removeAttribute('controls');
+    video.controls=false;
+    const track=stream.getVideoTracks()[0];
+    if(track){const caps=track.getCapabilities();if(!caps.torch)torchBtn.style.display='none';}
+    video.addEventListener('playing',()=>{
+      video.classList.add('playing');
+      loadingEl.classList.add('hidden');
+      setUI('scanning','');
+      requestAnimationFrame(tick);
+    },{once:true});
+    await video.play();
+  }catch(e){
+    loadingEl.textContent='Could not start camera.\n'+(e.name||'Error')+': '+(e.message||'unknown');
+    setUI('error','Camera failed');
   }
+}
 
-  function stopStream()
-  {
-    if (stream) {
-      try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
-      stream = null;
-    }
-  }
-
-  async function start()
-  {
-    if (typeof decode !== 'function') {
-      loadingEl.textContent =
-        'QR decoder not loaded.\n\nExports: ' + Object.keys(qrModule).join(', ');
-      setUI('error', 'Decoder missing');
-      return;
-    }
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      loadingEl.textContent = 'This device does not support camera access in WebView.';
-      setUI('error', 'No camera support');
-      return;
-    }
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-      });
-
-      video.srcObject = stream;
-      video.removeAttribute('controls');
-      video.controls = false;
-
-      const track = stream.getVideoTracks()[0];
-      if (track) {
-        const caps = track.getCapabilities();
-        if (!caps.torch) torchBtn.style.display = 'none';
-      }
-
-      video.addEventListener('playing', () => {
-        video.classList.add('playing');
-        loadingEl.classList.add('hidden');
-        setUI('scanning', '');
-        requestAnimationFrame(tick);
-      }, { once: true });
-
-      await video.play();
-    } catch (e) {
-      loadingEl.textContent =
-        'Could not start camera.\n\n' + (e.name || 'Error') + ': ' + (e.message || 'unknown');
-      setUI('error', 'Camera failed');
-    }
-  }
-
-  function tick()
-  {
-    if (!scanning) { requestAnimationFrame(tick); return; }
-
-    if (video.readyState >= 2 && video.videoWidth > 0) {
-      const w = video.videoWidth, h = video.videoHeight;
-      if (canvas.width !== w) canvas.width = w;
-      if (canvas.height !== h) canvas.height = h;
-
-      try {
-        ctx.drawImage(video, 0, 0, w, h);
-        const imageData = ctx.getImageData(0, 0, w, h);
-
-        // ── tryHarder: cam2qr will retry with rotation, inversion,
-        //    and multiple binarization thresholds. Slower per frame
-        //    but necessary for dense / high-version QR codes. ─────
-        let result = null;
-        try {
-          result = decode(imageData, { tryHarder: true });
-        } catch (decodeErr) {
-          // expected on undecodable frames
-        }
-
-        if (result) {
-          const text = result.text || (typeof result === 'string' ? result : null);
-          if (text) {
-            const now = Date.now();
-            if (text !== lastScanData || now - lastScanTime > 1500) {
-              lastScanData = text;
-              lastScanTime = now;
-              handleScan(text);
-            }
+function tick(){
+  if(!scanning){requestAnimationFrame(tick);return;}
+  if(video.readyState>=2&&video.videoWidth>0){
+    const w=video.videoWidth,h=video.videoHeight;
+    if(canvas.width!==w)canvas.width=w;
+    if(canvas.height!==h)canvas.height=h;
+    try{
+      ctx.drawImage(video,0,0,w,h);
+      const imageData=ctx.getImageData(0,0,w,h);
+      let result=null;
+      try{result=decode(imageData,{tryHarder:true});}catch(e){}
+      if(result){
+        const text=result.text||(typeof result==='string'?result:null);
+        if(text){
+          const now=Date.now();
+          if(text!==lastScanData||now-lastScanTime>1500){
+            lastScanData=text;lastScanTime=now;handleScan(text);
           }
         }
-      } catch (outerErr) {
-        console.warn('Scanner frame error:', outerErr);
       }
-    }
-    requestAnimationFrame(tick);
+    }catch(e){console.warn('Scanner frame error:',e);}
   }
+  requestAnimationFrame(tick);
+}
 
-  function handleScan(text)
-  {
-    let result;
-    try { result = JSON.parse(Android.onScan(text)); }
-    catch (e) { setUI('error', 'Bridge error'); return; }
-
-    if (result.type === 'chunk') {
-      setUI('partial', 'Scanned ' + result.received + '/' + result.total);
-    } else if (result.type === 'ready') {
-      scanning = false;
-      setUI('ready', result.summary);
-      showPreview(text);
-    } else if (result.type === 'error') {
-      setUI('error', result.message);
-      setTimeout(() => { if (scanning) setUI('scanning', ''); }, 1800);
-    }
+function handleScan(text){
+  let result;
+  try{result=JSON.parse(Android.onScan(text));}catch(e){setUI('error','Bridge error');return;}
+  if(result.type==='chunk')setUI('partial','Scanned '+result.received+'/'+result.total);
+  else if(result.type==='ready'){scanning=false;setUI('ready',result.summary);showPreview(text);}
+  else if(result.type==='error'){
+    setUI('error',result.message);
+    setTimeout(()=>{if(scanning)setUI('scanning','');},1800);
   }
+}
 
-  function save()
-  {
-    if (!currentPayload) return;
-    try {
-      const r = JSON.parse(Android.save());
-      if (r.ok) {
-        setUI('ready', 'Saved — closing…');
-        setTimeout(() => { try { Android.close(); } catch (e) {} }, 600);
-      } else {
-        setUI('error', r.message || 'Save failed');
-      }
-    } catch (e) { setUI('error', 'Bridge error'); }
-  }
+function save(){
+  if(!currentPayload)return;
+  try{
+    const r=JSON.parse(Android.save());
+    if(r.ok){setUI('ready','Saved — closing…');setTimeout(()=>{try{Android.close();}catch(e){}},600);}
+    else setUI('error',r.message||'Save failed');
+  }catch(e){setUI('error','Bridge error');}
+}
 
-  function copy()
-  {
-    if (!currentPayload) return;
-    try {
-      const r = JSON.parse(Android.copy());
-      if (r.ok) {
-        statusEl.textContent = '✓ Copied to clipboard';
-        statusEl.className = 'saved';
-      }
-    } catch (e) { setUI('error', 'Bridge error'); }
-  }
+function copy(){
+  if(!currentPayload)return;
+  try{
+    const r=JSON.parse(Android.copy());
+    if(r.ok){statusEl.textContent='✓ Copied to clipboard';statusEl.className='saved';}
+  }catch(e){setUI('error','Bridge error');}
+}
 
-  function rescan()
-  {
-    try { Android.rescan(); } catch (e) {}
-    lastScanData = '';
-    scanning = true;
-    clearPreview();
-    setUI('scanning', '');
-  }
+function rescan(){
+  try{Android.rescan();}catch(e){}
+  lastScanData='';scanning=true;clearPreview();setUI('scanning','');
+}
 
-  function closeApp()
-  {
-    stopStream();
-    try { Android.close(); } catch (e) {}
-  }
+function closeApp(){stopStream();try{Android.close();}catch(e){}}
 
-  window.addEventListener('pagehide', stopStream);
-  window.addEventListener('beforeunload', stopStream);
+window.addEventListener('pagehide',stopStream);
+window.addEventListener('beforeunload',stopStream);
 
-  start();
+start();
 </script>
 </body>
 </html>
