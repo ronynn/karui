@@ -54,11 +54,7 @@ public class FloatingWindowService extends Service
   private static final int COLLAPSED_WIDTH_DP  = 140;
   private static final int COLLAPSED_HEIGHT_DP = 28;
 
-  /**
-   * InputManager refuses IME for windows whose obscuring alpha exceeds
-   * getMaximumObscuringOpacityForTouch() (~0.8). Keep this strictly
-   * below 0.8 so the keyboard can appear over the overlay.
-   */
+  // Critical: alpha must be <= 0.8 so the IME accepts our window
   private static final float WINDOW_ALPHA = 0.78f;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
@@ -152,8 +148,6 @@ public class FloatingWindowService extends Service
     bg.setCornerRadius(dp(10));
     rootLayout.setBackground(bg);
     rootLayout.setClipToOutline(true);
-    // Focusable by default — required so EditText can receive keys.
-    // When collapsed we toggle FLAG_NOT_FOCUSABLE to release focus.
     rootLayout.setFocusable(true);
     rootLayout.setFocusableInTouchMode(true);
 
@@ -162,7 +156,6 @@ public class FloatingWindowService extends Service
     contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-    // Title bar
     FrameLayout titleBar = new FrameLayout(this);
     GradientDrawable titleBg = new GradientDrawable();
     titleBg.setColor(Color.parseColor(HANDLE_BG_COLOR));
@@ -203,7 +196,6 @@ public class FloatingWindowService extends Service
     closeBtn.setOnClickListener(v -> saveAndClose());
     titleBar.addView(closeBtn);
 
-    // EditText
     mEditText = new EditText(this);
     mEditText.setLayoutParams(new LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -244,7 +236,6 @@ public class FloatingWindowService extends Service
     contentLayout.addView(mEditText);
     rootLayout.addView(contentLayout);
 
-    // Resize handle
     mResizeHandle = new View(this);
     GradientDrawable resizeShape = new GradientDrawable();
     resizeShape.setColor(Color.parseColor(RESIZE_COLOR));
@@ -256,7 +247,6 @@ public class FloatingWindowService extends Service
     mResizeHandle.setLayoutParams(rhParams);
     rootLayout.addView(mResizeHandle);
 
-    // Window flags — focusable (no FLAG_NOT_FOCUSABLE) so EditText works.
     int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
               | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
@@ -271,7 +261,6 @@ public class FloatingWindowService extends Service
     mParams.y = dp(100);
     mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                           | WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE;
-    // Critical for IME: alpha must be ≤ 0.8
     mParams.alpha = WINDOW_ALPHA;
 
     mRootView = rootLayout;
@@ -293,14 +282,15 @@ public class FloatingWindowService extends Service
       return false;
     });
 
-    // Show keyboard AFTER layout — onGlobalLayout is the reliable hook
+    // Wait for layout, THEN show keyboard. This is the only reliable
+    // sequence for TYPE_APPLICATION_OVERLAY + EditText.
     mRootView.getViewTreeObserver().addOnGlobalLayoutListener(
         new ViewTreeObserver.OnGlobalLayoutListener()
         {
           @Override public void onGlobalLayout()
           {
             mRootView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-            mHandler.postDelayed(() -> focusAndShowKeyboard(), 150);
+            mHandler.postDelayed(() -> focusAndShowKeyboard(), 100);
           }
         });
 
@@ -314,7 +304,6 @@ public class FloatingWindowService extends Service
     };
     mHandler.postDelayed(mAutoSaveRunnable, AUTOSAVE_INTERVAL_MS);
 
-    // Drag + tap-to-expand
     titleBar.setOnTouchListener(new View.OnTouchListener()
     {
       private int startX, startY;
@@ -330,7 +319,6 @@ public class FloatingWindowService extends Service
             startTouchX = e.getRawX(); startTouchY = e.getRawY();
             moved = false;
             return true;
-
           case MotionEvent.ACTION_MOVE:
             float dx = e.getRawX() - startTouchX;
             float dy = e.getRawY() - startTouchY;
@@ -346,7 +334,6 @@ public class FloatingWindowService extends Service
               updateOffscreenState();
             }
             return true;
-
           case MotionEvent.ACTION_UP:
           case MotionEvent.ACTION_CANCEL:
             if (moved && !mMostlyOffscreen)
@@ -358,7 +345,6 @@ public class FloatingWindowService extends Service
       }
     });
 
-    // Resize handle
     mResizeHandle.setOnTouchListener(new View.OnTouchListener()
     {
       private int startW, startH;
@@ -399,17 +385,13 @@ public class FloatingWindowService extends Service
     if (mCollapsed || mParams == null) return;
     mExpandedWidth = mParams.width;
     mExpandedHeight = mParams.height;
-
-    // Release focus → other apps can use the keyboard again.
     mParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
     mParams.flags &= ~WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
     mParams.width = dp(COLLAPSED_WIDTH_DP);
     mParams.height = dp(COLLAPSED_HEIGHT_DP);
-
     if (mEditText != null) mEditText.setVisibility(View.GONE);
     if (mResizeHandle != null) mResizeHandle.setVisibility(View.GONE);
     if (mMinimizeBtn != null) mMinimizeBtn.setText("+");
-
     hideKeyboard();
     mCollapsed = true;
     try { mWindowManager.updateViewLayout(mRootView, mParams); }
@@ -422,24 +404,15 @@ public class FloatingWindowService extends Service
     mParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
     mParams.width = mExpandedWidth;
     mParams.height = mExpandedHeight;
-
     if (mEditText != null) mEditText.setVisibility(View.VISIBLE);
     if (mResizeHandle != null) mResizeHandle.setVisibility(View.VISIBLE);
     if (mMinimizeBtn != null) mMinimizeBtn.setText("−");
-
     mCollapsed = false;
     try { mWindowManager.updateViewLayout(mRootView, mParams); }
     catch (Exception ignored) {}
-
     mHandler.postDelayed(() -> focusAndShowKeyboard(), 100);
   }
 
-  /**
-   * Reliable keyboard-show sequence for TYPE_APPLICATION_OVERLAY:
-   *   1. requestFocus on both root and EditText
-   *   2. showSoftInput with SHOW_IMPLICIT
-   *   3. toggleSoftInput as fallback (some ROMs ignore step 2)
-   */
   private void focusAndShowKeyboard()
   {
     if (mEditText == null || mCollapsed) return;
@@ -447,17 +420,12 @@ public class FloatingWindowService extends Service
     {
       mRootView.requestFocus();
       mEditText.requestFocus();
-
       InputMethodManager imm =
           (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
       if (imm == null) return;
-
       boolean shown = imm.showSoftInput(mEditText, InputMethodManager.SHOW_IMPLICIT);
       if (!shown)
-      {
-        // Fallback for OEMs that reject showSoftInput on overlays.
         imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0);
-      }
     }
     catch (Exception ignored) {}
   }

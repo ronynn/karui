@@ -24,9 +24,7 @@ public class KaruiTileService extends TileService
     }
 
     // startActivityAndCollapse is the ONLY way to make the shade collapse.
-    // The target Activity is MainActivity with ACTION_OPEN_FLOATING — it
-    // starts the service and finishes immediately (transparent window,
-    // no transition), so the user only sees the shade collapse.
+    // The target Activity starts the service and finishes immediately.
     Intent intent = new Intent(this, MainActivity.class);
     intent.setAction(MainActivity.ACTION_OPEN_FLOATING);
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK

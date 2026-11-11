@@ -20,6 +20,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -40,10 +41,6 @@ import java.io.OutputStream;
 
 public class MainActivity extends Activity
 {
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 1 — CONSTANTS
-  // ═══════════════════════════════════════════════════════════════
-
   public static final String ACTION_NOTE_ADDED = "io.github.ronynn.karui.ACTION_NOTE_ADDED";
   public static final String ACTION_OPEN_FLOATING = "io.github.ronynn.karui.ACTION_OPEN_FLOATING";
   public static final String ACTION_CLOSE_FLOATING = "io.github.ronynn.karui.ACTION_CLOSE_FLOATING";
@@ -68,11 +65,8 @@ public class MainActivity extends Activity
 
   private static final int DEFAULT_BG = 0xFF282828;
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 2 — FIELDS
-  // ═══════════════════════════════════════════════════════════════
-
   private WebView mWebView;
+  private View mSplash;
 
   String pendingFileName;
   String pendingFileData;
@@ -95,10 +89,6 @@ public class MainActivity extends Activity
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 3 — LIFECYCLE
-  // ═══════════════════════════════════════════════════════════════
-
   @Override
   @SuppressLint({"SetJavaScriptEnabled", "AllowFileAccess"})
   protected void onCreate(Bundle savedInstanceState)
@@ -107,7 +97,6 @@ public class MainActivity extends Activity
 
     Intent launchIntent = getIntent();
     String action = launchIntent != null ? launchIntent.getAction() : null;
-
     boolean assistLaunch = Intent.ACTION_ASSIST.equals(action);
     boolean tileLaunch = ACTION_OPEN_FLOATING.equals(action);
     boolean floatingTrigger = assistLaunch || tileLaunch;
@@ -135,15 +124,14 @@ public class MainActivity extends Activity
     boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
 
     getWindow().setBackgroundDrawable(new ColorDrawable(themeBg));
-
     setContentView(R.layout.activity_main);
     SystemBarHelper.apply(this, lightBars);
 
-    View splash = findViewById(R.id.splash_screen);
-    if (splash != null) splash.setVisibility(View.GONE);
+    mSplash = findViewById(R.id.splash_screen);
+    if (mSplash != null) mSplash.setVisibility(View.VISIBLE);
 
     mWebView = findViewById(R.id.activity_main_webview);
-    mWebView.setVisibility(View.VISIBLE);
+    mWebView.setVisibility(View.INVISIBLE);
     mWebView.setBackgroundColor(themeBg);
     mWebView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     mWebView.setVerticalScrollBarEnabled(false);
@@ -181,6 +169,17 @@ public class MainActivity extends Activity
         injectPendingNotes();
         readSyncFileAndInject();
         consumeImportQr();
+
+        // Cross-fade: show WebView, fade splash out in 120ms.
+        mWebView.setVisibility(View.VISIBLE);
+        if (mSplash != null)
+        {
+          AlphaAnimation fade = new AlphaAnimation(1f, 0f);
+          fade.setDuration(120);
+          fade.setFillAfter(true);
+          mSplash.startAnimation(fade);
+          mSplash.postDelayed(() -> mSplash.setVisibility(View.GONE), 120);
+        }
 
         SharedPreferences p = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
         SystemBarHelper.apply(MainActivity.this, p.getBoolean(KEY_THEME_LIGHT, false));
@@ -244,7 +243,6 @@ public class MainActivity extends Activity
   protected void onResume()
   {
     super.onResume();
-
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
 
@@ -488,10 +486,6 @@ public class MainActivity extends Activity
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 4 — OVERLAY PERMISSION
-  // ═══════════════════════════════════════════════════════════════
-
   boolean canDrawOverlays()
   {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
@@ -536,10 +530,6 @@ public class MainActivity extends Activity
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 5 — THEME HELPERS
-  // ═══════════════════════════════════════════════════════════════
-
   private int readThemeBg(SharedPreferences prefs)
   {
     String hex = prefs.getString(KEY_THEME_BG, null);
@@ -548,27 +538,19 @@ public class MainActivity extends Activity
     catch (Exception e) { return DEFAULT_BG; }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 6 — DATA INJECTION & QR IMPORT
-  // ═══════════════════════════════════════════════════════════════
-
   private void injectPendingNotes() { injectPendingNotes(0); }
 
   private void injectPendingNotes(final int attempt)
   {
     if (mInjecting || !isPageLoaded || mWebView == null) return;
-
     final SharedPreferences qp = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     final String jsonStr = qp.getString("pending_notes_json", "[]");
     if (jsonStr.equals("[]") || jsonStr.isEmpty()) return;
-
     mInjecting = true;
-
     String js = "(function(){"
         + "if(!window.syncNotesArrayFromAndroid) return 'missing';"
         + "try{window.syncNotesArrayFromAndroid(" + JSONObject.quote(jsonStr) + ");return 'ok';}"
         + "catch(e){return 'error';}})()";
-
     mWebView.evaluateJavascript(js, value ->
     {
       mInjecting = false;
@@ -591,13 +573,10 @@ public class MainActivity extends Activity
   private void consumeImportQr(final int attempt)
   {
     if (mImportingQr || !isPageLoaded || mWebView == null) return;
-
     final SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     final String payloadsJson = prefs.getString(KEY_PENDING_IMPORT, "[]");
     if (payloadsJson.equals("[]") || payloadsJson.isEmpty()) return;
-
     mImportingQr = true;
-
     JSONArray arr;
     try { arr = new JSONArray(payloadsJson); }
     catch (Exception e)
@@ -606,7 +585,6 @@ public class MainActivity extends Activity
       mImportingQr = false;
       return;
     }
-
     final String[] payloads = new String[arr.length()];
     for (int i = 0; i < arr.length(); i++) payloads[i] = arr.optString(i, "");
     if (payloads.length == 0)
@@ -615,7 +593,6 @@ public class MainActivity extends Activity
       mImportingQr = false;
       return;
     }
-
     deliverQrPayload(prefs, payloads, 0, attempt);
   }
 
@@ -635,20 +612,17 @@ public class MainActivity extends Activity
       mImportingQr = false;
       return;
     }
-
     String payload = payloads[index];
     if (payload == null || payload.isEmpty())
     {
       deliverQrPayload(prefs, payloads, index + 1, attempt);
       return;
     }
-
     String js = "(function(){"
         + "if (typeof window.importQrPayload !== 'function') return 'missing';"
         + "try { return window.importQrPayload(" + JSONObject.quote(payload) + "); }"
         + "catch(e) { return 'error'; }"
         + "})()";
-
     mWebView.evaluateJavascript(js, value ->
     {
       if ("\"ok\"".equals(value) || "\"error\"".equals(value))
@@ -661,10 +635,7 @@ public class MainActivity extends Activity
             () -> deliverQrPayload(prefs, payloads, index, attempt + 1),
             INJECT_RETRY_DELAY_MS);
       }
-      else
-      {
-        mImportingQr = false;
-      }
+      else { mImportingQr = false; }
     });
   }
 
@@ -682,13 +653,11 @@ public class MainActivity extends Activity
         Uri uri = Uri.parse(uriStr);
         InputStream is = getContentResolver().openInputStream(uri);
         if (is == null) return;
-
         BufferedReader r = new BufferedReader(new InputStreamReader(is));
         StringBuilder sb = new StringBuilder();
         String line;
         while ((line = r.readLine()) != null) sb.append(line).append("\n");
         r.close();
-
         final String md = sb.toString();
         runOnUiThread(() ->
         {
@@ -716,10 +685,6 @@ public class MainActivity extends Activity
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 7 — JAVASCRIPT BRIDGE
-  // ═══════════════════════════════════════════════════════════════
-
   public class WebAppInterface
   {
     MainActivity mActivity;
@@ -731,12 +696,10 @@ public class MainActivity extends Activity
       mActivity.pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty())
           ? defaultFileName : "file.md";
       mActivity.pendingFileData = currentContent != null ? currentContent : "";
-
       Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
       intent.addCategory(Intent.CATEGORY_OPENABLE);
       intent.setType("text/markdown");
       intent.putExtra(Intent.EXTRA_TITLE, mActivity.pendingFileName);
-
       try { mActivity.startActivityForResult(intent, SYNC_FILE_REQUEST_CODE); }
       catch (ActivityNotFoundException e)
       {
@@ -894,15 +857,9 @@ public class MainActivity extends Activity
     {
       mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
         .edit().putBoolean(KEY_THEME_LIGHT, light).apply();
-      mActivity.runOnUiThread(() ->
-        SystemBarHelper.apply(mActivity, light));
+      mActivity.runOnUiThread(() -> SystemBarHelper.apply(mActivity, light));
     }
 
-    /**
-     * Reads the current wallpaper and returns a derived JSON theme.
-     * Called from settings.js's "DYNAMIC" button and by the silent
-     * re-apply logic on app start.
-     */
     @JavascriptInterface
     public String getDynamicWallpaperTheme()
     {
@@ -917,7 +874,6 @@ public class MainActivity extends Activity
           CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
       String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
       prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
-
       try
       {
         JSONArray oldArr = new JSONArray(oldJson);
@@ -943,7 +899,6 @@ public class MainActivity extends Activity
         }
       }
       catch (Exception ignored) {}
-
       if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
       {
         Intent refresh = new Intent(mActivity, CalendarNotificationReceiver.class);
@@ -960,7 +915,6 @@ public class MainActivity extends Activity
       boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
       prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
       final boolean justEnabled = enabled && !wasEnabled;
-
       mActivity.runOnUiThread(() ->
       {
         if (enabled)
@@ -973,7 +927,6 @@ public class MainActivity extends Activity
               new String[]{Manifest.permission.POST_NOTIFICATIONS},
               NOTIFICATION_PERMISSION_REQUEST);
           }
-
           if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
           {
             android.app.AlarmManager am =
@@ -988,39 +941,27 @@ public class MainActivity extends Activity
               try { mActivity.startActivity(i); } catch (Exception ignored) {}
             }
           }
-
           CalendarNotificationReceiver.scheduleNext(mActivity);
           CalendarNotificationReceiver.scheduleEventReminders(mActivity);
-
           if (justEnabled)
           {
             Intent show = new Intent(mActivity, CalendarNotificationReceiver.class);
             mActivity.sendBroadcast(show);
           }
         }
-        else
-        {
-          CalendarNotificationReceiver.cancel(mActivity);
-        }
+        else { CalendarNotificationReceiver.cancel(mActivity); }
       });
     }
   }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  SECTION 8 — PERMISSION RESULT ROUTING
-  // ═══════════════════════════════════════════════════════════════
 
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
   {
     if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return;
-
     boolean granted = grantResults.length > 0
         && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-
     boolean wasQuickNote = pendingQuickNoteEnable;
     pendingQuickNoteEnable = false;
-
     if (wasQuickNote)
     {
       if (granted)
