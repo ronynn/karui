@@ -134,8 +134,6 @@ public class MainActivity extends Activity
     mSplash = findViewById(R.id.splash_screen);
     if (mSplash != null)
     {
-      // Override the #000000 in the XML with the actual theme bg.
-      mSplash.setBackgroundColor(themeBg);
       mSplash.setVisibility(View.VISIBLE);
     }
 
@@ -180,15 +178,15 @@ public class MainActivity extends Activity
         consumeImportQr();
 
         // WebView becomes visible at the same colour as the splash.
-        // Fade splash text out in 120ms — feels like the text dissolving.
+        // Fade splash text out in 60ms — feels like the text dissolving.
         mWebView.setVisibility(View.VISIBLE);
         if (mSplash != null)
         {
           AlphaAnimation fade = new AlphaAnimation(1f, 0f);
-          fade.setDuration(120);
+          fade.setDuration(60);
           fade.setFillAfter(true);
           mSplash.startAnimation(fade);
-          mSplash.postDelayed(() -> mSplash.setVisibility(View.GONE), 120);
+          mSplash.postDelayed(() -> mSplash.setVisibility(View.GONE), 60);
         }
 
         SharedPreferences p = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);

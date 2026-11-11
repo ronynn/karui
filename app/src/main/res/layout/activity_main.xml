@@ -4,21 +4,18 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <!-- WebView sits at the BOTTOM of the stack (added first).
-         It is VISIBLE from onCreate — it paints the theme background
-         while loading, hidden behind the opaque splash above. -->
     <WebView
         android:id="@+id/activity_main_webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <!-- Splash on TOP. Opaque black. Fades out from onPageFinished to
-         reveal the WebView beneath — a real cross-fade, not a pop. -->
+    <!-- Splash: gruvbox bg0 — matches the window background and WebView
+         background, so there is no colour transition at any point. -->
     <RelativeLayout
         android:id="@+id/splash_screen"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#000000"
+        android:background="#282828"
         android:gravity="center">
 
         <TextView

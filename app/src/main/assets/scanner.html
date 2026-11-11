@@ -5,157 +5,117 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
   html, body {
-    margin: 0; padding: 0;
-    width: 100%; height: 100%;
-    background: #000;
-    overflow: hidden;
-    position: fixed;
-    touch-action: none;
-    overscroll-behavior: none;
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #000; overflow: hidden; position: fixed;
+    touch-action: none; overscroll-behavior: none;
     -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
-    font-family: system-ui, sans-serif;
-    color: #EBDBB2;
+    font-family: system-ui, sans-serif; color: #EBDBB2;
   }
   video {
-    position: fixed; top: 0; left: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    pointer-events: none;
-    display: none;
-    background: #000;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; pointer-events: none; display: none; background: #000;
   }
   video.playing { display: block; }
   #overlay {
-    position: fixed; inset: 0;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    pointer-events: none;
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; pointer-events: none;
   }
   #frame {
-    width: 70vmin; height: 70vmin;
-    border: 2px solid #FABD2F;
-    border-radius: 14px;
-    opacity: 0;
-    transition: opacity .3s;
+    width: 70vmin; height: 70vmin; border: 2px solid #FABD2F;
+    border-radius: 14px; opacity: 0; transition: opacity .3s;
   }
   #frame.visible { opacity: 1; }
   #status {
-    position: absolute;
-    top: calc(50% - 35vmin - 44px);
-    width: 100%; text-align: center;
-    color: #FABD2F; font-size: 18px; font-weight: 600;
+    position: absolute; top: calc(50% - 35vmin - 44px); width: 100%;
+    text-align: center; color: #FABD2F; font-size: 18px; font-weight: 600;
     text-shadow: 0 2px 8px #000;
   }
   #hint {
-    position: absolute;
-    bottom: calc(50% - 35vmin - 30px);
-    width: 100%; text-align: center;
-    color: #EBDBB2; font-size: 13px; opacity: .85;
+    position: absolute; bottom: calc(50% - 35vmin - 30px); width: 100%;
+    text-align: center; color: #EBDBB2; font-size: 13px; opacity: .85;
     text-shadow: 0 2px 8px #000;
   }
   #status.saved { color: #B8BB26; }
   #status.error { color: #FB4934; }
 
-  /* Both floating buttons — blur + semi-transparent + border */
   #close, #torch {
-    position: fixed;
-    top: 56px;                       /* clears status bar + margin */
-    width: 48px; height: 48px;
-    border-radius: 24px;
-    border: 1px solid rgba(235, 219, 178, 0.15);
-    color: #EBDBB2;
-    font-size: 22px;
-    cursor: pointer;
-    z-index: 20;
+    position: fixed; top: 56px; width: 48px; height: 48px;
+    border-radius: 24px; border: 1px solid rgba(235,219,178,0.2);
+    color: #EBDBB2; font-size: 22px; cursor: pointer; z-index: 20;
     display: flex; align-items: center; justify-content: center;
-    padding: 0;
-    line-height: 1;
-    background: rgba(40, 40, 40, 0.5);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    padding: 0; line-height: 1;
+    background: #3C3836;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    transition: transform 80ms ease, box-shadow 80ms ease, background 80ms ease;
     -webkit-tap-highlight-color: transparent;
   }
   #close { right: 16px; }
-  #torch {
-    left: 16px;
-    font-size: 18px;
-    font-weight: 700;
-    font-family: ui-monospace, monospace;
-  }
+  #torch { left: 16px; font-size: 18px; font-weight: 700;
+           font-family: ui-monospace, monospace; }
   #close:active, #torch:active {
-    background: rgba(80, 73, 69, 0.7);
+    transform: scale(0.92);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    background: #504945;
   }
   #torch.on {
-    background: rgba(250, 189, 47, 0.85);
-    color: #282828;
-    border-color: transparent;
+    background: #FABD2F; color: #282828; border-color: transparent;
+    box-shadow: 0 2px 8px rgba(250,189,47,0.4);
+  }
+  #torch.on:active {
+    background: #D79921;
+    box-shadow: 0 1px 3px rgba(250,189,47,0.5);
   }
 
-  /* Preview box — shows decoded text before saving */
   #preview {
-    position: fixed;
-    left: 16px; right: 16px;
-    bottom: 120px;
-    max-height: 120px;
-    overflow-y: auto;
-    background: rgba(40, 40, 40, 0.95);
-    border: 1px solid #504945;
-    border-radius: 10px;
-    padding: 12px;
-    font-size: 13px;
-    line-height: 1.4;
-    color: #EBDBB2;
-    z-index: 8;
-    display: none;
-    -webkit-user-select: text; user-select: text;
-    word-break: break-all;
+    position: fixed; left: 16px; right: 16px; bottom: 120px; max-height: 120px;
+    overflow-y: auto; background: rgba(40,40,40,0.95);
+    border: 1px solid #504945; border-radius: 10px; padding: 12px;
+    font-size: 13px; line-height: 1.4; color: #EBDBB2; z-index: 8;
+    display: none; -webkit-user-select: text; user-select: text; word-break: break-all;
   }
   #preview.visible { display: block; }
   #preview-label {
-    position: fixed;
-    left: 16px; right: 16px;
-    bottom: 244px;
-    font-size: 11px;
-    letter-spacing: .5px;
-    color: #928374;
-    z-index: 8;
-    display: none;
+    position: fixed; left: 16px; right: 16px; bottom: 244px;
+    font-size: 11px; letter-spacing: .5px; color: #928374; z-index: 8; display: none;
   }
   #preview-label.visible { display: block; }
 
   #controls {
-    position: fixed;
-    left: 0; right: 0;
-    bottom: 0;
+    position: fixed; left: 0; right: 0; bottom: 0;
     padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px) + 40px);
-    display: none;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    background: linear-gradient(to top, rgba(0,0,0,.9), transparent);
+    display: none; justify-content: center; gap: 10px; flex-wrap: wrap;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
     z-index: 10;
   }
   #controls.visible { display: flex; }
   #controls button {
-    background: #3C3836; color: #EBDBB2;
-    border: none; padding: 12px 20px;
-    border-radius: 10px; font-size: 14px; font-weight: 600;
-    letter-spacing: .5px; cursor: pointer;
-    min-width: 90px;
+    background: #3C3836; color: #EBDBB2; border: none;
+    padding: 12px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 600; letter-spacing: .5px;
+    cursor: pointer; min-width: 90px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    transition: transform 80ms ease, box-shadow 80ms ease, background 80ms ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  #controls button:active { background: #504945; }
-  #btn-save { background: #FABD2F; color: #282828; }
-  #btn-save:active { background: #D79921; }
+  #controls button:active {
+    transform: scale(0.95);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    background: #504945;
+  }
+  #btn-save {
+    background: #FABD2F; color: #282828;
+    box-shadow: 0 2px 8px rgba(250,189,47,0.35);
+  }
+  #btn-save:active {
+    background: #D79921;
+    box-shadow: 0 1px 3px rgba(250,189,47,0.4);
+  }
 
   #loading {
-    position: fixed; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    color: #EBDBB2; font-size: 14px;
-    background: #000;
-    z-index: 5;
-    text-align: center;
-    padding: 20px;
+    position: fixed; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: #EBDBB2; font-size: 14px;
+    background: #000; z-index: 5; text-align: center; padding: 20px;
     white-space: pre-line;
   }
   #loading.hidden { display: none; }
@@ -187,8 +147,13 @@
   <button id="btn-rescan" onclick="rescan()">SCAN AGAIN</button>
 </div>
 
-<script src="jsqr.min.js"></script>
-<script>
+<script type="module">
+  // cam2qr ships its decode function under varying export names across
+  // CDN builds. The test page checks all three; do the same here so
+  // any CDN variant works without further edits.
+  import * as qrModule from './qr-decode.js';
+  const decode = qrModule.decode || qrModule.default || qrModule.decodeQR;
+
   const video     = document.getElementById('v');
   const canvas    = document.getElementById('c');
   const ctx       = canvas.getContext('2d', { willReadFrequently: true });
@@ -246,16 +211,14 @@
     }
   }
 
-  function showPreview(text)
-  {
+  function showPreview(text) {
     currentPayload = text;
     previewEl.textContent = text;
     previewEl.classList.add('visible');
     previewLabel.classList.add('visible');
   }
 
-  function clearPreview()
-  {
+  function clearPreview() {
     currentPayload = null;
     previewEl.textContent = '';
     previewEl.classList.remove('visible');
@@ -265,8 +228,7 @@
   async function toggleTorch()
   {
     if (!stream) return;
-    try
-    {
+    try {
       const track = stream.getVideoTracks()[0];
       if (!track) return;
       const caps = track.getCapabilities();
@@ -274,11 +236,7 @@
       torchOn = !torchOn;
       await track.applyConstraints({ advanced: [{ torch: torchOn }] });
       torchBtn.classList.toggle('on', torchOn);
-    }
-    catch (e)
-    {
-      torchBtn.style.display = 'none';
-    }
+    } catch (e) { torchBtn.style.display = 'none'; }
   }
 
   function stopStream()
@@ -291,11 +249,13 @@
 
   async function start()
   {
-    if (typeof jsQR !== 'function') {
+    // Verify decoder actually loaded
+    if (typeof decode !== 'function') {
       loadingEl.textContent =
-        'QR library not loaded.\n\n' +
-        'Place jsQR.js (or minified) in app/src/main/assets/ and rename to jsqr.min.js';
-      setUI('error', 'jsqr.min.js missing');
+        'QR decoder not loaded.\n\n' +
+        'qr-decode.js must export a "decode" function (got: '
+        + Object.keys(qrModule).join(', ') + ')';
+      setUI('error', 'Decoder missing');
       return;
     }
 
@@ -305,8 +265,7 @@
       return;
     }
 
-    try
-    {
+    try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       });
@@ -321,8 +280,7 @@
         if (!caps.torch) torchBtn.style.display = 'none';
       }
 
-      video.addEventListener('playing', () =>
-      {
+      video.addEventListener('playing', () => {
         video.classList.add('playing');
         loadingEl.classList.add('hidden');
         setUI('scanning', '');
@@ -330,12 +288,9 @@
       }, { once: true });
 
       await video.play();
-    }
-    catch (e)
-    {
+    } catch (e) {
       loadingEl.textContent =
-        'Could not start camera.\n\n' +
-        (e.name || 'Error') + ': ' + (e.message || 'unknown');
+        'Could not start camera.\n\n' + (e.name || 'Error') + ': ' + (e.message || 'unknown');
       setUI('error', 'Camera failed');
     }
   }
@@ -348,21 +303,36 @@
       const w = video.videoWidth, h = video.videoHeight;
       if (canvas.width !== w) canvas.width = w;
       if (canvas.height !== h) canvas.height = h;
+
       try {
         ctx.drawImage(video, 0, 0, w, h);
-        const img = ctx.getImageData(0, 0, w, h);
-        const code = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
-        if (code && code.data) {
-          const now = Date.now();
-          if (code.data !== lastScanData || now - lastScanTime > 1500) {
-            lastScanData = code.data;
-            lastScanTime = now;
-            handleScan(code.data);
+        const imageData = ctx.getImageData(0, 0, w, h);
+
+        // Decode may throw on blank / unfocused / noisy frames. That's
+        // normal — the first frame after play() is often all black.
+        // Swallow per-frame errors so the scanner keeps running.
+        let result = null;
+        try {
+          result = decode(imageData);
+        } catch (decodeErr) {
+          // expected on undecodable frames
+        }
+
+        if (result) {
+          const text = result.text || (typeof result === 'string' ? result : null);
+          if (text) {
+            const now = Date.now();
+            if (text !== lastScanData || now - lastScanTime > 1500) {
+              lastScanData = text;
+              lastScanTime = now;
+              handleScan(text);
+            }
           }
         }
-      } catch (e) {
-        setUI('error', 'Decode error: ' + e.message);
-        scanning = false;
+      } catch (outerErr) {
+        // Canvas / getImageData failure — rare WebView glitch. Log and
+        // keep scanning; don't kill the loop.
+        console.warn('Scanner frame error:', outerErr);
       }
     }
     requestAnimationFrame(tick);
@@ -390,22 +360,15 @@
   {
     if (!currentPayload) return;
     const r = JSON.parse(Android.save());
-    if (r.ok) {
-      setUI('ready', 'Saved — closing…');
-      setTimeout(() => { try { Android.close(); } catch (e) {} }, 600);
-    } else {
-      setUI('error', r.message || 'Save failed');
-    }
+    if (r.ok) { setUI('ready', 'Saved — closing…'); setTimeout(() => { try { Android.close(); } catch (e) {} }, 600); }
+    else setUI('error', r.message || 'Save failed');
   }
 
   function copy()
   {
     if (!currentPayload) return;
     const r = JSON.parse(Android.copy());
-    if (r.ok) {
-      statusEl.textContent = '✓ Copied to clipboard';
-      statusEl.className = 'saved';
-    }
+    if (r.ok) { statusEl.textContent = '✓ Copied to clipboard'; statusEl.className = 'saved'; }
   }
 
   function rescan()
