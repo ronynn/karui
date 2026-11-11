@@ -46,7 +46,7 @@ public class FloatingWindowService extends Service
   private static final String RESIZE_COLOR     = "#504945";
 
   private static final long AUTOSAVE_INTERVAL_MS = 800L;
-  private static final int INITIAL_WIDTH_DP  = 340;
+  private static final int INITIAL_WIDTH_DP  = 280;
   private static final int INITIAL_HEIGHT_DP = 150;
   private static final int MIN_WIDTH_DP      = 200;
   private static final int MIN_HEIGHT_DP     = 120;
@@ -55,7 +55,7 @@ public class FloatingWindowService extends Service
   private static final int COLLAPSED_HEIGHT_DP = 28;
 
   // Critical: alpha must be <= 0.8 so the IME accepts our window
-  private static final float WINDOW_ALPHA = 0.78f;
+  private static final float WINDOW_ALPHA = 1.0f;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
   private WindowManager mWindowManager;

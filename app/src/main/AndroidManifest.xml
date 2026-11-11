@@ -140,7 +140,7 @@
 </service>
 
 
-    <!-- VoiceInteractionService — enables seamless long-press home -->
+<!-- Voice interaction -->
 <service
     android:name=".KaruiVoiceInteractionService"
     android:exported="true"
@@ -158,5 +158,19 @@
     android:exported="true"
     android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
+<service
+    android:name=".KaruiRecognitionService"
+    android:exported="true"
+    android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+<!-- Ghost activity for tile -->
+<activity
+    android:name=".GhostActivity"
+    android:theme="@android:style/Theme.Translucent.NoTitleBar"
+    android:excludeFromRecents="true"
+    android:taskAffinity=""
+    android:exported="false" />
+
+    
   </application>
 </manifest>

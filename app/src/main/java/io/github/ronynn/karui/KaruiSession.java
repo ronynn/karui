@@ -17,8 +17,9 @@ public class KaruiSession extends VoiceInteractionSession
   {
     super.onShow(args, showFlags);
 
-    // Start the floating note window directly — no activity.
-    // This is what makes the overlay appear without any activity switch.
+    // Start the floating note window directly. No activity, no task switch.
+    // The system is already displaying us on top of the current task
+    // because we are a VoiceInteractionSession.
     try
     {
       getContext().startService(
@@ -26,7 +27,8 @@ public class KaruiSession extends VoiceInteractionSession
     }
     catch (Exception ignored) {}
 
-    // Hide the session window itself — we don't need it.
+    // Hide the session's own window. We only needed it to get the
+    // system-level overlay layer; the actual UI is our Service window.
     hide();
   }
 }

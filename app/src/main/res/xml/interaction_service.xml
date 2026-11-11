@@ -2,4 +2,5 @@
 <voice-interaction-service
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="io.github.ronynn.karui.KaruiSessionService"
+    android:recognitionService="io.github.ronynn.karui.KaruiRecognitionService"
     android:supportsAssist="true" />

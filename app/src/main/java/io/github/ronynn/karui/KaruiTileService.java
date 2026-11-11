@@ -23,13 +23,11 @@ public class KaruiTileService extends TileService
       return;
     }
 
-    // startActivityAndCollapse is the ONLY way to make the shade collapse.
-    // The target Activity starts the service and finishes immediately.
-    Intent intent = new Intent(this, MainActivity.class);
-    intent.setAction(MainActivity.ACTION_OPEN_FLOATING);
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-        | Intent.FLAG_ACTIVITY_CLEAR_TOP
-        | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+    // GhostActivity is a translucent shell that starts the service and
+    // finishes immediately. This is required because startActivityAndCollapse
+    // needs an Activity intent to dismiss the notification shade.
+    Intent intent = new Intent(this, GhostActivity.class);
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     launchIntent(intent);
   }
 
