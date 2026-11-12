@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Karui</string>
-    <string name="no_app_to_open_link">No app found to open this link</string>
+  <string name="app_name">Karui</string>
+  <string name="no_app_to_open_link">No app found to open this link</string>
+
+  <string name="shortcut_tile_short">Karui Tile</string>
+  <string name="shortcut_tile_long">Open floating note</string>
+  <string name="shortcut_scan_short">Scan into Karui</string>
+  <string name="shortcut_scan_long">Scan a QR into Karui</string>
 
 </resources>

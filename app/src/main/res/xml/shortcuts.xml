@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="karui_tile"
+        android:enabled="true"
+        android:icon="@drawable/ic_note"
+        android:shortcutShortLabel="@string/shortcut_tile_short"
+        android:shortcutLongLabel="@string/shortcut_tile_long">
+        <intent
+            android:action="io.github.ronynn.karui.ACTION_OPEN_FLOATING"
+            android:targetPackage="io.github.ronynn.karui"
+            android:targetClass="io.github.ronynn.karui.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="scan_into_karui"
+        android:enabled="true"
+        android:icon="@drawable/ic_qr_scan"
+        android:shortcutShortLabel="@string/shortcut_scan_short"
+        android:shortcutLongLabel="@string/shortcut_scan_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="io.github.ronynn.karui"
+            android:targetClass="io.github.ronynn.karui.ScannerActivity" />
+    </shortcut>
+
+</shortcuts>
