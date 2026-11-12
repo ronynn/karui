@@ -64,6 +64,18 @@
               {{ getTabLabel(t) }}
             </div>
           </div>
+
+          <div class="select-bar-container">
+            <div class="select-bar" v-show="selectMode">
+              <span class="select-count">{{ selectedCount }} selected</span>
+              <select class="select-target" @change="onSelectTargetChange($event)">
+                <option value="">Move to…</option>
+                <option v-for="t in selectableTabs" :value="t">{{ t }}</option>
+              </select>
+              <button class="select-cancel" @click="exitSelectMode()">Cancel</button>
+            </div>
+          </div>
+
           <div id="notes-list">
             <div v-if="searchTerm && displayedNotes.length === 0" class="ghost-line">
               No notes contain "{{ searchTerm }}"
@@ -72,8 +84,8 @@
               Locked — long-press tab → Unlock
             </div>
             <div v-for="(n, index) in displayedNotes" :key="n.id" :data-id="n.id" class="note-item">
-              <div style="flex: 1; min-width: 0; cursor: pointer;" @click="toggleNote(n, $event)">
-                <div class="note-content-wrap" :class="{ expanded: _expandedNotes[n.id] }">
+              <div style="flex: 1; min-width: 0; cursor: pointer;" @click="selectMode ? toggleNoteSelect(n.id) : toggleNote(n, $event)">
+                <div class="note-content-wrap" :class="{ expanded: _expandedNotes[n.id], 'note-selected-wrap': selectMode && isNoteSelected(n.id) }">
                   <span v-if="n.pinned" class="pin-icon">⊢</span>
                   <span class="note-text" :class="{ completed: n.completed }">{{ n.text }}</span>
                 </div>
@@ -81,11 +93,25 @@
                   {{ _expandedNotes[n.id] ? 'collapse ↑' : 'expand ↓' }}
                 </div>
               </div>
-              <span class="note-menu-trigger text-muted" tabindex="-1" @click.stop="openNoteMenu($event, n.id)">:</span>
+              <span class="note-menu-trigger text-muted"
+                :class="{ 'note-select-indicator': selectMode }"
+                tabindex="-1"
+                @click.stop="selectMode ? toggleNoteSelect(n.id) : openNoteMenu($event, n.id)">
+                {{ selectMode ? (isNoteSelected(n.id) ? '▣' : '☐') : ':' }}
+              </span>
             </div>
           </div>
         </div>
+
+
+
       </div>
+
+
+
+
+
+
 
       <div v-if="calendarEnabled" class="screen" id="calendar-screen" @scroll="handleScroll">
         <div class="box">
@@ -375,6 +401,8 @@
         <button @click="deleteTabClick">Delete</button>
         <button v-if="puffableCount > 0" @click="puffCompleted">Puff ({{ puffableCount }})</button>
         <button v-if="mergeableCount > 0" @click="mergeTabNotes">Merge</button>
+        <button @click="enterSelectMode">Select</button>
+
         <button @click="editTabAsMarkdown">TextView</button>
         <button @click="showTabQr">Show QR</button>
         <button @click="openPrompt('New Tab', '', addTab)">Add Tab</button>

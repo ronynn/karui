@@ -14,14 +14,14 @@ function _loadConfetti()
 {
   if (_confettiPromise) return _confettiPromise
   _confettiPromise = new Promise((resolve, reject) =>
-    {
-      const s = document.createElement('script')
-      s.src = 'confetti.browser.min.js'
-      s.async = true
-      s.onload = () => resolve(window.confetti)
-      s.onerror = () => { _confettiPromise = null; reject(new Error('confetti failed to load')) }
-      document.head.appendChild(s)
-    })
+  {
+    const s = document.createElement('script')
+    s.src = 'confetti.browser.min.js'
+    s.async = true
+    s.onload = () => resolve(window.confetti)
+    s.onerror = () => { _confettiPromise = null; reject(new Error('confetti failed to load')) }
+    document.head.appendChild(s)
+  })
   return _confettiPromise
 }
 
@@ -40,9 +40,9 @@ if (typeof window.confetti !== 'function')
     return function(...callArgs)
     {
       _loadConfetti().then(fn =>
-        {
-          if (fn && fn.create) fn.create(...args)(...callArgs)
-        }).catch(() => {})
+      {
+        if (fn && fn.create) fn.create(...args)(...callArgs)
+      }).catch(() => {})
     }
   }
   window.confetti = stub
@@ -72,14 +72,14 @@ function mergeModules(...mods)
 function hydrateStore(store)
 {
   const ls = (k) =>
-    {
-      try { return JSON.parse(localStorage.getItem(k)) } catch (e) { return null }
-    }
+  {
+    try { return JSON.parse(localStorage.getItem(k)) } catch (e) { return null }
+  }
   const str = (k, def) =>
-    {
-      const v = localStorage.getItem(k)
-      return v === null ? def : v
-    }
+  {
+    const v = localStorage.getItem(k)
+    return v === null ? def : v
+  }
   const bool = (k) => localStorage.getItem(k) === 'true'
 
   store.noteCategories = [...new Set(ls('noteCategories') || ['Inbox'])]
@@ -90,10 +90,10 @@ function hydrateStore(store)
 
   const seedTime = Date.now()
   store.notes.forEach((n, idx) =>
-    {
-      if (!n.id) n.id = seedTime + idx
-      if (!n.updatedAt) n.updatedAt = seedTime
-    })
+  {
+    if (!n.id) n.id = seedTime + idx
+    if (!n.updatedAt) n.updatedAt = seedTime
+  })
 
   store.currentTheme = str('theme', 'gruvbox')
   store.currentFont = str('font', 'system-ui')
@@ -198,18 +198,18 @@ const appStore = reactive(mergeModules(
 
       let now = Date.now()
       this.noteCategories.forEach((cat, idx) =>
+      {
+        if (!this.categoryMeta[cat])
         {
-          if (!this.categoryMeta[cat])
-          {
-            this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
-          }
-        })
+          this.categoryMeta[cat] = { id: now + idx, updatedAt: now }
+        }
+      })
 
       this.notes.forEach((n, idx) =>
-        {
-          if (!n.id) n.id = now + idx
-          if (!n.updatedAt) n.updatedAt = now
-        })
+      {
+        if (!n.id) n.id = now + idx
+        if (!n.updatedAt) n.updatedAt = now
+      })
 
       if (!this.noteCategories.includes(this.activeCategory))
       {
@@ -226,9 +226,9 @@ const appStore = reactive(mergeModules(
         ? document.fonts.ready
         : Promise.resolve()
       fontReady.then(() => requestAnimationFrame(() =>
-        {
-          if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
-        }))
+      {
+        if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
+      }))
 
       this.customFonts = await initFontSystem()
 
@@ -242,66 +242,66 @@ const appStore = reactive(mergeModules(
       window.addEventListener('click', e => this.handleGlobalClick(e), true)
 
       window.addEventListener('focusin', (e) =>
+      {
+        const t = e.target
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
         {
-          const t = e.target
-          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
-          {
-            if (this.isScrolled) this.isScrolled = false
-            document.body.classList.add('kb-open')
-          }
-        })
+          if (this.isScrolled) this.isScrolled = false
+          document.body.classList.add('kb-open')
+        }
+      })
 
       window.addEventListener('focusout', (e) =>
+      {
+        const t = e.target
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
         {
-          const t = e.target
-          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))
+          setTimeout(() =>
           {
-            setTimeout(() =>
-              {
-                const ae = document.activeElement
-                if (!ae || (ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA'))
-                {
-                  document.body.classList.remove('kb-open')
-                }
-              }, 80)
-          }
-        })
+            const ae = document.activeElement
+            if (!ae || (ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA'))
+            {
+              document.body.classList.remove('kb-open')
+            }
+          }, 80)
+        }
+      })
 
       window.addEventListener('keydown', (e) =>
+      {
+        if (e.key === 'Escape' && this.editVisible)
         {
-          if (e.key === 'Escape' && this.editVisible)
-          {
-            e.preventDefault()
-            this.finishEdit()
-          }
-        })
+          e.preventDefault()
+          this.finishEdit()
+        }
+      })
 
       window.addEventListener('popstate', () =>
-        {
-          if (this.editVisible) this.finishEdit()
-        })
+      {
+        if (this.editVisible) this.finishEdit()
+      })
 
       document.addEventListener('visibilitychange', () =>
+      {
+        if (document.hidden && this._sideEffectTimer)
         {
-          if (document.hidden && this._sideEffectTimer)
-          {
-            clearTimeout(this._sideEffectTimer)
-            this._sideEffectTimer = null
-            this._runSideEffects()
-          }
-        })
+          clearTimeout(this._sideEffectTimer)
+          this._sideEffectTimer = null
+          this._runSideEffects()
+        }
+      })
 
       setupNativeHooks(this)
       setupDragAndDrop(this)
 
       window.addEventListener('resize', () =>
+      {
+        clearTimeout(this._resizeDebounce)
+        this._resizeDebounce = setTimeout(() =>
         {
-          clearTimeout(this._resizeDebounce)
-          this._resizeDebounce = setTimeout(() =>
-            {
-              if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
-            }, 150)
-        })
+          if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
+        }, 150)
+      })
 
       this.syncCalendarEventsToAndroid()
       if (this.calendarNotificationsEnabled &&
@@ -314,28 +314,33 @@ const appStore = reactive(mergeModules(
       if (this.calendarEnabled)
       {
         setTimeout(() =>
-          {
-            this.calendarRef = initCalendar(this)
-          }, 50)
+        {
+          this.calendarRef = initCalendar(this)
+        }, 50)
       }
 
       this.resumePomodoroIfNeeded()
       this._recoverTabEditDraft()
 
       requestAnimationFrame(() => requestAnimationFrame(() =>
+      {
+        const ae = document.activeElement
+        const ni = document.getElementById('note-in')
+        if (ae && ae !== ni && ae !== document.body && typeof ae.blur === 'function')
         {
-          const ae = document.activeElement
-          const ni = document.getElementById('note-in')
-          if (ae && ae !== ni && ae !== document.body && typeof ae.blur === 'function')
-          {
-            ae.blur()
-          }
-        }))
+          ae.blur()
+        }
+      }))
     },
 
     saveData()
     {
       this._dirtyNotes = true
+
+      // Encrypt any pending plaintext in unlocked locked-tabs before
+      // serializing. No-op if nothing is unlocked.
+      if (this._encryptLockedTabs) this._encryptLockedTabs()
+
       localStorage.setItem('noteCategories', JSON.stringify(this.noteCategories))
       localStorage.setItem('notes', JSON.stringify(this.notes))
       localStorage.setItem('recycleBin', JSON.stringify(this.recycleBin))
@@ -374,28 +379,28 @@ const appStore = reactive(mergeModules(
       this._scheduleSideEffects()
 
       requestAnimationFrame(() =>
+      {
+        const vv = window.visualViewport
+        const kbOpen = vv ? (window.innerHeight - vv.height) > 100 : false
+        if (kbOpen) return
+        const screens = document.querySelectorAll('.screen')
+        const idx = this.currentScreenIdx
+        if (screens[idx])
         {
-          const vv = window.visualViewport
-          const kbOpen = vv ? (window.innerHeight - vv.height) > 100 : false
-          if (kbOpen) return
-          const screens = document.querySelectorAll('.screen')
-          const idx = this.currentScreenIdx
-          if (screens[idx])
-          {
-            const scrolled = screens[idx].scrollTop > 10
-            if (this.isScrolled !== scrolled) this.isScrolled = scrolled
-          }
-        })
+          const scrolled = screens[idx].scrollTop > 10
+          if (this.isScrolled !== scrolled) this.isScrolled = scrolled
+        }
+      })
     },
 
     _scheduleSideEffects()
     {
       clearTimeout(this._sideEffectTimer)
       this._sideEffectTimer = setTimeout(() =>
-        {
-          this._sideEffectTimer = null
-          this._runSideEffects()
-        }, 400)
+      {
+        this._sideEffectTimer = null
+        this._runSideEffects()
+      }, 400)
     },
 
     _flushSideEffectsNow()
@@ -493,23 +498,23 @@ const appStore = reactive(mergeModules(
       {
         const scrollTop = e.target.scrollTop
         window.requestAnimationFrame(() =>
+        {
+          const vv = window.visualViewport
+          const kbOpen = vv
+            ? (window.innerHeight - vv.height) > 100
+            : document.body.classList.contains('kb-open')
+          if (kbOpen)
           {
-            const vv = window.visualViewport
-            const kbOpen = vv
-              ? (window.innerHeight - vv.height) > 100
-              : document.body.classList.contains('kb-open')
-            if (kbOpen)
-            {
-              if (this.isScrolled) this.isScrolled = false
-            }
-            else
-            {
-              const scrolled = scrollTop > 10
-              if (this.isScrolled !== scrolled) this.isScrolled = scrolled
-            }
-            if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
-            this.scrollTicking = false
-          })
+            if (this.isScrolled) this.isScrolled = false
+          }
+          else
+          {
+            const scrolled = scrollTop > 10
+            if (this.isScrolled !== scrolled) this.isScrolled = scrolled
+          }
+          if (this.contextMenuVisible || this.noteMenuVisible) this.closeAllMenus()
+          this.scrollTicking = false
+        })
         this.scrollTicking = true
       }
     },
@@ -518,9 +523,9 @@ const appStore = reactive(mergeModules(
     {
       clearTimeout(this.tabTouchTimer)
       this.tabTouchTimer = setTimeout(() =>
-        {
-          this.openContextMenu(e, tab)
-        }, 500)
+      {
+        this.openContextMenu(e, tab)
+      }, 500)
     },
 
     handleTabTouchEnd() { clearTimeout(this.tabTouchTimer) },
@@ -565,17 +570,16 @@ const appStore = reactive(mergeModules(
       if (this.keepKeyboard)
       {
         nextTick(() =>
-          {
-            const el = document.getElementById('edit-textarea')
-            if (!el) return
-            el.focus()
-            const len = el.value.length
-            try { el.selectionStart = el.selectionEnd = len } catch (_) {}
-            // Staggered scrolls to catch keyboard animation frames.
-            requestAnimationFrame(() => this._scrollEditorToCursor())
-            setTimeout(() => this._scrollEditorToCursor(), 150)
-            setTimeout(() => this._scrollEditorToCursor(), 350)
-          })
+        {
+          const el = document.getElementById('edit-textarea')
+          if (!el) return
+          el.focus()
+          const len = el.value.length
+          try { el.selectionStart = el.selectionEnd = len } catch (_) {}
+          requestAnimationFrame(() => this._scrollEditorToCursor())
+          setTimeout(() => this._scrollEditorToCursor(), 150)
+          setTimeout(() => this._scrollEditorToCursor(), 350)
+        })
       }
     },
 
@@ -607,14 +611,14 @@ const appStore = reactive(mergeModules(
       if (this.keepKeyboard)
       {
         nextTick(() =>
-          {
-            const el = document.getElementById('edit-textarea')
-            if (!el) return
-            el.focus()
-            requestAnimationFrame(() => this._scrollEditorToCursor())
-            setTimeout(() => this._scrollEditorToCursor(), 150)
-            setTimeout(() => this._scrollEditorToCursor(), 350)
-          })
+        {
+          const el = document.getElementById('edit-textarea')
+          if (!el) return
+          el.focus()
+          requestAnimationFrame(() => this._scrollEditorToCursor())
+          setTimeout(() => this._scrollEditorToCursor(), 150)
+          setTimeout(() => this._scrollEditorToCursor(), 350)
+        })
       }
     },
 
@@ -654,6 +658,9 @@ const appStore = reactive(mergeModules(
       if (this.editNoteId == null) return
       const n = this.notes.find(x => x.id === this.editNoteId)
       if (!n) return
+      // Text changed → ciphertext (if any) is stale. Delete so saveData's
+      // encrypt hook regenerates it from the new plaintext.
+      if (n.text !== this.editDraftText) delete n.encryptedText
       n.text = this.editDraftText
       n.updatedAt = Date.now()
       clearTimeout(this._autosaveTimer)
@@ -673,13 +680,10 @@ const appStore = reactive(mergeModules(
         document.documentElement.style.setProperty('--kb-pad', padStr)
         requestAnimationFrame(() => requestAnimationFrame(() =>
           this._scrollEditorToCursor()
-                                                         ))
+        ))
       }
     },
 
-    // Measure the true rendered Y of the cursor within the textarea content,
-    // using a hidden mirror div. Line-count estimation fails for soft-wrapped
-    // text — a 200-char paragraph is 1 newline but ~10 rendered lines.
     _measureCursorY(el, cursorPos)
     {
       try
@@ -719,7 +723,6 @@ const appStore = reactive(mergeModules(
       }
       catch (e)
       {
-        // Fallback: line-count estimate.
         const before = el.value.slice(0, cursorPos)
         const lines = before.split('\n').length
         const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24
@@ -727,9 +730,6 @@ const appStore = reactive(mergeModules(
       }
     },
 
-    // Scroll the textarea so the cursor sits inside the *visible* viewport,
-    // i.e. above the keyboard. Uses screen coordinates so vv.height (which
-    // shrinks when the keyboard opens) is the authoritative visible bottom.
     _scrollEditorToCursor()
     {
       if (!this.editVisible) return
@@ -742,11 +742,8 @@ const appStore = reactive(mergeModules(
       const cursorYInContent = this._measureCursorY(el, pos)
       const scrollTop = el.scrollTop
       const rect = el.getBoundingClientRect()
-
-      // Cursor's Y in screen space
       const cursorScreenY = rect.top + cursorYInContent - scrollTop
 
-      // Visible window on screen: top of textarea to bottom of visual viewport.
       const vv = window.visualViewport
       const visibleTop = rect.top
       const visibleBottom = vv ? Math.min(rect.bottom, vv.height) : rect.bottom
@@ -770,17 +767,17 @@ const appStore = reactive(mergeModules(
     {
       if (this._selectionListener) return
       this._selectionListener = () =>
+      {
+        if (!this.editVisible) return
+        const el = document.getElementById('edit-textarea')
+        if (!el) return
+        if (document.activeElement !== el) return
+        clearTimeout(this._selectionTimer)
+        this._selectionTimer = setTimeout(() =>
         {
-          if (!this.editVisible) return
-          const el = document.getElementById('edit-textarea')
-          if (!el) return
-          if (document.activeElement !== el) return
-          clearTimeout(this._selectionTimer)
-          this._selectionTimer = setTimeout(() =>
-            {
-              requestAnimationFrame(() => this._scrollEditorToCursor())
-            }, 40)
-        }
+          requestAnimationFrame(() => this._scrollEditorToCursor())
+        }, 40)
+      }
       document.addEventListener('selectionchange', this._selectionListener)
     },
 
@@ -840,7 +837,6 @@ const appStore = reactive(mergeModules(
       this._removeSelectionListener()
       try { localStorage.removeItem('tabEditDraft') } catch (e) {}
 
-      // Save immediately in memory so the note list reflects the change…
       if (wasTabMode && tabName)
       {
         // Tab edit is rare — defer its work but do it right after paint.
@@ -854,19 +850,17 @@ const appStore = reactive(mergeModules(
         const n = this.notes.find(x => x.id === id)
         if (n)
         {
+          if (n.text !== draft) delete n.encryptedText
           n.text = draft
           n.updatedAt = Date.now()
         }
-        // Defer disk writes and layout measurement
         queueMicrotask(() => this.saveData())
         requestAnimationFrame(() => this._flushSideEffectsNow())
       }
-
       this.editDraftText = ''
       const ae = document.activeElement
       if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur()
 
-      // Double-rAF the overflow measure so it never blocks the paint
       requestAnimationFrame(() => requestAnimationFrame(() => {
         this._measureNoteOverflow()
       }))
@@ -889,21 +883,21 @@ const appStore = reactive(mergeModules(
       this.modalIsPassword = !!isPassword
       this.modalVisible = true
       nextTick(() =>
+      {
+        if (this.modalIsPassword)
         {
-          if (this.modalIsPassword)
-          {
-            const el = document.getElementById('modal-pin-input')
-            if (el) el.focus()
-            return
-          }
-          const el = document.getElementById('modal-input')
-          if (el)
-          {
-            el.style.height = 'auto'
-            autoExpandTextarea(el)
-            if (this.keepKeyboard) el.focus()
-          }
-        })
+          const el = document.getElementById('modal-pin-input')
+          if (el) el.focus()
+          return
+        }
+        const el = document.getElementById('modal-input')
+        if (el)
+        {
+          el.style.height = 'auto'
+          autoExpandTextarea(el)
+          if (this.keepKeyboard) el.focus()
+        }
+      })
     },
 
     closeModal(saveAction)
@@ -914,10 +908,10 @@ const appStore = reactive(mergeModules(
       this.modalIsPassword = false
       if (cb) cb(saveAction ? this.modalInput.trim() : null)
       nextTick(() =>
-        {
-          const el = document.getElementById('modal-input')
-          if (el) el.style.height = ''
-        })
+      {
+        const el = document.getElementById('modal-input')
+        if (el) el.style.height = ''
+      })
     },
 
     showToast(msg)
@@ -926,9 +920,9 @@ const appStore = reactive(mergeModules(
       this.toastVisible = true
       clearTimeout(this.toastTimer)
       this.toastTimer = setTimeout(() =>
-        {
-          this.toastVisible = false
-        }, 2000)
+      {
+        this.toastVisible = false
+      }, 2000)
     },
 
     handleGlobalClick(e)
@@ -1005,14 +999,14 @@ const appStore = reactive(mergeModules(
       else
       {
         this.openPrompt('Sync File Path', this.syncFilePath, val =>
+        {
+          if (val !== null)
           {
-            if (val !== null)
-            {
-              this.syncFilePath = val
-              this.saveData()
-              this.showToast('Sync target saved')
-            }
-          })
+            this.syncFilePath = val
+            this.saveData()
+            this.showToast('Sync target saved')
+          }
+        })
       }
     },
 
@@ -1034,11 +1028,19 @@ const appStore = reactive(mergeModules(
     exportMarkdownSilent()
     {
       if (!this.syncFilePath) return
+
+      // Ensure any pending plaintext in unlocked locked-tabs is encrypted
+      // before serializing.
+      if (this._encryptLockedTabs) this._encryptLockedTabs()
+
       let now = Date.now()
-      const safeNotes = this.notes.filter(n => !this.isTabLocked(n.category))
-      const safeCats = this.noteCategories.filter(t => !this.isTabLocked(t))
-      safeNotes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
-      let mdStr = generateMarkdownString(safeCats, safeNotes, this.categoryMeta)
+      // Sync ALL notes — locked-tab notes go out as ciphertext
+      // (generateMarkdownString picks n.encryptedText for locked tabs).
+      const allNotes = this.notes.slice()
+      allNotes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
+      const allCats = this.noteCategories.slice()
+
+      let mdStr = generateMarkdownString(allCats, allNotes, this.categoryMeta)
       if (window.Android && window.Android.saveFileSync)
       {
         window.Android.saveFileSync(this.syncFilePath, mdStr)

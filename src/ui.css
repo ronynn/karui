@@ -72,3 +72,44 @@ button:active { filter: brightness(0.8); }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 15px; }
 .text-muted { color: var(--gray); }
 .btn-subtle { background: var(--surface); color: var(--text); border: 2px solid var(--border); font-size: calc(12px * var(--ui-scale)); }
+
+
+/* ── Select mode ───────────────────────────────────────── */
+.select-bar-container { display: contents; }
+.select-bar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  font-size: calc(13px * var(--ui-scale));
+}
+.select-count { color: var(--accent); font-weight: bold; flex-shrink: 0; }
+.select-target {
+  flex: 1; min-width: 0;
+  padding: 6px 8px;
+  background: var(--bg); color: var(--text);
+  border: 2px solid var(--border);
+  font-size: calc(13px * var(--ui-scale));
+}
+.select-cancel {
+  padding: 6px 10px; width: auto;
+  background: var(--bg); color: var(--text);
+  border: 2px solid var(--border);
+  font-size: calc(12px * var(--ui-scale));
+  text-transform: uppercase;
+}
+
+.note-selected-wrap {
+  border-left: 4px solid var(--accent);
+  padding-left: 8px;
+  margin-left: -12px; /* compensate for the added border */
+  background: var(--surface);
+}
+.note-selected-wrap .note-text { color: var(--accent); }
+
+.note-select-indicator {
+  padding: 0 0 0 10px; flex-shrink: 0;
+  font-size: calc(18px * var(--ui-scale));
+  color: var(--accent); cursor: pointer;
+  line-height: 1; font-weight: bold;
+}
