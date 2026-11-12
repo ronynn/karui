@@ -128,7 +128,7 @@
 
     <activity
     android:name=".ScannerActivity"
-    android:exported="false"
+    android:exported="true"
     android:theme="@android:style/Theme.Material.NoActionBar"
     android:screenOrientation="portrait" />
 

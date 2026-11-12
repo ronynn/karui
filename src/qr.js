@@ -4,7 +4,7 @@ import * as leanQr from './lean.js'
 const generate = leanQr.generate || leanQr.default?.generate || leanQr.default
 
 const ECC = 'M'
-const MAX_CHUNK_BYTES = 1500
+const MAX_CHUNK_BYTES = 1250
 const PREFIX = 'KARUI1'
 
 function _noteSig(n)

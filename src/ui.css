@@ -26,7 +26,7 @@ button:active { filter: brightness(0.8); }
 /* Tabs & theme grid */
 .tabs-container { display: flex; flex-wrap: wrap; gap: 8px; overflow-x: auto; padding-bottom: 0; margin-bottom: 5px; scrollbar-width: none; }
 .tab { position: relative; overflow: hidden; padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale)); background: var(--bg); color: var(--gray); border: 2px solid var(--border); white-space: nowrap; cursor: pointer; transition: opacity 0.2s; font-size: calc(14px * var(--ui-scale)); }
-.tab.active { background: var(--border); color: var(--bg); font-weight: bold; }
+.tab.active { background: var(--accent); color: var(--bg); font-weight: bold; }
 .grid-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .theme-btn { position: relative; overflow: hidden; padding: calc(10px * var(--ui-scale)) calc(4px * var(--ui-scale)); background: var(--surface); color: var(--gray); border: 2px solid var(--border); text-transform: uppercase; font-size: clamp(9px, 2.4vw, calc(12px * var(--ui-scale))); font-weight: bold; white-space: nowrap; text-overflow: ellipsis; width: 100%; text-align: center; display: flex; align-items: center; justify-content: center; }
 .theme-btn.active { background: var(--accent); color: var(--accent-txt); }
