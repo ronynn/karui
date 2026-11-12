@@ -6,8 +6,7 @@ const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\s+/
 const TIME_TOKEN_RE = /(?:^|\s)@(\d{2})(\d{2})([ap])?(?=\s|$)/
 const SEARCH_PREFIX_RE = /^%s(?:\s|$)/
 const SEARCH_ACTIVE_RE = /^%s\s/
-const CELEBRATION_COOLDOWN_MS = 4000
-const MAX_CONFETTI_FAILURES = 2
+const MAX_CONFETTI_FAILURES = 5
 
 export function parseReminderTime(text)
 {
@@ -58,8 +57,7 @@ export function createNotesModule()
     activeNoteMenuId: null,
     lastTrashTap: 0,
 
-    // Celebration safety state
-    _lastCelebrationAt: 0,
+    // Celebration safety state (no cooldown — fires on every mark)
     _confettiFailures: 0,
 
     _displayedCache: [],
@@ -682,24 +680,20 @@ export function createNotesModule()
       this.saveData()
     },
 
-    // Rate-limited, safety-wrapped confetti. Disables celebration mode
-    // automatically after repeated failures — this is our primary defence
-    // against the Android WebView white-screen-on-completion bug.
+    // Fires on EVERY mark (not unmark). No cooldown — spam away.
+    // Safety: try/catch prevents a throwing confetti call from breaking
+    // the render; if it throws repeatedly, celebration auto-disables.
     _celebrateOnce()
     {
       if (!this.celebrationMode) return
       if (this._confettiFailures >= MAX_CONFETTI_FAILURES) return
       if (typeof window.confetti !== 'function') return
 
-      const now = Date.now()
-      if (this._lastCelebrationAt && now - this._lastCelebrationAt < CELEBRATION_COOLDOWN_MS) return
-      this._lastCelebrationAt = now
-
       try
       {
         window.confetti({
-          particleCount: 40,
-          spread: 55,
+          particleCount: 60,
+          spread: 60,
           origin: { y: 0.7 },
           disableForReducedMotion: true
         })
@@ -751,8 +745,6 @@ export function createNotesModule()
 
         try { this._vibrate() } catch (_) {}
 
-        // Safer than window.location.href — WebViews that fail to load the
-        // URL can go blank; an anchor click defers to the platform.
         const txt = n.text.trim()
         if (/^https?:\/\//i.test(txt) || /^www\./i.test(txt))
         {

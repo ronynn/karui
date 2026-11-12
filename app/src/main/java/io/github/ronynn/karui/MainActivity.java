@@ -22,7 +22,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AlphaAnimation;
 import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -119,10 +118,6 @@ public class MainActivity extends Activity
       }
     }
 
-    // ── Seamless startup ────────────────────────────────────────
-    // Window bg, splash bg, and WebView bg are ALL painted the same
-    // theme colour. No flash between them — only the splash TEXT
-    // fades out to reveal the loaded WebView.
     SharedPreferences prefs = getSharedPreferences(PREFS_NOTE_QUEUE, MODE_PRIVATE);
     int themeBg = readThemeBg(prefs);
     boolean lightBars = prefs.getBoolean(KEY_THEME_LIGHT, false);
@@ -152,6 +147,8 @@ public class MainActivity extends Activity
     ws.setAllowFileAccessFromFileURLs(true);
     ws.setAllowUniversalAccessFromFileURLs(true);
 
+    // Top-level WebAppInterface.java in the same package — NOT the one
+    // that used to live as a nested class here.
     mWebView.addJavascriptInterface(new WebAppInterface(this), "Android");
 
     mWebView.setWebViewClient(new WebViewClient()
@@ -177,8 +174,6 @@ public class MainActivity extends Activity
         readSyncFileAndInject();
         consumeImportQr();
 
-        // WebView becomes visible at the same colour as the splash.
-        // Fade splash text out in 60ms — feels like the text dissolving.
         mWebView.setVisibility(View.VISIBLE);
         if (mSplash != null)
         {
@@ -690,275 +685,6 @@ public class MainActivity extends Activity
     {
       mWebView.evaluateJavascript("if(window.exportMarkdownSilent) window.exportMarkdownSilent();", null);
       mWebView.evaluateJavascript("if(window.syncCalendarEventsToAndroid) window.syncCalendarEventsToAndroid();", null);
-    }
-  }
-
-  public class WebAppInterface
-  {
-    MainActivity mActivity;
-    WebAppInterface(MainActivity a) { mActivity = a; }
-
-    @JavascriptInterface
-    public void setupSyncFile(String defaultFileName, String currentContent)
-    {
-      mActivity.pendingFileName = (defaultFileName != null && !defaultFileName.trim().isEmpty())
-          ? defaultFileName : "file.md";
-      mActivity.pendingFileData = currentContent != null ? currentContent : "";
-      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType("text/markdown");
-      intent.putExtra(Intent.EXTRA_TITLE, mActivity.pendingFileName);
-      try { mActivity.startActivityForResult(intent, SYNC_FILE_REQUEST_CODE); }
-      catch (ActivityNotFoundException e)
-      {
-        mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
-            "No document picker found on device.", Toast.LENGTH_SHORT).show());
-      }
-    }
-
-    @JavascriptInterface
-    public void saveFileSync(String filePath, String content)
-    {
-      if (filePath == null || filePath.trim().isEmpty()) return;
-      try
-      {
-        Uri uri = Uri.parse(filePath);
-        OutputStream os = mActivity.getContentResolver().openOutputStream(uri, "rwt");
-        if (os == null) os = mActivity.getContentResolver().openOutputStream(uri);
-        if (os != null)
-        {
-          os.write(content.getBytes());
-          os.close();
-          Intent update = new Intent(ACTION_NOTE_ADDED);
-          update.setPackage(mActivity.getPackageName());
-          mActivity.sendBroadcast(update);
-        }
-      }
-      catch (Exception e) { e.printStackTrace(); }
-    }
-
-    @JavascriptInterface
-    public void triggerManualReadSync() { mActivity.runOnUiThread(mActivity::readSyncFileAndInject); }
-
-    @JavascriptInterface
-    public void importMarkdownFile()
-    {
-      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      String[] mimes = {"text/markdown", "text/plain", "text/x-markdown", "application/octet-stream"};
-      intent.setType("*/*");
-      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes);
-      try { mActivity.startActivityForResult(intent, IMPORT_MD_FILE_REQUEST_CODE); }
-      catch (ActivityNotFoundException e)
-      {
-        mActivity.runOnUiThread(() -> Toast.makeText(mActivity,
-            "No document picker found", Toast.LENGTH_SHORT).show());
-      }
-    }
-
-    @JavascriptInterface
-    public void saveFile(String fileName, String fileData, String fileType)
-    {
-      mActivity.pendingFileName = fileName;
-      mActivity.pendingFileData = fileData;
-      mActivity.pendingFileType = fileType;
-      Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType(fileType);
-      intent.putExtra(Intent.EXTRA_TITLE, fileName);
-      mActivity.startActivityForResult(intent, CREATE_FILE_REQUEST_CODE);
-    }
-
-    @JavascriptInterface
-    public void importJsonFile()
-    {
-      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      intent.addCategory(Intent.CATEGORY_OPENABLE);
-      intent.setType("application/json");
-      mActivity.startActivityForResult(intent, IMPORT_FILE_REQUEST_CODE);
-    }
-
-    @JavascriptInterface
-    public void toggleNotification(boolean enable)
-    {
-      mActivity.runOnUiThread(() ->
-      {
-        if (enable)
-        {
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-              && mActivity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                 != PackageManager.PERMISSION_GRANTED)
-          {
-            mActivity.pendingQuickNoteEnable = true;
-            mActivity.requestPermissions(
-              new String[]{Manifest.permission.POST_NOTIFICATIONS},
-              NOTIFICATION_PERMISSION_REQUEST);
-            return;
-          }
-          NotificationHelper.setEnabled(mActivity, true);
-          NotificationHelper.show(mActivity, false);
-        }
-        else
-        {
-          NotificationHelper.setEnabled(mActivity, false);
-          NotificationHelper.cancel(mActivity);
-        }
-      });
-    }
-
-    @JavascriptInterface
-    public boolean isNotificationEnabled() { return NotificationHelper.isEnabled(mActivity); }
-
-    @JavascriptInterface
-    public void setInboxTabName(String tabName)
-    {
-      if (tabName == null || tabName.trim().isEmpty()) tabName = "Inbox";
-      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
-        .edit().putString("inbox_tab_name", tabName.trim()).apply();
-    }
-
-    @JavascriptInterface
-    public void toggleScreenshots(boolean disable)
-    {
-      mActivity.runOnUiThread(() ->
-      {
-        if (disable) mActivity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-        else         mActivity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-      });
-    }
-
-    @JavascriptInterface
-    public boolean isOverlayPermissionGranted()
-    {
-      return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-          || Settings.canDrawOverlays(mActivity);
-    }
-
-    @JavascriptInterface
-    public void requestOverlayPermission() { mActivity.runOnUiThread(mActivity::openOverlaySettings); }
-
-    @JavascriptInterface
-    public int getStatusBarHeight()
-    {
-      int id = mActivity.getResources().getIdentifier("status_bar_height", "dimen", "android");
-      return id > 0 ? mActivity.getResources().getDimensionPixelSize(id) : 0;
-    }
-
-    @JavascriptInterface
-    public int getNavBarHeight()
-    {
-      int id = mActivity.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-      return id > 0 ? mActivity.getResources().getDimensionPixelSize(id) : 0;
-    }
-
-    @JavascriptInterface
-    public void setThemeBackgroundColor(String hex)
-    {
-      if (hex == null || hex.isEmpty()) return;
-      try { Color.parseColor(hex); } catch (Exception e) { return; }
-      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
-        .edit().putString(KEY_THEME_BG, hex).apply();
-    }
-
-    @JavascriptInterface
-    public void setSystemBarsLightMode(boolean light)
-    {
-      mActivity.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
-        .edit().putBoolean(KEY_THEME_LIGHT, light).apply();
-      mActivity.runOnUiThread(() -> SystemBarHelper.apply(mActivity, light));
-    }
-
-    @JavascriptInterface
-    public String getDynamicWallpaperTheme()
-    {
-      return DynamicTheme.getWallpaperTheme(mActivity);
-    }
-
-    @JavascriptInterface
-    public void updateCalendarEvents(String json)
-    {
-      if (json == null) json = "[]";
-      SharedPreferences prefs = mActivity.getSharedPreferences(
-          CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
-      String oldJson = prefs.getString(CalendarNotificationReceiver.KEY_EVENTS_JSON, "[]");
-      prefs.edit().putString(CalendarNotificationReceiver.KEY_EVENTS_JSON, json).apply();
-      try
-      {
-        JSONArray oldArr = new JSONArray(oldJson);
-        JSONArray newArr = new JSONArray(json);
-        android.app.NotificationManager nm =
-            (android.app.NotificationManager) mActivity.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null)
-        {
-          for (int i = 0; i < oldArr.length(); i++)
-          {
-            JSONObject oldO = oldArr.getJSONObject(i);
-            int oldId = oldO.optInt("id", 0);
-            boolean stillActive = false;
-            for (int j = 0; j < newArr.length(); j++)
-            {
-              JSONObject newO = newArr.getJSONObject(j);
-              if (newO.optInt("id", 0) == oldId && !newO.optBoolean("completed", false))
-              { stillActive = true; break; }
-            }
-            if (!stillActive)
-              nm.cancel(CalendarNotificationReceiver.EVENT_NOTIFICATION_BASE + Math.abs(oldId % 100000));
-          }
-        }
-      }
-      catch (Exception ignored) {}
-      if (prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false))
-      {
-        Intent refresh = new Intent(mActivity, CalendarNotificationReceiver.class);
-        refresh.setAction(CalendarNotificationReceiver.ACTION_REFRESH);
-        mActivity.sendBroadcast(refresh);
-      }
-    }
-
-    @JavascriptInterface
-    public void setCalendarNotificationsEnabled(final boolean enabled)
-    {
-      SharedPreferences prefs = mActivity.getSharedPreferences(
-          CalendarNotificationReceiver.PREFS, Context.MODE_PRIVATE);
-      boolean wasEnabled = prefs.getBoolean(CalendarNotificationReceiver.KEY_ENABLED, false);
-      prefs.edit().putBoolean(CalendarNotificationReceiver.KEY_ENABLED, enabled).apply();
-      final boolean justEnabled = enabled && !wasEnabled;
-      mActivity.runOnUiThread(() ->
-      {
-        if (enabled)
-        {
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-              && mActivity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                 != PackageManager.PERMISSION_GRANTED)
-          {
-            mActivity.requestPermissions(
-              new String[]{Manifest.permission.POST_NOTIFICATIONS},
-              NOTIFICATION_PERMISSION_REQUEST);
-          }
-          if (justEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-          {
-            android.app.AlarmManager am =
-                (android.app.AlarmManager) mActivity.getSystemService(Context.ALARM_SERVICE);
-            if (am != null && !am.canScheduleExactAlarms())
-            {
-              Toast.makeText(mActivity,
-                "Allow 'Alarms & reminders' so calendar reminders fire on time.",
-                Toast.LENGTH_LONG).show();
-              Intent i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-              i.setData(Uri.parse("package:" + mActivity.getPackageName()));
-              try { mActivity.startActivity(i); } catch (Exception ignored) {}
-            }
-          }
-          CalendarNotificationReceiver.scheduleNext(mActivity);
-          CalendarNotificationReceiver.scheduleEventReminders(mActivity);
-          if (justEnabled)
-          {
-            Intent show = new Intent(mActivity, CalendarNotificationReceiver.class);
-            mActivity.sendBroadcast(show);
-          }
-        }
-        else { CalendarNotificationReceiver.cancel(mActivity); }
-      });
     }
   }
 

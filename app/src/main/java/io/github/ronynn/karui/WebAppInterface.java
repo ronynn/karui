@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -216,7 +217,12 @@ public class WebAppInterface
   }
 
   @JavascriptInterface
-  public void requestOverlayPermission() {}
+  public void requestOverlayPermission()
+  {
+    MainActivity a = act();
+    if (a == null) return;
+    a.runOnUiThread(a::openOverlaySettings);
+  }
 
   @JavascriptInterface
   public int getStatusBarHeight()
@@ -242,6 +248,29 @@ public class WebAppInterface
     MainActivity a = act();
     if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
     return DynamicTheme.getWallpaperTheme(a);
+  }
+
+  // ── Theme / system bars (were present only in the removed nested class) ──
+
+  @JavascriptInterface
+  public void setThemeBackgroundColor(String hex)
+  {
+    MainActivity a = act();
+    if (a == null) return;
+    if (hex == null || hex.isEmpty()) return;
+    try { Color.parseColor(hex); } catch (Exception e) { return; }
+    a.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
+      .edit().putString("theme_bg_color", hex).apply();
+  }
+
+  @JavascriptInterface
+  public void setSystemBarsLightMode(boolean light)
+  {
+    MainActivity a = act();
+    if (a == null) return;
+    a.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
+      .edit().putBoolean("theme_light", light).apply();
+    a.runOnUiThread(() -> SystemBarHelper.apply(a, light));
   }
 
   // ── Pomodoro ────────────────────────────────────────────────────
