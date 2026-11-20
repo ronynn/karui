@@ -1,4 +1,4 @@
-esbuild src/*.js src/*.css   --minify   --outbase=src   --outdir=app/src/main/assets   --log-level=info
+esbuild src/*.js src/*.css   --minify   --outbase=src   --outdir=app/src/main/assets   --log-level=info  --drop:console --drop:debugger
 cp src/index.html app/src/main/assets
 
 : << 'COMMENT'

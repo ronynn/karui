@@ -50,11 +50,8 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
   }
 
   @Override
-  public void onCreate()
-  {
-  }
+  public void onCreate() { }
 
-  // --- SECTION: DATA LOADERS ---
   @Override
   public void onDataSetChanged()
   {
@@ -68,6 +65,13 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
 
     try
     {
+      // 1. Pending notes for this tab FIRST — newest at top.
+      //    These are notes captured via widget + button, floating window,
+      //    status bar reply, or share intent that haven't been synced to
+      //    the file yet (MainActivity isn't running to consume the queue).
+      loadPendingNotesForTab(targetTab);
+
+      // 2. Then the synced file contents below.
       SharedPreferences syncPrefs = mContext.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE);
       String uriStr = syncPrefs.getString("sync_file_uri", null);
 
@@ -86,6 +90,51 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     {
       t.printStackTrace();
     }
+  }
+
+  /**
+   * Reads pending_notes_json from the queue and prepends items whose
+   * target tab matches the widget's tab. Pending notes are shown newest-
+   * first at the top of the list, so a note captured from the floating
+   * window appears in the widget immediately even before MainActivity
+   * opens to sync the queue to disk.
+   *
+   * Once MainActivity runs and consumes the queue, these notes disappear
+   * from here and re-appear from loadFromMarkdownUri as normal synced
+   * notes. No duplication because the queue is cleared on sync.
+   */
+  private void loadPendingNotesForTab(String targetTab)
+  {
+    SharedPreferences queue = mContext.getSharedPreferences("note_queue", Context.MODE_PRIVATE);
+    String json = queue.getString("pending_notes_json", "[]");
+    if (json.equals("[]") || json.isEmpty()) return;
+
+    try
+    {
+      JSONArray arr = new JSONArray(json);
+      List<NoteItem> pending = new ArrayList<>();
+      for (int i = 0; i < arr.length(); i++)
+      {
+        JSONObject item = arr.getJSONObject(i);
+        String text = item.optString("text", "");
+        String tab = item.optString("tab", "Inbox");
+        if (text.isEmpty()) continue;
+        if (!tab.equalsIgnoreCase(targetTab)) continue;
+        pending.add(new NoteItem(text, false, "- [ ] " + text));
+      }
+      if (!pending.isEmpty())
+      {
+        // Newest at the very top. Pending notes are appended to the array
+        // in add order, so reverse to get the last-added first.
+        List<NoteItem> toPrepend = new ArrayList<>(pending.size());
+        for (int i = pending.size() - 1; i >= 0; i--)
+        {
+          toPrepend.add(pending.get(i));
+        }
+        mNotes.addAll(0, toPrepend);
+      }
+    }
+    catch (Exception ignored) {}
   }
 
   private boolean loadFromMarkdownUri(String uriStr, String targetTab)
@@ -161,9 +210,7 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
         }
       }
     }
-    catch (Exception e)
-    {
-    }
+    catch (Exception e) { }
   }
 
   @Override
@@ -178,7 +225,6 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     return mNotes.size();
   }
 
-  // --- SECTION: ITEM BINDING ---
   @Override
   public RemoteViews getViewAt(int position)
   {
@@ -192,8 +238,6 @@ public class NotesRemoteViewsFactory implements RemoteViewsService.RemoteViewsFa
     {
       span.setSpan(new StrikethroughSpan(), 0, span.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
-    // Apply the user-selected system font family. TypefaceSpan is ParcelableSpan,
-    // so it survives the RemoteViews parcel into the launcher process.
     span.setSpan(new TypefaceSpan(mFontFamily), 0, span.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
     views.setTextViewText(R.id.widget_item_text, span);

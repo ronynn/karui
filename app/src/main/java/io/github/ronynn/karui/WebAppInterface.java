@@ -26,6 +26,10 @@ import java.lang.ref.WeakReference;
 public class WebAppInterface
 {
   private static final String PREFS_NOTE_QUEUE = "note_queue";
+  private static final String PREFS_SYNC = "sync_prefs";
+  private static final String KEY_SYNC_URI = "sync_file_uri";
+  private static final String KEY_THEME_BG = "theme_bg_color";
+  private static final String KEY_THEME_LIGHT = "theme_light";
 
   private final WeakReference<MainActivity> mRef;
 
@@ -33,8 +37,7 @@ public class WebAppInterface
 
   private MainActivity act() { return mRef.get(); }
 
-  // ── Sync file & import/export ───────────────────────────────────
-
+  // --- Sync file & import/export ---
   @JavascriptInterface
   public void setupSyncFile(String defaultFileName, String currentContent)
   {
@@ -129,8 +132,7 @@ public class WebAppInterface
     a.startActivityForResult(intent, MainActivity.IMPORT_FILE_REQUEST_CODE);
   }
 
-  // ── Haptics ─────────────────────────────────────────────────────
-
+  // --- Haptics ---
   @JavascriptInterface
   public void haptic()
   {
@@ -141,8 +143,7 @@ public class WebAppInterface
        .performHapticFeedback(HapticFeedbackConstants.LONG_PRESS));
   }
 
-  // ── Notifications ───────────────────────────────────────────────
-
+  // --- Notifications ---
   @JavascriptInterface
   public void toggleNotification(boolean enable)
   {
@@ -180,8 +181,7 @@ public class WebAppInterface
     return a != null && NotificationHelper.isEnabled(a);
   }
 
-  // ── Tab / display settings ──────────────────────────────────────
-
+  // --- Tab / display settings ---
   @JavascriptInterface
   public void setInboxTabName(String tabName)
   {
@@ -204,8 +204,7 @@ public class WebAppInterface
     });
   }
 
-  // ── Overlay helpers ─────────────────────────────────────────────
-
+  // --- Overlay helpers ---
   @JavascriptInterface
   public boolean isOverlayPermissionGranted()
   {
@@ -242,25 +241,15 @@ public class WebAppInterface
     return id > 0 ? a.getResources().getDimensionPixelSize(id) : 0;
   }
 
-  @JavascriptInterface
-  public String getDynamicWallpaperTheme()
-  {
-    MainActivity a = act();
-    if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
-    return DynamicTheme.getWallpaperTheme(a);
-  }
-
-  // ── Theme / system bars (were present only in the removed nested class) ──
-
+  // --- Theme ---
   @JavascriptInterface
   public void setThemeBackgroundColor(String hex)
   {
     MainActivity a = act();
-    if (a == null) return;
-    if (hex == null || hex.isEmpty()) return;
+    if (a == null || hex == null || hex.isEmpty()) return;
     try { Color.parseColor(hex); } catch (Exception e) { return; }
     a.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
-      .edit().putString("theme_bg_color", hex).apply();
+      .edit().putString(KEY_THEME_BG, hex).apply();
   }
 
   @JavascriptInterface
@@ -269,12 +258,19 @@ public class WebAppInterface
     MainActivity a = act();
     if (a == null) return;
     a.getSharedPreferences(PREFS_NOTE_QUEUE, Context.MODE_PRIVATE)
-      .edit().putBoolean("theme_light", light).apply();
+      .edit().putBoolean(KEY_THEME_LIGHT, light).apply();
     a.runOnUiThread(() -> SystemBarHelper.apply(a, light));
   }
 
-  // ── Pomodoro ────────────────────────────────────────────────────
+  @JavascriptInterface
+  public String getDynamicWallpaperTheme()
+  {
+    MainActivity a = act();
+    if (a == null) return "{\"ok\":false,\"error\":\"no_activity\"}";
+    return DynamicTheme.getWallpaperTheme(a);
+  }
 
+  // --- Pomodoro ---
   @JavascriptInterface
   public void startPomodoroTimer(long endTimeMs)
   {
@@ -324,7 +320,6 @@ public class WebAppInterface
     CalendarNotificationReceiver.cancelPomodoro(a);
   }
 
-  // Legacy aliases — kept so older JS still works.
   @JavascriptInterface
   public void schedulePomodoro(long endTimeMs) { startPomodoroTimer(endTimeMs); }
 
@@ -347,8 +342,6 @@ public class WebAppInterface
     return CalendarNotificationReceiver.isPomodoroRunning(a);
   }
 
-  // Diagnostic. Call from JS console:
-  //   JSON.parse(window.Android.diagnosePomodoro())
   @JavascriptInterface
   public String diagnosePomodoro()
   {
@@ -382,8 +375,7 @@ public class WebAppInterface
          + ",\"exactAlarm\":" + exactAlarm + "}";
   }
 
-  // ── Calendar bridge ─────────────────────────────────────────────
-
+  // --- Calendar bridge ---
   @JavascriptInterface
   public void updateCalendarEvents(String json)
   {
