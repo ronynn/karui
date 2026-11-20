@@ -38,8 +38,6 @@ export function applyTheme(theme, customThemes)
       applyCustomThemeVars(vars)
       return
     }
-    // Vars missing (e.g., app data cleared) — fall back to gruvbox so
-    // the UI is never left in a broken state.
     clearInlineThemeVars()
     document.documentElement.setAttribute('data-theme', 'gruvbox')
     return
@@ -57,10 +55,6 @@ export function applyTheme(theme, customThemes)
     document.documentElement.setAttribute('data-theme', theme)
   }
 
-
-  // Notify Android of bar icon mode + background colour for smoother next launch.
-  // Deferred to rAF because CSS custom properties are set synchronously but
-  // getComputedStyle needs a frame to pick them up.
   if (window.Android)
   {
     requestAnimationFrame(() =>
@@ -106,14 +100,8 @@ function isLightColor(color)
     }
   }
   catch (e) { return false }
-  // Perceived luminance (ITU-R BT.601)
   return (0.299 * r + 0.587 * g + 0.114 * b) > 128
 }
-
-
-
-
-
 
 export function applyFont(font)
 {
@@ -128,7 +116,6 @@ export function applyUiScale(scale)
 export function createSettingsModule()
 {
   return {
-    // --- state ---
     currentTheme: 'gruvbox',
     currentFont: 'system-ui',
     uiScale: 1,
@@ -149,7 +136,6 @@ export function createSettingsModule()
     calendarRef: null,
     enterNewLine: false,
 
-    // --- theme import modal ---
     themeImportVisible: false,
     themeImportText: '',
 
@@ -176,14 +162,11 @@ export function createSettingsModule()
       { key: 'everforest', label: 'EVERFOREST' },
       { key: 'everforest-light', label: 'EV-LIGHT' },
       { key: 'sepia', label: 'SEPIA' },
-      { key: 'wheat', label: 'WHEAT' },
       { key: 'paper', label: 'PAPER' },
       { key: 'gruvbox-light', label: 'GRUV-LIGHT' },
 
       { key: 'sol-light', label: 'SOL-LIGHT' },
       { key: 'papercolor-light', label: 'CUPERTINO' },
-      { key: 'things', label: 'THINGS' },
-      { key: 'sakura', label: 'SAKURA' },
       { key: 'purple', label: 'PURPLE' },
 
       { key: 'slate', label: 'SLATE' },
@@ -193,7 +176,8 @@ export function createSettingsModule()
     defaultFonts: [
       { name: 'SYSTEM', val: 'system-ui' },
       { name: 'MONO', val: 'monospace' },
-      { name: 'SERIF', val: 'serif' }
+      { name: 'SERIF', val: 'serif' },
+      { name: 'CONDENSED', val: 'sans-serif-condensed' }
     ],
 
     uiSizes: [
@@ -203,12 +187,8 @@ export function createSettingsModule()
       { label: 'XL', scale: 1.3 }
     ],
 
-    // --- dynamic wallpaper theme ---
     applyDynamicTheme(silent)
     {
-      // Prune any stale DYNAMIC entry left in customThemes by a previous
-      // build. Runs on every click and on silent startup, so the
-      // duplicate button disappears without user action.
       if ((this.customThemes || []).some(t => t.key === DYNAMIC_KEY))
       {
         this.customThemes = this.customThemes.filter(t => t.key !== DYNAMIC_KEY)
@@ -247,7 +227,6 @@ export function createSettingsModule()
       }
     },
 
-    // --- setters ---
     setTheme(t)
     {
       this.currentTheme = t
@@ -269,7 +248,6 @@ export function createSettingsModule()
       this.saveData()
     },
 
-    // --- custom themes ---
     openThemeImport()
     {
       this.themeImportVisible = true
@@ -343,7 +321,6 @@ export function createSettingsModule()
       }
     },
 
-    // --- calendar ---
     toggleCalendarEnabled()
     {
       if (this.calendarEnabled)
@@ -379,7 +356,6 @@ export function createSettingsModule()
       }
     },
 
-    // --- native toggles ---
     toggleScreenshots()
     {
       if (window.Android && window.Android.toggleScreenshots)
@@ -412,7 +388,6 @@ export function createSettingsModule()
       this.saveData()
     },
 
-    // --- custom fonts ---
     triggerFontUpload()
     {
       let el = document.getElementById('font-file-input')

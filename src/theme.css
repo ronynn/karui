@@ -12,19 +12,8 @@
 [data-theme="nord"] { --bg: #2e3440; --surface: #3b4252; --border: #88c0d0; --text: #eceff4; --accent: #88c0d0; --accent-txt: #2e3440; --gray: #616e88; }
 [data-theme="paper"] { --bg: #f2ede3; --surface: #e6dfd1; --border: #8a7a5c; --text: #2b2b28; --accent: #b04a3a; --accent-txt: #f2ede3; --gray: #a49a86; }
 [data-theme="monokai"] { --bg: #272822; --surface: #3e3d32; --border: #f92672; --text: #f8f8f2; --accent: #fd971f; --accent-txt: #272822; --gray: #a6e22e; }
-[data-theme="cupcake"] { --bg: #fff5f7; --surface: #ffe4e9; --border: #e91e63; --text: #2e282a; --accent: #e91e63; --accent-txt: #ffffff; --gray: #d47a8e; }
-[data-theme="sakura"] { --bg: #fdf2f4; --surface: #f7e2e7; --border: #b3446c; --text: #2b1e24; --accent: #b3446c; --accent-txt: #ffffff; --gray: #b99aa3; }
 [data-theme="sol-dark"] { --bg: #002b36; --surface: #073642; --border: #2aa198; --text: #eee8d5; --accent: #b58900; --accent-txt: #002b36; --gray: #586e75; }
 
-[data-theme="things"] {
-  --bg: #fafaf8;
-  --surface: #eef0f4;
-  --border: #c9ccd4;
-  --text: #1c1c1e;
-  --accent: #1a6dff;
-  --accent-txt: #ffffff;
-  --gray: #7a7f8c;
-}
 
 [data-theme="sol-light"] {
   --bg: #fdf6e3;
@@ -151,10 +140,6 @@
 }
 
 
-[data-theme="wheat"] {
-  --bg: #faf6e8; --surface: #f0e8d0; --border: #c9b890;
-  --text: #3a3220; --accent: #a67c2e; --accent-txt: #faf6e8; --gray: #8a7a5a;
-}
 
 
 

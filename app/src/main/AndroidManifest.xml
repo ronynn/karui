@@ -20,7 +20,7 @@
     tools:ignore="GoogleAppIndexingWarning">
 
     <activity
-      android:configChanges="orientation|screenSize"
+      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode"
       android:name="io.github.ronynn.karui.MainActivity"
       android:exported="true"
       android:launchMode="singleTask"

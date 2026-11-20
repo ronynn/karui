@@ -4,27 +4,27 @@ This app cannot connect to the internet, doesn't have internet permissions. Secu
 
 Inspired by the discord system-24 theme and the Windows Mobile design system with a mash up of retro terminalesque design inspired by Unix customizations found online.
 
-Inspired by orgzly and colornote, it achieves sync and QR sharing of notes between devices when used alongside apps like syncthing and graphene camera (as Karui can now generate QR from notes), keeping the app itself lightweight and minimal.
+Inspired by orgzly and colornote, it supports sync and QR sharing of notes between devices.
 
 
 ## Typical uses and what makes it special
 
-- Daily quick notetaking, making shopping lists, bucket lists, calendar event marking, reminders and recurring notes.
+- Daily quick notetaking, pomodoro, making shopping lists, bucket lists, calendar event marking, reminders and recurring notes.
 - Tasks list with percentage remaining metrics, notemenu shows word count, useful when you are writing prose.
-- Taking notes from status bar or other app, taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok without the need to switch to a notes app (my mind races with ideas when watching youtube so I added this feature), helpful for saving trivial stuff you notice when reading some article or maybe for searching it later.
+- Taking notes from status bar or other app, taking design ideas when on youtube, instagram, snapchat, whatsapp, tiktok without the need to switch to a notes app.
 - Capture passing thoughts when on a jog.
 - Journal events of your daily life on a separate tab or in the calendar, a daily log of activities.
 - Playing quick mobile games (easter eggs).
 - Use it like a password manager, save your passwords for quick access with copy paste at one place.
-- Have a nice aesthetic UI to read your notes on your phone.
+
 
 ## Features
 
-- Simple note taking and shopping list making with home screen widgets, status bar input, calendar, recurring reminders, offline sync, recycle bin, drag-and-drop sorting.
+- Simple note taking and shopping list making with home screen widgets, status bar input, calendar, recurring reminders, offline sync, recycle bin, drag and drop sorting.
 - To add a new note tab: use the `/TabName` format. Bringing some Linux Terminal vibes.
 - Long-press any tab to rename, delete or add new tab (has a shadow that kinda brings back MS-DOS vibes).
-- Support for custom fonts, so pick and select any .ttf files you like from your files system.
-- Add a % symbol on any tabname and it automatically counts percentage of tasks completed.
-- Optionally disable screenshots for privacy when screensharing or in general.
-- Optional UI Sounds, celebration mode with confetti, button ripple effects.
+- Support for dynamic custom themes and fonts, so pick and select any .ttf files you like from your files system.
+- Add a % symbol on any tabname and it automatically counts percentage of tasks completed. Use %s term syntax to search and find a note.
+- Encrypt tabs or disable screenshots for privacy when screensharing, toggle celebration mode with confetti.
+- Homescreen widgets for notes, Karui also has a floating pomodoro timer.
 - Easter egg games like Flappy Bird, Snake and Moon lander. Use the codes FLAPTHEBIRD, SLITHER, MOONMAN to test them out, share your highscores on our telegram, discord server and reddit, good place for more details on features or for casual notetaking discussions. Links in github readme. Github issues are the fastest way to reach out.

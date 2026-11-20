@@ -151,7 +151,6 @@ const appStore = reactive(mergeModules(
     editTabName: null,
     _autosaveTimer: null,
     _vvListener: null,
-    _editPushedState: false,
     _lastKbPad: null,
     _selectionListener: null,
     _selectionTimer: null,
@@ -276,10 +275,10 @@ const appStore = reactive(mergeModules(
         }
       })
 
-      window.addEventListener('popstate', () =>
-      {
-        if (this.editVisible) this.finishEdit()
-      })
+      // No popstate listener here — Android hardware back goes through
+      // MainActivity.onBackPressed → window.handleAndroidBack().
+      // Games still use history.pushState/popstate; their back handling
+      // falls through mWebView.canGoBack() in the Java side.
 
       document.addEventListener('visibilitychange', () =>
       {
@@ -322,6 +321,20 @@ const appStore = reactive(mergeModules(
       this.resumePomodoroIfNeeded()
       this._recoverTabEditDraft()
 
+      // Bridge for Java's onBackPressed. Returns true if any in-app
+      // overlay was closed by this call; Java falls through to
+      // WebView history (games) or system back otherwise.
+      window.handleAndroidBack = () =>
+      {
+        if (this.editVisible) { this.finishEdit(); return true }
+        if (this.modalVisible) { this.closeModal(false); return true }
+        if (this.contextMenuVisible || this.noteMenuVisible) { this.closeAllMenus(); return true }
+        if (this.qrModalVisible) { this.qrClose(); return true }
+        if (this.pasteJsonVisible) { this.closePasteJson(); return true }
+        if (this.themeImportVisible) { this.closeThemeImport(); return true }
+        return false
+      }
+
       requestAnimationFrame(() => requestAnimationFrame(() =>
       {
         const ae = document.activeElement
@@ -337,8 +350,6 @@ const appStore = reactive(mergeModules(
     {
       this._dirtyNotes = true
 
-      // Encrypt any pending plaintext in unlocked locked-tabs before
-      // serializing. No-op if nothing is unlocked.
       if (this._encryptLockedTabs) this._encryptLockedTabs()
 
       localStorage.setItem('noteCategories', JSON.stringify(this.noteCategories))
@@ -558,15 +569,12 @@ const appStore = reactive(mergeModules(
       this.editTabMode = false
       this.editTabName = null
       this.editVisible = true
-      this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
       this._addSelectionListener()
-      if (!history.state || !history.state.karuiEdit)
-      {
-        history.pushState({ karuiEdit: true }, '')
-        this._editPushedState = true
-      }
+      // No history.pushState — Android back handles closing via
+      // window.handleAndroidBack(). This avoids WebView's silent
+      // page reload on history.back() for file:// URLs.
       if (this.keepKeyboard)
       {
         nextTick(() =>
@@ -599,15 +607,9 @@ const appStore = reactive(mergeModules(
       this.editNoteId = null
       this.editDraftText = this._generateTabMarkdown(tab)
       this.editVisible = true
-      this._editPushedState = false
       this._updateKeyboardPadding()
       this._bindViewportListener()
       this._addSelectionListener()
-      if (!history.state || !history.state.karuiEdit)
-      {
-        history.pushState({ karuiEdit: true }, '')
-        this._editPushedState = true
-      }
       if (this.keepKeyboard)
       {
         nextTick(() =>
@@ -658,8 +660,6 @@ const appStore = reactive(mergeModules(
       if (this.editNoteId == null) return
       const n = this.notes.find(x => x.id === this.editNoteId)
       if (!n) return
-      // Text changed → ciphertext (if any) is stale. Delete so saveData's
-      // encrypt hook regenerates it from the new plaintext.
       if (n.text !== this.editDraftText) delete n.encryptedText
       n.text = this.editDraftText
       n.updatedAt = Date.now()
@@ -824,10 +824,6 @@ const appStore = reactive(mergeModules(
       const tabName = this.editTabName
       const draft = this.editDraftText
       const id = this.editNoteId
-      const shouldPopHistory = this._editPushedState
-        && history.state
-        && history.state.karuiEdit
-      this._editPushedState = false
       this.editTabMode = false
       this.editTabName = null
       this.editVisible = false
@@ -839,7 +835,6 @@ const appStore = reactive(mergeModules(
 
       if (wasTabMode && tabName)
       {
-        // Tab edit is rare — defer its work but do it right after paint.
         requestAnimationFrame(() => {
           this.applyTabMarkdown(tabName, draft)
           this._flushSideEffectsNow()
@@ -864,8 +859,6 @@ const appStore = reactive(mergeModules(
       requestAnimationFrame(() => requestAnimationFrame(() => {
         this._measureNoteOverflow()
       }))
-
-      if (shouldPopHistory) history.back()
     },
 
     closeAllMenus()
@@ -927,11 +920,17 @@ const appStore = reactive(mergeModules(
 
     handleGlobalClick(e)
     {
-      playSound('click', this.uiSounds)
-      if (this.buttonRipples)
+      // Play sound only on interactives — tapping empty space, note body,
+      // or text inputs shouldn't click. Ripple too.
+      const interactive = e.target.closest(
+        'button, .tab, .theme-btn, #fab-btn, .switch, ' +
+        'input[type="checkbox"], input[type="radio"], ' +
+        'input[type="button"], input[type="submit"], input[type="reset"]'
+      )
+      if (interactive)
       {
-        let targetBtn = e.target.closest('button, .tab, .theme-btn, #fab-btn')
-        if (targetBtn) createRipple(e, targetBtn)
+        playSound('click', this.uiSounds)
+        if (this.buttonRipples) createRipple(e, interactive)
       }
       if (!e.target.closest('.menu')) this.closeAllMenus()
     },
@@ -1029,13 +1028,9 @@ const appStore = reactive(mergeModules(
     {
       if (!this.syncFilePath) return
 
-      // Ensure any pending plaintext in unlocked locked-tabs is encrypted
-      // before serializing.
       if (this._encryptLockedTabs) this._encryptLockedTabs()
 
       let now = Date.now()
-      // Sync ALL notes — locked-tab notes go out as ciphertext
-      // (generateMarkdownString picks n.encryptedText for locked tabs).
       const allNotes = this.notes.slice()
       allNotes.forEach(n => { if (!n.updatedAt) n.updatedAt = now })
       const allCats = this.noteCategories.slice()

@@ -448,18 +448,7 @@ export const gameRegistry = {
     mod.startSnakeGame()
     return true
   },
-  2048: async () =>
-  {
-    const mod = await import('./2048.js')
-    mod.start2048Game()
-    return true
-  },
-  ASEPRITE: async () =>
-  {
-    const mod = await import('./pixel.js')
-    mod.startPixelGame()
-    return true
-  }
+  
 }
 
 export function tryRunGame(code)
@@ -470,10 +459,6 @@ export function tryRunGame(code)
     return false
   }
 
-  // Did the user start the game with the keyboard open? (Enter key path)
-  // If so, the viewport is about to shrink back to its resting size as the
-  // soft keyboard animates away. Creating a position:fixed overlay during
-  // that transition is what caused the FOUC on Android WebView.
   const active = document.activeElement
   const hadKeyboard = !!(
     active && (
@@ -487,10 +472,6 @@ export function tryRunGame(code)
     active.blur()
   }
 
-  // Show the spinner immediately, in the same synchronous tick as the
-  // key press. It covers the notes screen for the entire process, and
-  // (unlike the game canvas) it's centred and tiny, so viewport resize
-  // during keyboard dismissal doesn't cause a visible jump.
   const loading = createLoadingSpinner()
 
   // Wait for the viewport to be stable before creating the game overlay.

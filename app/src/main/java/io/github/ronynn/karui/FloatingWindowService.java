@@ -35,7 +35,6 @@ public class FloatingWindowService extends Service
 {
   private static final String PREFS_NOTE_QUEUE = "note_queue";
   private static final String KEY_DRAFT = "quick_capture_draft";
-  static final String KEY_OVERLAY_ACTIVE = "overlay_active";
 
   private static final String PANEL_BG_COLOR   = "#282828";
   private static final String HANDLE_BG_COLOR  = "#3C3836";
@@ -53,9 +52,6 @@ public class FloatingWindowService extends Service
   private static final int MIN_VISIBLE_DP    = 48;
   private static final int COLLAPSED_WIDTH_DP  = 140;
   private static final int COLLAPSED_HEIGHT_DP = 28;
-
-  // Critical: alpha must be <= 0.8 so the IME accepts our window
-  private static final float WINDOW_ALPHA = 1.0f;
 
   private final Handler mHandler = new Handler(Looper.getMainLooper());
   private WindowManager mWindowManager;
@@ -261,7 +257,6 @@ public class FloatingWindowService extends Service
     mParams.y = dp(100);
     mParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                           | WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE;
-    mParams.alpha = WINDOW_ALPHA;
 
     mRootView = rootLayout;
     mWindowManager.addView(mRootView, mParams);
@@ -269,21 +264,16 @@ public class FloatingWindowService extends Service
     mPreOffscreenX = mParams.x;
     mPreOffscreenY = mParams.y;
 
-    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, true).apply();
-
     mRootView.setOnKeyListener((v, keyCode, event) ->
     {
       if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP)
       {
-        if (mCollapsed) expandWindow();
-        else saveAndClose();
+        saveAndClose();
         return true;
       }
       return false;
     });
 
-    // Wait for layout, THEN show keyboard. This is the only reliable
-    // sequence for TYPE_APPLICATION_OVERLAY + EditText.
     mRootView.getViewTreeObserver().addOnGlobalLayoutListener(
         new ViewTreeObserver.OnGlobalLayoutListener()
         {
@@ -494,7 +484,6 @@ public class FloatingWindowService extends Service
       try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
       mRootView = null;
     }
-    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
     stopSelf();
   }
 
@@ -508,7 +497,6 @@ public class FloatingWindowService extends Service
       try { mWindowManager.removeView(mRootView); } catch (Exception ignored) {}
       mRootView = null;
     }
-    mPrefs.edit().putBoolean(KEY_OVERLAY_ACTIVE, false).apply();
     try { unregisterReceiver(closeReceiver); } catch (Exception ignored) {}
     super.onDestroy();
   }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-  <string name="app_name">Karui</string>
+  <string name="app_name">Karui ToDo</string>
   <string name="no_app_to_open_link">No app found to open this link</string>
 
   <string name="shortcut_tile_short">Karui Tile</string>

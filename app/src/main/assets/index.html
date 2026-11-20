@@ -329,9 +329,9 @@
         <div class="box">
           <span class="box-title">Box 4: Instructions</span>
           <div class="about-text">
-            - Use /tabName to add a new tab. S is sort, E is enter, R on widget is refresh, M is for menu. Long press from your launcher homescreen to add Karui widgets. <br/>
-            - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete individual notes.<br/>
-            - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. <br/>
+            - Use /tabName to add a new tab. S is sort, E is enter, M is for menu on the widget. Long press from your launcher homescreen to add Karui widgets. <br/>
+            - You can just long press any tab to rename or delete it or add a new tab. Use Puff to delete marked notes. Tap <code>:</code> to copy, edit, pin or delete individual notes. Return from edit screen by simply pressing back button.<br/>
+            - You can restore notes from the recycle bin easily. If you accidentally delete a tab, restoring the individual notes will seemingly go nowhere, just create a newtab with the same name and notes of that tab restored from the recycle bin will be there. Locked notes are encrypted and can be decrypted even on other device with the same password if syncing notes with a .md file. <br/>
             - Add a % symbol on any tabname and it automatically counts percentage of tasks completed. Use %s term to search a term in your notes.<br/>
             - Recurring notes (BETA): Start a note with !Nx to repeat it.
             !1d daily · !3d every 3 days · !1w weekly · !2m every 2 months · !1y yearly.
@@ -339,7 +339,8 @@
             Deleting one occurrence deletes the whole series (and restoring brings it back whole).
             Completing an occurrence automatically queues the next fourth one. Adding time goes like !1d @1500 event.<br/>
             - To pin a note to status bar, add it as a journal/calendar entry for today.<br/>
-            - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN, ASEPRITE. Share your highscores on our reddit or telegram where we talk about foss apps, design and productivity.
+            - Give the app overlay permissions for using the floating quick note tile from either the statusbar quick tiles, app shortcuts, widget, or by setting Karui as android digital assistant on your device. Use the Scan QR quick tile to import notes from other devices running Karui, or any other QR data. <br/>
+            - Ronynn made Karui with the intention of having the most aesthetic, fun and performant note taking app on android. Check out the <a href="https://github.com/ronynn/karui">github repository</a> for source code and bugs/feature requests. Easter eggs: FLAPTHEBIRD, SLITHER, MOONMAN. Share your highscores on our reddit or telegram where we talk about foss apps, design and productivity.
           </div>
         </div>
 
@@ -501,6 +502,7 @@
     </div>
 
     <script type="module" src="index.js"></script>
+    <!--
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -510,5 +512,6 @@
         });
       }
     </script>
+    -->
   </body>
 </html>

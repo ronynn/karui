@@ -103,7 +103,7 @@ All versions of the app are completely reproducible, just fork the source code f
 Karui is being developed under the GPLv3 License.
 
 
-## Most Recent Update Notes (2.2)
+## Most Recent Update Notes (2.x)
 
 > Achieved Perfection
 Try opening the app in older devices, changing themes and the games, everything should feel snappier now.
@@ -125,20 +125,51 @@ Try opening the app in older devices, changing themes and the games, everything 
 - Added: Note Menu now shows word count and character count, I often find the need for it and don't want to keep a seperate app just for this.
 - Added: Merge notes in a tab, preferably after deleting done tasks, to easily share the plaintext using qr. I use it to batch my searches or quick notes which I then sometimes use [Hashiru](https://github.com/ronynn/hashiru) to save.
 
+Added
+
+- New condensed font, several new themes, support for dynamic theme based on wallpaper, and importing custom themes
+- Search support, use %s search_term syntax
+- Select multiple notes feature and move them to any tab
+- Support for locking a tab with a pin, notes are encrypted in the sync file
+- Use quick note tile from app shortcut, quick tile, widget, or by setting Karui as Digital Assistant app of your device.
+- Toggle for Monday as first day of the week
+- Pomodoro Timer
+
+Changes
+- Much faster startup
+- Editing happens fullscreen now
+- Flappy game rewritten in DOM to avoid some device specific canvas stutters
+- Reactive input bar based on note size
+- Smaller note menu, two column tab menu
+- Save cancel direction change (previous flow led me to delete many edits accidentally)
+- StatusBar input recreated on app start if it doesn't exist
+
+Added
+
+- Merge all notes in a tab, or edit an entire tab in a text view.
+- Remove transitions mode to appear more like first versions of Karui, and more reducing UI movements.
+- Exporting clean .md file of all notes
+- Disabling screen swipes, if they annoy you
+
+
+
 
 
 
 ## Roadmap /Beta Features
 
 - [x] Letting user to select their own fonts from file picker
-- [ ] Add translations (didn't face the need/demand)
 - [x] Develop widgets (e.g., Java fetching notes from the .md file that gets synced)
-- [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
 - [x] Integrate app data piping to Obsidian or a new notes app
 - [x] Incorporate a QR library to generate QR codes from notes (specifically tabs)
-- [ ] Read them using the system camera, facilitating easy note sharing between devices. (lengthy, also will need camera permissions that some users might not be comfortable with)
+- [x] Read them using the system camera, facilitating easy note sharing between devices. (lengthy, also will need camera permissions that some users might not be comfortable with)
+- [x] Enable time for setting reminders 
 - [ ] Using some library to send and receive notes as frequencies of sound, as a gimmick
-- [ ] Enable time for setting reminders 
+- [ ] Explore cloud saving options without internet connection (piping to arcane chat? how would it sync?)
+- [ ] Add translations (didn't face the need/demand)
+
+
+
 
 
 

@@ -37,24 +37,7 @@
       android:paddingEnd="8dp"
       android:paddingTop="4dp"
       android:paddingBottom="4dp"
-      android:text="S" 
-      android:textColor="#FFFFFF"
-      android:textSize="14sp"
-      android:background="@drawable/widget_button_bg" />
-
-    <TextView
-      android:id="@+id/widget_refresh_btn"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:layout_marginStart="6dp"
-      android:minWidth="32dp"
-      android:minHeight="32dp"
-      android:gravity="center"
-      android:paddingStart="8dp"
-      android:paddingEnd="8dp"
-      android:paddingTop="4dp"
-      android:paddingBottom="4dp"
-      android:text="R"
+      android:text="S"
       android:textColor="#FFFFFF"
       android:textSize="14sp"
       android:background="@drawable/widget_button_bg" />
@@ -74,6 +57,24 @@
       android:text="M"
       android:textColor="#FFFFFF"
       android:textSize="14sp"
+      android:background="@drawable/widget_button_bg" />
+
+    <TextView
+      android:id="@+id/widget_add_btn"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:minWidth="32dp"
+      android:minHeight="32dp"
+      android:gravity="center"
+      android:paddingStart="8dp"
+      android:paddingEnd="8dp"
+      android:paddingTop="4dp"
+      android:paddingBottom="4dp"
+      android:text="+"
+      android:textColor="#FFFFFF"
+      android:textSize="16sp"
+      android:textStyle="bold"
       android:background="@drawable/widget_button_bg" />
 
   </LinearLayout>
