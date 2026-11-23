@@ -1,0 +1,4 @@
+- Drag and drop now scrolls the page
+- Pomodoro graph is now working
+
+Try the improved flappy bird game that now has a glide feature inspired by a PICO-8 game

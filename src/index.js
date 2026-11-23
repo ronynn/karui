@@ -229,8 +229,10 @@ const appStore = reactive(mergeModules(
         if (typeof this._measureNoteOverflow === 'function') this._measureNoteOverflow()
       }))
 
-      this.customFonts = await initFontSystem()
+      try { this.customFonts = await initFontSystem() }
+      catch (e) { console.error('[Karui] font init failed:', e); this.customFonts = [] }
 
+      
       if (typeof getRandomQuote === 'function')
       {
         const q = getRandomQuote()
@@ -318,6 +320,7 @@ const appStore = reactive(mergeModules(
         }, 50)
       }
 
+      this.loadPomodoroHistory()
       this.resumePomodoroIfNeeded()
       this._recoverTabEditDraft()
 
