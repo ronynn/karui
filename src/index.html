@@ -386,8 +386,7 @@
     </div>
 
     <div id="fab-btn"
-      v-if="showFab && (editVisible || (currentScreen === 'home' && !modalVisible))"
-      @click="onFabClick"
+      v-if="editVisible || (showFab && currentScreen === 'home' && !modalVisible)"      @click="onFabClick"
       :title="editVisible ? 'Done' : 'Quick Input'"
       :style="editVisible ? { fontSize: 'calc(24px * var(--ui-scale))' } : null">
       {{ editVisible ? '>>' : '>_' }}

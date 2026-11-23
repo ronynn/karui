@@ -4,8 +4,95 @@ a { color: gray; }
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; border-radius: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; font-size: calc(16px * var(--ui-scale)); }
 
-/* Header & title */
-header { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) calc(100% - 28px), transparent 100%); padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale)); padding-top: 26px; transition: transform 0.1s ease-out, opacity 0.25s ease-out; }
+/* ═══ Header & glass ═══════════════════════════════════════════════
+ * Two pseudo-elements crossfade:
+ *   ::before — solid --bg with bottom fade (visible at rest)
+ *   ::after  — tint + backdrop blur + mask (visible when scrolled)
+ *
+ * The mask-image on ::after is the critical piece: it fades BOTH the
+ * tint AND the blur over the same 28px the gradient uses, so content
+ * behind the header transitions to fully sharp instead of staying
+ * blurred. That preserves the original fade-away behaviour.
+ *
+ * Fallback: no @supports → ::after never activates, ::before stays
+ * visible, header looks identical to pre-glass version.
+ * ═══════════════════════════════════════════════════════════════ */
+header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: transparent;
+  padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding-top: 26px;
+  transition: transform 0.1s ease-out, opacity 0.25s ease-out;
+}
+
+/* Solid state — same as original */
+header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--bg) 0%,
+    var(--bg) calc(100% - 28px),
+    transparent 100%
+  );
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+/* Glass state — hidden until @supports confirms support */
+header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Only crossfade to glass where color-mix + backdrop-filter + mask
+   are ALL supported. Otherwise the solid ::before keeps painting —
+   identical to before, zero regression. */
+@supports (background: color-mix(in srgb, red 50%, transparent)) and ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  header::after {
+    /* Tint — 72% of the theme bg, fading at the bottom */
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 72%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 72%, transparent) calc(100% - 28px),
+      transparent 100%
+    );
+    /* The glass itself */
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    /* Fade BOTH tint and blur over the last 28px, so content
+       behind the header transitions to fully sharp instead of
+       staying blurred all the way down. This is the fix. */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 calc(100% - 28px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 calc(100% - 28px),
+      transparent 100%
+    );
+  }
+
+  header.scrolled::before { opacity: 0; }
+  header.scrolled::after  { opacity: 1; }
+}
+
+/* Title */
 #app-title { font-size: calc(40px * var(--ui-scale)); font-weight: 200; letter-spacing: -1px; opacity: 1; max-height: calc(50px * var(--ui-scale)); margin-bottom: -4px; margin-top: 28px; line-height: 1; overflow: hidden; transform: translateY(0); transition: opacity 0.1s ease-out, max-height 0.1s ease-out, margin-bottom 0.1s ease-out, margin-top 0.1s ease-out, transform 0.1s ease-out; will-change: transform, opacity; }
 header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin-top: 10px; transform: translateY(-20px); pointer-events: none; }
 
@@ -20,13 +107,15 @@ header.scrolled #app-title { max-height: 0; opacity: 0; margin-bottom: 0; margin
 .screen { width: 100vw; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(134px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(280px * var(--ui-scale)); display: block; min-height: 100vh; contain: layout style; overflow-anchor: none; }
 #notes-list { overflow-anchor: none; }
 
-/* No-transitions mode: header shrinks (title hidden), screen padding follows */
+/* No-transitions mode */
 body.no-transitions #viewport { transition: none !important; }
 body.no-transitions #app-title { display: none !important; }
 body.no-transitions header { transition: none !important; padding-top: calc(38px * var(--ui-scale)); }
+body.no-transitions header::before,
+body.no-transitions header::after { transition: none !important; }
 body.no-transitions .screen { padding-top: calc(78px * var(--ui-scale)); }
 
-/* Landscape phone: header slides up on scroll, tighter spacing */
+/* Landscape phone */
 @media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) and (min-aspect-ratio: 16/9) and (min-width: 480px) {
   body { padding-top: 0; }
   header { padding: calc(8px * var(--ui-scale)) calc(24px * var(--ui-scale)) calc(4px * var(--ui-scale)); padding-top: 10px; }
@@ -37,47 +126,24 @@ body.no-transitions .screen { padding-top: calc(78px * var(--ui-scale)); }
   .pivot-item { font-size: calc(18px * var(--ui-scale)); padding-bottom: 2px; }
   .screen { padding: calc(58px * var(--ui-scale)) calc(60px * var(--ui-scale)) calc(40px * var(--ui-scale)); }
   body.no-transitions header { transition: none !important; padding-top: calc(22px * var(--ui-scale)); }
-
   body.no-transitions .screen { padding-top: calc(46px * var(--ui-scale)); }
 }
 
-/* Very short portrait screens: trim header headroom.
-   Guarded against keyboard-open so typing doesn't trigger a layout shift,
-   and against no-transitions so that mode keeps its own tight spacing. */
+/* Very short portrait */
 @media (max-height: 520px) and (orientation: portrait) {
   body:not(.kb-open):not(.no-transitions) header { padding-top: 6px; }
   body:not(.kb-open):not(.no-transitions) #app-title { margin-top: 8px; margin-bottom: -4px; font-size: calc(32px * var(--ui-scale)); max-height: calc(40px * var(--ui-scale)); }
   body:not(.kb-open):not(.no-transitions) .screen { padding-top: calc(100px * var(--ui-scale)); }
 }
 
-/* Respect OS-level reduced-motion preference (accessibility + battery). */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   #viewport, header, #app-title, #toast, #fab-btn, .menu, .note-item { transition: none !important; }
+  header::before, header::after { transition: none !important; }
   .ripple-span { animation: none !important; }
 }
 
-/* Compact mode: small floating windows / split-screen / resizable windows.
-   Catches viewports that are small in BOTH dimensions (~560px square),
-   so real phones (≥640px tall in portrait, ≥640px wide in landscape) are
-   unaffected. Regardless of transition toggle or keyboard state:
-   - Karui title hidden
-   - Header has minimal top padding
-   - Screen padding shrinks to match the smaller header.   Header still slides away on scroll (paused while typing so the keyboard
-   never hides it). 
-@media (max-width: 560px) and (max-height: 560px) {
-  #app-title { display: none !important; }
-  header { padding-top: 4px !important; padding-bottom: 4px !important; }
-  .screen { padding-top: calc(56px * var(--ui-scale)) !important; }
-  body:not(.kb-open) header.scrolled { transform: translateY(-100%); }
-}
-*/
-
-/* Compact mode: small floating windows / split-screen / very small viewports.
-   Fires only when BOTH dimensions are small (≤500×600), so normal phones
-   (360×640 portrait, 640×360 landscape) are unaffected.
-   Regardless of the transition toggle: title hidden, no top padding,
-   header slides away on scroll — paused only when the keyboard is up,
-   which the handleScroll fix already handles via visualViewport. */
+/* Compact mode */
 @media (max-width: 500px) and (max-height: 600px) {
   #app-title { display: none !important; }
   header { padding-top: 0 !important; padding-bottom: 2px !important; margin-bottom: 0 !important; }

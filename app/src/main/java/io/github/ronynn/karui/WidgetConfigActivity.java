@@ -5,23 +5,31 @@ import android.appwidget.AppWidgetManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.TextView;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class WidgetConfigActivity extends Activity
 {
-  // System font families understood by TypefaceSpan / Typeface.create(family, style)
+  // Explicit colors — bypasses Samsung One UI's theme resolution for
+  // Spinner popup items. Same values as gruvbox.
+  private static final int SPINNER_TEXT_COLOR = 0xFFEBDBB2;
+  private static final int SPINNER_POPUP_BG   = 0xFF282828;
+
   private static final String[] FONT_FAMILIES = {
     "sans-serif", "serif", "monospace", "cursive",
     "sans-serif-light", "sans-serif-medium", "sans-serif-condensed"
@@ -71,14 +79,12 @@ public class WidgetConfigActivity extends Activity
       categories.add(defaultTab);
       if (!categories.contains("Main")) categories.add("Main");
     }
-    ArrayAdapter<String> tabAdapter = new ArrayAdapter<>(
-      this, android.R.layout.simple_spinner_dropdown_item, categories);
-    spinnerTabs.setAdapter(tabAdapter);
+    spinnerTabs.setAdapter(makeThemedAdapter(categories));
+    spinnerTabs.setPopupBackgroundDrawable(new ColorDrawable(SPINNER_POPUP_BG));
 
     // --- Font list ---
-    ArrayAdapter<String> fontAdapter = new ArrayAdapter<>(
-      this, android.R.layout.simple_spinner_dropdown_item, FONT_LABELS);
-    spinnerFont.setAdapter(fontAdapter);
+    spinnerFont.setAdapter(makeThemedAdapter(Arrays.asList(FONT_LABELS)));
+    spinnerFont.setPopupBackgroundDrawable(new ColorDrawable(SPINNER_POPUP_BG));
 
     // --- Load saved prefs ---
     SharedPreferences prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE);
@@ -86,7 +92,6 @@ public class WidgetConfigActivity extends Activity
     int savedTrans = prefs.getInt("widget_transparency_" + mAppWidgetId, 50);
     String savedFont = prefs.getString("widget_font_" + mAppWidgetId, "sans-serif");
 
-    // Migration from the old DEFAULT / MONOSPACE values
     if ("DEFAULT".equals(savedFont)) savedFont = "sans-serif";
     else if ("MONOSPACE".equals(savedFont)) savedFont = "monospace";
 
@@ -114,7 +119,44 @@ public class WidgetConfigActivity extends Activity
     return -1;
   }
 
-  // --- SECTION: PREFERENCE SAVING ---
+  /**
+   * ArrayAdapter that forces gruvbox colors on both the collapsed spinner
+   * view and the dropdown list items.
+   *
+   * Why: simple_spinner_dropdown_item inherits ?textColorPrimary, which
+   * Samsung One UI resolves to dark-on-dark inside the Spinner popup on
+   * some builds. Setting the color explicitly per TextView bypasses the
+   * theme entirely, so this works regardless of system light/dark mode.
+   */
+  private ArrayAdapter<String> makeThemedAdapter(List<String> items)
+  {
+    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+        this, android.R.layout.simple_spinner_item, items)
+    {
+      @Override
+      public View getView(int position, View convertView, ViewGroup parent)
+      {
+        TextView tv = (TextView) super.getView(position, convertView, parent);
+        tv.setTextColor(SPINNER_TEXT_COLOR);
+        return tv;
+      }
+
+      @Override
+      public View getDropDownView(int position, View convertView, ViewGroup parent)
+      {
+        TextView tv = (TextView) super.getDropDownView(position, convertView, parent);
+        tv.setTextColor(SPINNER_TEXT_COLOR);
+        tv.setBackgroundColor(SPINNER_POPUP_BG);
+        int padV = Math.round(14 * getResources().getDisplayMetrics().density);
+        int padH = Math.round(16 * getResources().getDisplayMetrics().density);
+        tv.setPadding(padH, padV, padH, padV);
+        return tv;
+      }
+    };
+    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+    return adapter;
+  }
+
   private void saveWidgetPreferences()
   {
     String selectedTab = (String) spinnerTabs.getSelectedItem();
@@ -128,7 +170,6 @@ public class WidgetConfigActivity extends Activity
     ed.putString("widget_tab_" + mAppWidgetId, selectedTab);
     ed.putInt("widget_transparency_" + mAppWidgetId, transparency);
     ed.putString("widget_font_" + mAppWidgetId, fontFamily);
-    // Clean up any stale custom-font pref from earlier builds
     ed.remove("widget_font_uri_" + mAppWidgetId);
     ed.apply();
 
@@ -142,7 +183,6 @@ public class WidgetConfigActivity extends Activity
     finish();
   }
 
-  // --- SECTION: CATEGORY PARSER ---
   private List<String> loadCategoriesFromMarkdown()
   {
     List<String> categories = new ArrayList<>();
