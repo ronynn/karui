@@ -6,10 +6,12 @@ const HISTORY_MAX_ENTRIES = 500
 const GRAPH_DAYS = 14
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-// Module-level cache — kept out of the reactive store so writing it doesn't
-// trigger re-renders.
+// Module-level caches — kept out of the reactive store so writing them
+// doesn't trigger re-renders.
 let _graphCache = null
 let _graphCacheKey = ''
+let _daysCache = null
+let _daysCacheKey = ''
 
 function dayKey(ts)
 {
@@ -17,6 +19,42 @@ function dayKey(ts)
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0')
+}
+
+function fmtMinutes(m)
+{
+  if (!m || m <= 0) return '0m'
+  if (m < 60) return m + 'm'
+  const h = Math.floor(m / 60)
+  const min = Math.round(m % 60)
+  return min > 0 ? h + 'h ' + min + 'm' : h + 'h'
+}
+
+// Per-day aggregation, cached on history length + last endTime + today.
+function getDaysMap(history)
+{
+  const lastEnd = history.length ? (history[history.length - 1].endTime || 0) : 0
+  const key = history.length + ':' + lastEnd + ':' + dayKey()
+  if (_daysCacheKey === key && _daysCache) return _daysCache
+
+  const map = new Map()
+  for (const e of history)
+  {
+    const k = dayKey(e.endTime)
+    const bucket = map.get(k)
+    if (bucket)
+    {
+      bucket.minutes += e.minutes || 0
+      bucket.count++
+    }
+    else
+    {
+      map.set(k, { minutes: e.minutes || 0, count: 1 })
+    }
+  }
+  _daysCacheKey = key
+  _daysCache = map
+  return map
 }
 
 export function createPomodoroModule()
@@ -36,6 +74,8 @@ export function createPomodoroModule()
       { label: '50m', minutes: 50 }
     ],
 
+    _formatMinutes(m) { return fmtMinutes(m) },
+
     get pomodoroDisplay()
     {
       const s = Math.max(0, this.pomodoroRemaining)
@@ -44,8 +84,115 @@ export function createPomodoroModule()
       return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0')
     },
 
-    // Aggregated per-day minutes for the last GRAPH_DAYS days.
-    // Oldest entry is index 0 (leftmost bar); today is last.
+    // ── Today / yesterday ──────────────────────────────────────────
+    get pomodoroTodayMinutes()
+    {
+      const bucket = getDaysMap(this.pomodoroHistory).get(dayKey())
+      return bucket ? bucket.minutes : 0
+    },
+
+    get pomodoroTodayCount()
+    {
+      const bucket = getDaysMap(this.pomodoroHistory).get(dayKey())
+      return bucket ? bucket.count : 0
+    },
+
+    get pomodoroYesterdayMinutes()
+    {
+      const d = new Date()
+      d.setDate(d.getDate() - 1)
+      const bucket = getDaysMap(this.pomodoroHistory).get(dayKey(d.getTime()))
+      return bucket ? bucket.minutes : 0
+    },
+
+    // ── This week (last 7 days including today) ───────────────────
+    get pomodoroWeekMinutes()
+    {
+      const map = getDaysMap(this.pomodoroHistory)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      let total = 0
+      for (let i = 0; i < 7; i++)
+      {
+        const d = new Date(today)
+        d.setDate(d.getDate() - i)
+        const bucket = map.get(dayKey(d.getTime()))
+        if (bucket) total += bucket.minutes
+      }
+      return total
+    },
+
+    get pomodoroWeekCount()
+    {
+      const map = getDaysMap(this.pomodoroHistory)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      let count = 0
+      for (let i = 0; i < 7; i++)
+      {
+        const d = new Date(today)
+        d.setDate(d.getDate() - i)
+        const bucket = map.get(dayKey(d.getTime()))
+        if (bucket) count += bucket.count
+      }
+      return count
+    },
+
+    // ── Streak ─────────────────────────────────────────────────────
+    // Consecutive days with ≥1 session, counting back from today.
+    // If today has no session yet, the streak "carries over" from
+    // yesterday — a day isn't missed until it's over.
+    get pomodoroStreak()
+    {
+      const map = getDaysMap(this.pomodoroHistory)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const cursor = new Date(today)
+
+      // If no session today, allow starting from yesterday.
+      const todayBucket = map.get(dayKey(cursor.getTime()))
+      if (!todayBucket || todayBucket.count === 0)
+      {
+        cursor.setDate(cursor.getDate() - 1)
+        const yBucket = map.get(dayKey(cursor.getTime()))
+        if (!yBucket || yBucket.count === 0) return 0
+      }
+
+      let streak = 0
+      while (streak < 9999)
+      {
+        const bucket = map.get(dayKey(cursor.getTime()))
+        if (!bucket || bucket.count === 0) break
+        streak++
+        cursor.setDate(cursor.getDate() - 1)
+      }
+      return streak
+    },
+
+    // ── Best day / all-time ────────────────────────────────────────
+    get pomodoroBestDayMinutes()
+    {
+      let best = 0
+      for (const bucket of getDaysMap(this.pomodoroHistory).values())
+      {
+        if (bucket.minutes > best) best = bucket.minutes
+      }
+      return best
+    },
+
+    get pomodoroHistoryTotal()
+    {
+      let total = 0
+      for (const e of this.pomodoroHistory) total += e.minutes || 0
+      return total
+    },
+
+    get pomodoroHistoryCount()
+    {
+      return this.pomodoroHistory.length
+    },
+
+    // ── Graph data (unchanged shape, now uses shared day map) ─────
     get pomodoroGraphData()
     {
       const hist = this.pomodoroHistory
@@ -53,37 +200,25 @@ export function createPomodoroModule()
       const key = hist.length + ':' + lastEnd + ':' + dayKey()
       if (_graphCacheKey === key && _graphCache) return _graphCache
 
+      const daysMap = getDaysMap(hist)
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
       const result = []
-      const buckets = new Map()
 
       for (let i = GRAPH_DAYS - 1; i >= 0; i--)
       {
         const d = new Date(today)
         d.setDate(d.getDate() - i)
         const k = dayKey(d.getTime())
-        const day = {
+        const bucket = daysMap.get(k)
+        result.push({
           date: k,
           label: DAY_NAMES[d.getDay()],
           dayNum: d.getDate(),
-          minutes: 0,
-          count: 0,
+          minutes: bucket ? bucket.minutes : 0,
+          count: bucket ? bucket.count : 0,
           isToday: i === 0
-        }
-        buckets.set(k, day)
-        result.push(day)
-      }
-
-      for (let i = 0; i < hist.length; i++)
-      {
-        const entry = hist[i]
-        const bucket = buckets.get(dayKey(entry.endTime))
-        if (bucket)
-        {
-          bucket.minutes += entry.minutes || 0
-          bucket.count++
-        }
+        })
       }
 
       _graphCacheKey = key
@@ -102,18 +237,7 @@ export function createPomodoroModule()
       return max
     },
 
-    get pomodoroHistoryTotal()
-    {
-      let total = 0
-      for (const e of this.pomodoroHistory) total += e.minutes || 0
-      return total
-    },
-
-    get pomodoroHistoryCount()
-    {
-      return this.pomodoroHistory.length
-    },
-
+    // ── Actions (unchanged) ────────────────────────────────────────
     startPomodoro(minutes)
     {
       this._stopPomodoroInternal(true)

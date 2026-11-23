@@ -118,12 +118,22 @@
           <span class="box-title" id="calendar-title" style="cursor: pointer;">Box 7: Calendar</span>
           <div id="calendar-container"></div>
         </div>
+
+
+
+
+
+
+
         <div class="box">
           <span class="box-title">Box 8: Pomodoro</span>
           <div style="text-align: center; padding: 12px 0;">
-            <div style="font-size: calc(52px * var(--ui-scale)); font-family: monospace; font-weight: bold; color: var(--accent); letter-spacing: 3px; line-height: 1;">
-              {{ pomodoroDisplay }}
-            </div>
+
+
+            <!-- Timer -->
+            <div class="pomodoro-timer">{{ pomodoroDisplay }}</div>
+
+            <!-- Presets / stop -->
             <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(25)">25m</button>
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(5)">5m</button>
@@ -131,20 +141,60 @@
               <button v-if="!pomodoroRunning" class="btn-subtle" style="flex:1;" @click="startPomodoro(50)">50m</button>
               <button v-if="pomodoroRunning" style="flex:1;" @click="stopPomodoro">Stop</button>
             </div>
+
+            <!-- Streak · week context -->
+            <div class="pomodoro-context">
+              <span v-if="pomodoroStreak >= 2">{{ pomodoroStreak }} day streak</span>
+              <span v-else-if="pomodoroStreak === 1">day 1 of your streak</span>
+              <span v-else>no streak yet</span>
+              <span class="pomodoro-context-sep">·</span>
+              <span>{{ _formatMinutes(pomodoroWeekMinutes) }} this week</span>
+            </div>
+
+            <br/>
+            <div class="pomodoro-header-stats">
+              <span class="pomodoro-today-minutes">{{ _formatMinutes(pomodoroTodayMinutes) }}</span>
+              <span class="pomodoro-today-label">
+                today<span v-if="pomodoroTodayCount > 0"> · {{ pomodoroTodayCount }} session{{ pomodoroTodayCount === 1 ? '' : 's' }}</span>
+              </span>
+            </div>
+
+
+            <!-- Graph -->
             <div class="pomodoro-graph" v-if="pomodoroGraphData.length">
               <div v-for="d in pomodoroGraphData" :key="d.date" class="pomodoro-graph-bar-wrap"
-                :title="d.label + ' ' + d.dayNum + ': ' + d.minutes + 'm (' + d.count + ')'">
-                <div class="pomodoro-graph-bar"
-                  :class="{ empty: d.minutes === 0, today: d.isToday }"
-                  :style="{ height: Math.max(2, (d.minutes / pomodoroGraphMax) * 100) + '%' }"></div>
+                :title="d.label + ' ' + d.dayNum + ': ' + d.minutes + 'm (' + d.count + ' session' + (d.count === 1 ? '' : 's') + ')'">
+                <div class="pomodoro-graph-bar-area">
+                  <div class="pomodoro-graph-bar"
+                    :class="{ empty: d.minutes === 0, today: d.isToday, best: d.minutes > 0 && d.minutes === pomodoroBestDayMinutes }"
+                    :style="{ height: Math.max(2, (d.minutes / pomodoroGraphMax) * 100) + '%' }"></div>
+                </div>
                 <div class="pomodoro-graph-label">{{ d.label[0] }}</div>
               </div>
             </div>
-            <div class="pomodoro-graph-legend" v-if="pomodoroHistoryCount > 0">
-              {{ pomodoroHistoryTotal }}m · {{ pomodoroHistoryCount }} sessions · last 14 days
+
+
+
+            <!-- Footer: best day + vs yesterday -->
+            <div class="pomodoro-footer" v-if="pomodoroHistoryCount > 0">
+              best day {{ _formatMinutes(pomodoroBestDayMinutes) }}
+              <template v-if="pomodoroYesterdayMinutes > 0 && pomodoroTodayMinutes !== pomodoroYesterdayMinutes">
+                · {{ pomodoroTodayMinutes > pomodoroYesterdayMinutes ? '+' : '−' }}{{ _formatMinutes(Math.abs(pomodoroTodayMinutes - pomodoroYesterdayMinutes)) }} vs yesterday
+              </template>
             </div>
+
+
+
           </div>
         </div>
+
+
+
+
+
+
+
+
       </div>
 
       <div class="screen" id="settings-screen" @scroll="handleScroll">
@@ -503,14 +553,14 @@
     <script type="module" src="index.js"></script>
     <!--
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('SW registered:', reg.scope))
-            .catch(err => console.error('SW registration failed:', err));
-        });
-      }
-    </script>
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.error('SW registration failed:', err));
+    });
+    }
+  </script>
     -->
   </body>
 </html>

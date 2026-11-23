@@ -125,49 +125,119 @@ body.no-fab #edit-textarea {
 
 
 
+/* ---- Pomodoro ---- */
 
-/* ---- Pomodoro history graph ---- */
+/* Today's total — the motivating focal point */
+.pomodoro-header-stats {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.pomodoro-today-minutes {
+  font-size: calc(34px * var(--ui-scale));
+  font-family: monospace;
+  font-weight: bold;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+.pomodoro-today-label {
+  font-size: calc(11px * var(--ui-scale));
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 600;
+}
+
+/* Big timer */
+.pomodoro-timer {
+  font-size: calc(52px * var(--ui-scale));
+  font-family: monospace;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 3px;
+  line-height: 1;
+}
+
+/* Streak · week context line */
+.pomodoro-context {
+  font-size: calc(12px * var(--ui-scale));
+  color: var(--text);
+  opacity: 0.8;
+  margin-top: 14px;
+}
+.pomodoro-context-sep {
+  margin: 0 6px;
+  color: var(--gray);
+}
+
+/* Graph — each column is [bar-area (flex 1), label (fixed)] so bar
+   height: X% is X% of the bar-area, not of the whole column. That's
+   what makes 100% reach the top of the graph instead of stopping
+   above the label row. */
 .pomodoro-graph {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 3px;
   height: 72px;
-  margin-top: 14px;
+  margin-top: 18px;
   padding-top: 8px;
   border-top: 1px dashed var(--border);
-  position: relative;
 }
 .pomodoro-graph-bar-wrap {
   flex: 1;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
+  align-items: stretch;
   gap: 3px;
   min-width: 0;
+  height: 100%;
+}
+.pomodoro-graph-bar-area {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+  overflow: hidden;
 }
 .pomodoro-graph-bar {
   width: 100%;
   background: var(--accent);
-  border: 1px solid var(--border);
   min-height: 2px;
   transition: height 0.25s ease-out;
 }
-.pomodoro-graph-bar.empty { background: var(--surface); opacity: 0.5; }
-.pomodoro-graph-bar.today { box-shadow: 0 0 0 1px var(--accent); }
+/* Empty = a visible but muted stub. Using --gray at 0.4 gives a warm
+   grey against the gruvbox background — visible enough to read as
+   "this day had no sessions" without competing with the accent. */
+.pomodoro-graph-bar.empty {
+  background: var(--gray);
+  opacity: 0.4;
+}
+.pomodoro-graph-bar.today {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.pomodoro-graph-bar.best:not(.today) {
+  background: var(--accent);
+  opacity: 0.65;
+}
 .pomodoro-graph-label {
   font-size: 9px;
   color: var(--gray);
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: clip;
+  line-height: 1;
+  flex-shrink: 0;
 }
-.pomodoro-graph-legend {
-  font-size: 11px;
+
+/* Footer: best day, vs yesterday */
+.pomodoro-footer {
+  font-size: calc(11px * var(--ui-scale));
   color: var(--gray);
-  text-align: center;
-  margin-top: 6px;
+  margin-top: 12px;
+  opacity: 0.85;
+  letter-spacing: 0.2px;
 }
+
 body.no-transitions .pomodoro-graph-bar { transition: none !important; }
